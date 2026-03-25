@@ -74,12 +74,19 @@ export interface CemeteryInfo {
   location?: GeoLocation;
 }
 
+export interface LifetimeLandmark {
+  year: number;
+  age: number;
+  event: string;
+}
+
 export interface HistoricalContext {
   birthEra?: string;
   deathEra?: string;
   lifeExpectancyAtDeath?: number;
-  notableEvents?: string[];
-  worldEvents?: string[];
+  birthYearEvents?: string[];       // real events from birth year
+  deathYearEvents?: string[];       // real events from death year
+  lifetimeLandmarks?: LifetimeLandmark[]; // major events they lived through
 }
 
 export interface ResearchData {

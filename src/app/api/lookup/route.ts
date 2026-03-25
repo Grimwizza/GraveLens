@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
         searchNewspapers(name, deathYear, state),
         searchNaraRecords(name, birthYear, deathYear),
         searchLandPatents(lastName, firstName, state),
-        getHistoricalContext(birthYear, deathYear),
+        getHistoricalContext(birthYear, deathYear, state),
         searchCemeteryWikipedia(cemetery),
       ]);
 

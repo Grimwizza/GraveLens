@@ -9,10 +9,15 @@ export default function ArchiveMap({ graves }: { graves: GraveRecord[] }) {
   const mapInstanceRef = useRef<unknown>(null);
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    if (!mapRef.current) return;
+
+    // Cancellation flag — prevents the async import callback from running
+    // if React Strict Mode has already fired the cleanup before it resolves.
+    let cancelled = false;
 
     // Dynamically import Leaflet
     import("leaflet").then((L) => {
+      if (cancelled || !mapRef.current || mapInstanceRef.current) return;
       // Fix default marker icon paths for Next.js
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -104,6 +109,7 @@ export default function ArchiveMap({ graves }: { graves: GraveRecord[] }) {
     });
 
     return () => {
+      cancelled = true;
       if (mapInstanceRef.current) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (mapInstanceRef.current as any).remove();

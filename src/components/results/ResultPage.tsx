@@ -447,12 +447,15 @@ function HistoricalCard({
   extracted: ExtractedGraveData;
   loading: boolean;
 }) {
+  const [landmarksExpanded, setLandmarksExpanded] = useState(false);
+
   if (loading && !historical) {
     return (
       <div className="py-5 animate-fade-up" style={{ animationDelay: "0.1s" }}>
         <SectionHeader icon="📖" title="Historical Context" />
         <div className="mt-3 space-y-2">
           <div className="h-4 shimmer rounded w-3/4" />
+          <div className="h-4 shimmer rounded w-5/6" />
           <div className="h-4 shimmer rounded w-1/2" />
         </div>
       </div>
@@ -461,40 +464,121 @@ function HistoricalCard({
 
   if (!historical) return null;
 
+  const hasContent =
+    historical.birthEra ||
+    historical.deathEra ||
+    historical.birthYearEvents?.length ||
+    historical.deathYearEvents?.length ||
+    historical.lifetimeLandmarks?.length;
+
+  if (!hasContent) return null;
+
+  const landmarks = historical.lifetimeLandmarks ?? [];
+  const visibleLandmarks = landmarksExpanded ? landmarks : landmarks.slice(0, 5);
+
   return (
     <div className="py-5 animate-fade-up" style={{ animationDelay: "0.1s" }}>
       <SectionHeader icon="📖" title="Historical Context" />
-      <div className="mt-3 space-y-3">
-        {historical.deathEra && (
-          <div className="flex items-center gap-3">
-            <span className="text-stone-400 text-sm w-20 shrink-0">Era</span>
-            <span className="text-stone-200 text-sm">{historical.deathEra}</span>
+      <div className="mt-3 space-y-4">
+
+        {/* Era + life expectancy */}
+        {(historical.birthEra || historical.deathEra) && (
+          <div className="flex flex-wrap gap-x-6 gap-y-1">
+            {historical.birthEra && (
+              <div>
+                <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">Born in</p>
+                <p className="text-stone-300 text-sm">{historical.birthEra}</p>
+              </div>
+            )}
+            {historical.deathEra && historical.deathEra !== historical.birthEra && (
+              <div>
+                <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">Died in</p>
+                <p className="text-stone-300 text-sm">{historical.deathEra}</p>
+              </div>
+            )}
+            {historical.lifeExpectancyAtDeath && extracted.ageAtDeath && (
+              <div>
+                <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">Life expectancy then</p>
+                <p className="text-stone-300 text-sm">
+                  ~{historical.lifeExpectancyAtDeath} yrs
+                  <span className="text-stone-500 ml-1">
+                    (lived to {extracted.ageAtDeath})
+                  </span>
+                </p>
+              </div>
+            )}
           </div>
         )}
-        {historical.lifeExpectancyAtDeath && extracted.ageAtDeath && (
-          <div className="flex items-start gap-3">
-            <span className="text-stone-400 text-sm w-20 shrink-0">Context</span>
-            <span className="text-stone-300 text-sm leading-relaxed">
-              In {extracted.birthYear ?? "their era"}, life expectancy was{" "}
-              <strong className="text-stone-200">
-                ~{historical.lifeExpectancyAtDeath} years
-              </strong>
-              . {extracted.name || "This person"} lived to{" "}
-              <strong className="text-stone-200">
-                {extracted.ageAtDeath}
-              </strong>
-              .
-            </span>
-          </div>
-        )}
-        {historical.worldEvents && historical.worldEvents.length > 0 && (
-          <div className="mt-2 p-3 rounded-xl bg-stone-800 border border-stone-700">
+
+        {/* Birth year events */}
+        {historical.birthYearEvents && historical.birthYearEvents.length > 0 && (
+          <div className="p-3 rounded-xl bg-stone-800 border border-stone-700/60">
             <p className="text-xs text-stone-500 uppercase tracking-widest mb-2">
-              The Year {extracted.deathYear ?? "They Died"}
+              The World in {extracted.birthYear}
             </p>
-            <p className="text-stone-300 text-sm leading-relaxed">
-              {historical.worldEvents.join(" ")}
+            <ul className="space-y-1.5">
+              {historical.birthYearEvents.map((e, i) => (
+                <li key={i} className="text-stone-300 text-sm leading-relaxed flex gap-2">
+                  <span className="text-stone-600 mt-0.5 shrink-0">—</span>
+                  <span>{e}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Death year events */}
+        {historical.deathYearEvents && historical.deathYearEvents.length > 0 && (
+          <div className="p-3 rounded-xl bg-stone-800 border border-stone-700/60">
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-2">
+              The World in {extracted.deathYear}
             </p>
+            <ul className="space-y-1.5">
+              {historical.deathYearEvents.map((e, i) => (
+                <li key={i} className="text-stone-300 text-sm leading-relaxed flex gap-2">
+                  <span className="text-stone-600 mt-0.5 shrink-0">—</span>
+                  <span>{e}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Landmark events lived through */}
+        {landmarks.length > 0 && (
+          <div>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-2">
+              Events witnessed in their lifetime
+            </p>
+            <div className="relative">
+              {/* Timeline line */}
+              <div className="absolute left-[52px] top-0 bottom-0 w-px bg-stone-700" />
+              <ul className="space-y-3">
+                {visibleLandmarks.map((lm, i) => (
+                  <li key={i} className="flex items-start gap-3">
+                    <div className="text-right shrink-0 w-10">
+                      <span className="text-gold-500 text-xs font-mono">{lm.year}</span>
+                    </div>
+                    {/* Timeline dot */}
+                    <div className="w-2.5 h-2.5 rounded-full bg-stone-600 border border-stone-500 mt-1 shrink-0 relative z-10" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-stone-300 text-sm leading-snug">{lm.event}</p>
+                      <p className="text-stone-600 text-xs mt-0.5">Age {lm.age}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {landmarks.length > 5 && (
+              <button
+                onClick={() => setLandmarksExpanded((e) => !e)}
+                className="text-gold-500 text-xs mt-3 ml-[52px]"
+              >
+                {landmarksExpanded
+                  ? "Show fewer events"
+                  : `Show all ${landmarks.length} events`}
+              </button>
+            )}
           </div>
         )}
       </div>
