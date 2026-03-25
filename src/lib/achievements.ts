@@ -11,16 +11,16 @@ export interface Rank {
 }
 
 export const RANKS: Rank[] = [
-  { level: 1,  title: "The Wanderer",       subtitle: "Your journey into history begins",           minXP: 0    },
-  { level: 2,  title: "The Curious",         subtitle: "Questions stir among the stones",            minXP: 75   },
-  { level: 3,  title: "The Seeker",          subtitle: "Following trails through the grass",         minXP: 200  },
-  { level: 4,  title: "The Chronicler",      subtitle: "Names and dates fill your pages",            minXP: 450  },
-  { level: 5,  title: "The Sleuth",          subtitle: "Every stone holds a secret",                 minXP: 800  },
-  { level: 6,  title: "The Historian",       subtitle: "Patterns emerge across the centuries",       minXP: 1250 },
-  { level: 7,  title: "The Archivist",       subtitle: "Deep in the records, deep in the past",      minXP: 1800 },
-  { level: 8,  title: "The Curator",         subtitle: "Preserving heritage for those who follow",   minXP: 2500 },
-  { level: 9,  title: "The Scholar",         subtitle: "Your knowledge spans generations",           minXP: 3500 },
-  { level: 10, title: "Master Historian",    subtitle: "Guardian of the forgotten and the found",    minXP: 5000 },
+  { level: 1,  title: "The Wanderer",       subtitle: "Your journey into history begins",           minXP: 0     },
+  { level: 2,  title: "The Curious",         subtitle: "Questions stir among the stones",            minXP: 150   },
+  { level: 3,  title: "The Seeker",          subtitle: "Following trails through the grass",         minXP: 450   },
+  { level: 4,  title: "The Chronicler",      subtitle: "Names and dates fill your pages",            minXP: 1000  },
+  { level: 5,  title: "The Sleuth",          subtitle: "Every stone holds a secret",                 minXP: 1800  },
+  { level: 6,  title: "The Historian",       subtitle: "Patterns emerge across the centuries",       minXP: 2800  },
+  { level: 7,  title: "The Archivist",       subtitle: "Deep in the records, deep in the past",      minXP: 4000  },
+  { level: 8,  title: "The Curator",         subtitle: "Preserving heritage for those who follow",   minXP: 5500  },
+  { level: 9,  title: "The Scholar",         subtitle: "Your knowledge spans generations",           minXP: 7500  },
+  { level: 10, title: "Master Historian",    subtitle: "Guardian of the forgotten and the found",    minXP: 10000 },
 ];
 
 export function getRank(xp: number): Rank {
@@ -158,7 +158,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: "First Stone",
     description: "Save your first grave marker to the archive.",
     flavour: "Every great archive begins with a single stone.",
-    xp: 25, category: "First Steps", icon: "🪦",
+    xp: 10, category: "First Steps", icon: "🪦",
     evaluate: (g) => count(g.length, 1),
   },
   {
@@ -166,7 +166,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: "A Name Remembered",
     description: "Save a marker with a full name extracted.",
     flavour: "To speak a name is to keep them alive.",
-    xp: 15, category: "First Steps", icon: "✍️",
+    xp: 6, category: "First Steps", icon: "✍️",
     evaluate: (g) => binary(g.some((r) => Boolean(r.extracted.name))),
   },
   {
@@ -174,7 +174,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: "Marked on the Map",
     description: "Save a GPS-tagged grave marker.",
     flavour: "Place them on the map of memory.",
-    xp: 20, category: "First Steps", icon: "📍",
+    xp: 8, category: "First Steps", icon: "📍",
     evaluate: (g) => binary(g.some((r) => Boolean(r.location?.lat))),
   },
   {
@@ -182,7 +182,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: "The Written Word",
     description: "Find a grave marker with an inscription.",
     flavour: "Stone outlasts paper. These words were meant to last.",
-    xp: 15, category: "First Steps", icon: "📖",
+    xp: 6, category: "First Steps", icon: "📖",
     evaluate: (g) => binary(g.some((r) => r.extracted.inscription?.length > 10)),
   },
   {
@@ -190,7 +190,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: "Symbol Seeker",
     description: "Find a grave marker bearing a symbol or emblem.",
     flavour: "Every symbol carries a century of meaning.",
-    xp: 15, category: "First Steps", icon: "✦",
+    xp: 6, category: "First Steps", icon: "✦",
     evaluate: (g) => binary(g.some((r) => (r.extracted.symbols?.length ?? 0) > 0)),
   },
   {
@@ -198,7 +198,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     title: "Last Words",
     description: "Find a grave marker with an epitaph.",
     flavour: "The final message, chosen with great care.",
-    xp: 20, category: "First Steps", icon: "📜",
+    xp: 8, category: "First Steps", icon: "📜",
     evaluate: (g) => binary(g.some((r) => r.extracted.epitaph?.length > 5)),
   },
 

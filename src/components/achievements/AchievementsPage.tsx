@@ -11,11 +11,12 @@ import {
   xpToNextRank,
   totalXP,
   loadUnlocks,
+  loadStats,
   isUnlocked,
+  type Achievement,
   type UnlockRecord,
   type AchievementCategory,
 } from "@/lib/achievements";
-import { loadStats } from "@/lib/achievements";
 import { getAllGraves } from "@/lib/storage";
 import type { GraveRecord } from "@/types";
 
@@ -81,15 +82,18 @@ function AchievementCard({
   unlocked,
   progress,
   label,
+  onClick,
 }: {
   achievement: (typeof ACHIEVEMENTS)[number];
   unlocked: boolean;
   progress: number;
   label: string;
+  onClick: () => void;
 }) {
   return (
-    <div
-      className="rounded-xl p-4 flex gap-3 items-start transition-all"
+    <button
+      onClick={onClick}
+      className="w-full text-left rounded-xl p-4 flex gap-3 items-start transition-all active:scale-[0.98]"
       style={{
         background: unlocked
           ? "linear-gradient(135deg, #2a2515, #1e1c18)"
@@ -166,9 +170,181 @@ function AchievementCard({
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
-            <span className="text-[10px] text-gold-500" style={{ color: "#c9a84c" }}>Unlocked</span>
+            <span className="text-[10px]" style={{ color: "#c9a84c" }}>Unlocked · tap for details</span>
           </div>
         )}
+        {!unlocked && (
+          <p className="text-[10px] text-stone-700 mt-1.5">Tap to see how to earn this</p>
+        )}
+      </div>
+    </button>
+  );
+}
+
+// ── Achievement detail sheet ───────────────────────────────────────────────
+function AchievementDetailSheet({
+  achievement,
+  unlocked,
+  unlockedAt,
+  progress,
+  label,
+  onClose,
+}: {
+  achievement: Achievement;
+  unlocked: boolean;
+  unlockedAt?: number;
+  progress: number;
+  label: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70" />
+      <div
+        className="relative w-full max-w-lg mx-auto rounded-t-3xl animate-fade-up"
+        style={{
+          background: "linear-gradient(160deg, #1e1c18, #252218)",
+          border: "1px solid rgba(201,168,76,0.2)",
+          paddingBottom: "max(2rem, env(safe-area-inset-bottom))",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Drag handle */}
+        <div className="w-10 h-1 bg-stone-600 rounded-full mx-auto mt-3 mb-6" />
+
+        <div className="px-6">
+          {/* Icon + category */}
+          <div className="flex items-start justify-between mb-5">
+            <div
+              className="text-4xl w-16 h-16 flex items-center justify-center rounded-2xl"
+              style={{
+                background: unlocked
+                  ? "rgba(201,168,76,0.18)"
+                  : "rgba(255,255,255,0.05)",
+                filter: !unlocked ? "grayscale(0.6)" : "none",
+              }}
+            >
+              {achievement.icon}
+            </div>
+            <div className="text-right">
+              <span
+                className="text-xs font-medium px-2 py-1 rounded-full"
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  color: "#8a8580",
+                }}
+              >
+                {achievement.category}
+              </span>
+              <div className="mt-2">
+                <span
+                  className="text-sm font-bold px-2.5 py-1 rounded-lg"
+                  style={{
+                    background: unlocked ? "rgba(201,168,76,0.2)" : "rgba(255,255,255,0.06)",
+                    color: unlocked ? "#f5d080" : "#6a6560",
+                  }}
+                >
+                  +{achievement.xp} XP
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Title */}
+          <h2
+            className="font-serif text-2xl font-bold leading-tight mb-2"
+            style={{ color: unlocked ? "#f5d080" : "#c8c0b8" }}
+          >
+            {achievement.title}
+          </h2>
+
+          {/* Unlock status */}
+          {unlocked ? (
+            <div className="flex items-center gap-2 mb-4">
+              <div
+                className="w-5 h-5 rounded-full flex items-center justify-center"
+                style={{ background: "rgba(201,168,76,0.2)" }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+              <span className="text-sm font-medium" style={{ color: "#c9a84c" }}>
+                Unlocked
+                {unlockedAt && (
+                  <span className="text-stone-500 font-normal ml-1">
+                    · {new Date(unlockedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                )}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 mb-4">
+              <div
+                className="w-5 h-5 rounded-full flex items-center justify-center"
+                style={{ background: "rgba(255,255,255,0.05)" }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6a6560" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              </div>
+              <span className="text-sm text-stone-500">Not yet unlocked</span>
+            </div>
+          )}
+
+          {/* Divider */}
+          <div className="h-px bg-stone-700/50 mb-4" />
+
+          {/* How to earn */}
+          <div className="mb-4">
+            <p className="text-[10px] uppercase tracking-widest text-stone-500 font-medium mb-1.5">
+              How to earn
+            </p>
+            <p className="text-stone-300 text-sm leading-relaxed">
+              {achievement.description}
+            </p>
+          </div>
+
+          {/* Progress (if in progress) */}
+          {!unlocked && progress > 0 && (
+            <div className="mb-4">
+              <p className="text-[10px] uppercase tracking-widest text-stone-500 font-medium mb-2">
+                Your progress
+              </p>
+              <div className="h-2 rounded-full bg-stone-700 overflow-hidden mb-1">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, progress * 100)}%`,
+                    background: "linear-gradient(90deg, #5a4010, #c9a84c)",
+                  }}
+                />
+              </div>
+              <p className="text-xs text-stone-500">{label}</p>
+            </div>
+          )}
+
+          {/* Flavour quote (always show) */}
+          <div
+            className="rounded-xl px-4 py-3"
+            style={{
+              background: "rgba(255,255,255,0.03)",
+              borderLeft: "2px solid rgba(201,168,76,0.3)",
+            }}
+          >
+            <p className="text-stone-400 text-sm italic leading-relaxed">
+              &ldquo;{achievement.flavour}&rdquo;
+            </p>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="w-full mt-5 h-12 rounded-2xl text-stone-400 text-sm border border-stone-700"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -178,6 +354,7 @@ export default function AchievementsPage() {
   const [graves, setGraves] = useState<GraveRecord[]>([]);
   const [unlocks, setUnlocks] = useState<UnlockRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     getAllGraves().then((g) => {
@@ -342,6 +519,7 @@ export default function AchievementsPage() {
                       unlocked={unlocked}
                       progress={ratio}
                       label={label}
+                      onClick={() => setSelectedId(achievement.id)}
                     />
                   );
                 })}
@@ -350,6 +528,26 @@ export default function AchievementsPage() {
           );
         })}
       </main>
+
+      {/* Achievement detail sheet */}
+      {selectedId && (() => {
+        const achievement = ACHIEVEMENTS.find((a) => a.id === selectedId);
+        if (!achievement) return null;
+        const unlocked = isUnlocked(selectedId, unlocks);
+        const unlockRecord = unlocks.find((u) => u.id === selectedId);
+        const catStats = loaded ? stats : { sharesCount: 0, cemeteryNamesAdded: 0, daysActive: [] };
+        const { ratio, label } = loaded ? achievement.evaluate(graves, catStats) : { ratio: 0, label: "" };
+        return (
+          <AchievementDetailSheet
+            achievement={achievement}
+            unlocked={unlocked}
+            unlockedAt={unlockRecord?.unlockedAt}
+            progress={ratio}
+            label={label}
+            onClose={() => setSelectedId(null)}
+          />
+        );
+      })()}
 
       <BottomNav />
     </div>

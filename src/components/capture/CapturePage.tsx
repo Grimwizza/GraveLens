@@ -120,14 +120,22 @@ export default function CapturePage() {
         }
       }
 
-      // Step 5: Store result in IndexedDB and navigate
+      // Step 5: Compress photo for storage, then write to IndexedDB and navigate.
+      // Full-res phone photos are 3–8 MB as base64. We resize to ≤1200px / 80%
+      // JPEG before saving — typically 100–250 KB, a 20–50× reduction.
+      // The compressed version is still sharp enough to read inscriptions on-screen.
+      setProgress(90);
+      setProgressLabel("Saving…");
+
+      const storageDataUrl = await resizeForStorage(previewUrl);
+
       setProgress(95);
       setProgressLabel("Almost done…");
 
       const id = generateId();
       const pendingResult = {
         id,
-        photoDataUrl: previewUrl,
+        photoDataUrl: storageDataUrl,
         extracted,
         location,
         timestamp: Date.now(),
@@ -448,6 +456,38 @@ function ProcessingState({
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Compress a photo for long-term storage in IndexedDB.
+ * Keeps the longest edge ≤ 1200 px at 80% JPEG quality.
+ * A typical 3–8 MB phone photo becomes ~100–250 KB — safe for IndexedDB
+ * and resistant to browser storage eviction on low-storage devices.
+ * 1200 px is sharp enough to read inscriptions at full-screen mobile width.
+ *
+ * To upgrade to cloud storage later, replace this function's output with
+ * an upload call and store the returned URL instead of the data URL.
+ * See CLOUD_STORAGE_GUIDE.md for the recommended migration path.
+ */
+function resizeForStorage(dataUrl: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxPx = 1200;
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Canvas unavailable"));
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.80));
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
 
 /**
  * Resize + re-encode to JPEG before sending to Claude.

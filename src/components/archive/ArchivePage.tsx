@@ -752,6 +752,264 @@ function NearbyConfirmSheet({
   );
 }
 
+// ── GraveTileGrid ──────────────────────────────────────────────────────────
+function GraveTileGrid({
+  graves,
+  enriching,
+  deleteConfirm,
+  onDeleteRequest,
+  onDeleteConfirm,
+  onDeleteCancel,
+}: {
+  graves: GraveRecord[];
+  enriching: boolean;
+  deleteConfirm: string | null;
+  onDeleteRequest: (id: string) => void;
+  onDeleteConfirm: (id: string) => void;
+  onDeleteCancel: () => void;
+}) {
+  if (graves.length === 0) {
+    return (
+      <div className="flex items-center justify-center flex-1 mt-16">
+        <p className="text-stone-500 text-sm">No markers match the current filters.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-3 p-4 mt-2">
+      {graves.map((grave) => {
+        const hasCemetery = Boolean(grave.location?.cemetery);
+        const hasGps = Boolean(grave.location?.lat && grave.location?.lng);
+        const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" — ");
+
+        return (
+          <div key={grave.id} className="relative">
+            <Link href={`/result/${grave.id}`} className="block">
+              <div
+                className="rounded-2xl overflow-hidden bg-stone-800 relative"
+                style={{ aspectRatio: "3/4" }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={grave.photoDataUrl}
+                  alt={grave.extracted.name ?? ""}
+                  className="w-full h-full object-cover"
+                />
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background:
+                      "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.3) 45%, transparent 70%)",
+                  }}
+                />
+                <div className="absolute bottom-0 left-0 right-0 p-3">
+                  <p className="font-serif text-white text-sm font-medium leading-tight line-clamp-2">
+                    {grave.extracted.name || "Unknown"}
+                  </p>
+                  {dates && (
+                    <p className="text-stone-400 text-[11px] mt-0.5">{dates}</p>
+                  )}
+                  {hasCemetery ? (
+                    <p className="text-stone-500 text-[10px] truncate mt-0.5">
+                      {grave.location.cemetery}
+                    </p>
+                  ) : enriching && hasGps ? (
+                    <p className="text-stone-600 text-[10px] mt-0.5">Looking up…</p>
+                  ) : null}
+                  {grave.tags && grave.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {grave.tags.slice(0, 2).map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-1.5 py-0.5 rounded-full text-[9px] bg-stone-800/80 border border-stone-600/60 text-stone-400"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Link>
+
+            {/* Delete button — top-right corner */}
+            <div className="absolute top-2 right-2 z-10">
+              {deleteConfirm === grave.id ? (
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => onDeleteConfirm(grave.id)}
+                    className="text-[10px] text-red-400 px-2 py-1 rounded-lg bg-stone-900/90 border border-red-500/30"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={onDeleteCancel}
+                    className="text-[10px] text-stone-400 px-2 py-1 rounded-lg bg-stone-900/90"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => onDeleteRequest(grave.id)}
+                  className="w-7 h-7 flex items-center justify-center rounded-full bg-stone-900/70 text-stone-500 active:text-red-400"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── GraveCoverFlow ─────────────────────────────────────────────────────────
+function GraveCoverFlow({
+  graves,
+  enriching,
+  deleteConfirm,
+  onDeleteRequest,
+  onDeleteConfirm,
+  onDeleteCancel,
+}: {
+  graves: GraveRecord[];
+  enriching: boolean;
+  deleteConfirm: string | null;
+  onDeleteRequest: (id: string) => void;
+  onDeleteConfirm: (id: string) => void;
+  onDeleteCancel: () => void;
+}) {
+  if (graves.length === 0) {
+    return (
+      <div className="flex items-center justify-center flex-1 mt-16">
+        <p className="text-stone-500 text-sm">No markers match the current filters.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex overflow-x-auto gap-4 mt-4 pb-4"
+      style={{
+        scrollSnapType: "x mandatory",
+        WebkitOverflowScrolling: "touch",
+        scrollbarWidth: "none",
+        paddingLeft: "calc(50vw - 42vw)",
+        paddingRight: "calc(50vw - 42vw)",
+      }}
+    >
+      {graves.map((grave) => {
+        const hasCemetery = Boolean(grave.location?.cemetery);
+        const hasGps = Boolean(grave.location?.lat && grave.location?.lng);
+        const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" — ");
+        const locationLine = [grave.location?.cemetery, grave.location?.city, grave.location?.state]
+          .filter(Boolean)
+          .join(", ");
+
+        return (
+          <div
+            key={grave.id}
+            className="relative shrink-0"
+            style={{
+              width: "84vw",
+              maxWidth: "360px",
+              scrollSnapAlign: "center",
+            }}
+          >
+            <Link href={`/result/${grave.id}`} className="block">
+              <div
+                className="rounded-3xl overflow-hidden bg-stone-800 relative"
+                style={{ height: "64vh", minHeight: "340px", maxHeight: "520px" }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={grave.photoDataUrl}
+                  alt={grave.extracted.name ?? ""}
+                  className="w-full h-full object-cover"
+                />
+                {/* Gradient overlay */}
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background:
+                      "linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.45) 40%, rgba(0,0,0,0.1) 65%, transparent 85%)",
+                  }}
+                />
+                {/* Content */}
+                <div className="absolute bottom-0 left-0 right-0 p-6">
+                  <h2 className="font-serif text-white text-2xl font-bold leading-tight">
+                    {grave.extracted.name || "Unknown"}
+                  </h2>
+                  {dates && (
+                    <p className="text-stone-300 text-sm mt-1.5">{dates}</p>
+                  )}
+                  {locationLine ? (
+                    <p className="text-stone-400 text-xs mt-1 truncate">{locationLine}</p>
+                  ) : enriching && hasGps ? (
+                    <p className="text-stone-600 text-xs mt-1">Looking up cemetery…</p>
+                  ) : null}
+                  {grave.tags && grave.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {grave.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-2 py-0.5 rounded-full text-[10px] border text-stone-300"
+                          style={{
+                            background: "rgba(201,168,76,0.12)",
+                            borderColor: "rgba(201,168,76,0.3)",
+                          }}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Link>
+
+            {/* Delete — top-right */}
+            <div className="absolute top-3 right-3 z-10">
+              {deleteConfirm === grave.id ? (
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => onDeleteConfirm(grave.id)}
+                    className="text-xs text-red-400 px-3 py-1.5 rounded-xl bg-stone-900/90 border border-red-500/30"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={onDeleteCancel}
+                    className="text-xs text-stone-400 px-3 py-1.5 rounded-xl bg-stone-900/90"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => onDeleteRequest(grave.id)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-stone-900/70 text-stone-500 active:text-red-400"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── EmptyState ─────────────────────────────────────────────────────────────
 function EmptyState() {
   return (
