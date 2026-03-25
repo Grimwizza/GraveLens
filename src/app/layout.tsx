@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegister from "./sw-register";
+import InstallPrompt from "@/components/InstallPrompt";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
   title: "GraveLens",
   description:
     "Photograph a grave marker and uncover the story of the person buried there.",
-  manifest: "/manifest.json",
+  // manifest.ts handles /manifest.webmanifest — no static reference needed
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -49,6 +50,7 @@ export default function RootLayout({
       <body className="min-h-dvh flex flex-col bg-[#1a1917] text-[#f5f2ed] font-sans">
         <ServiceWorkerRegister />
         {children}
+        <InstallPrompt />
       </body>
     </html>
   );
