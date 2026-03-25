@@ -366,11 +366,11 @@ function PreviewState({
           className="w-full h-full object-cover"
         />
         {/* Corner brackets overlay */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
-          <path d="M5% 15% L5% 5% L15% 5%" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
-          <path d="M85% 5% L95% 5% L95% 15%" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
-          <path d="M5% 85% L5% 95% L15% 95%" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
-          <path d="M85% 95% L95% 95% L95% 85%" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
+        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <path d="M5 15 L5 5 L15 5" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
+          <path d="M85 5 L95 5 L95 15" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
+          <path d="M5 85 L5 95 L15 95" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
+          <path d="M85 95 L95 95 L95 85" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
         </svg>
       </div>
 

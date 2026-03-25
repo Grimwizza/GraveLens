@@ -1,9 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 
-export const config = {
-  api: { bodyParser: { sizeLimit: "20mb" } },
-};
+// No specialized config needed for App Router Route Handlers. 
+// Request body limits are handled by Next.js defaults or next.config.ts.
 
 const client = new Anthropic();
 
@@ -49,7 +48,7 @@ export async function POST(req: NextRequest) {
     const finalMime = validMime.includes(mimeType) ? mimeType : "image/jpeg";
 
     const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model: "claude-3-5-sonnet-20241022",
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: [
