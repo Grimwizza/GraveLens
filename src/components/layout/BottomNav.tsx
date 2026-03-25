@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { recordActiveDay } from "@/lib/achievements";
 
 const tabs = [
   {
@@ -61,10 +63,34 @@ const tabs = [
       </svg>
     ),
   },
+  {
+    href: "/achievements",
+    label: "Explorer",
+    icon: (active: boolean) => (
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={active ? "#c9a84c" : "#8a8580"}
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="8" r="4" />
+        <path d="M8 8H4l2 8h12l2-8h-4" />
+        <path d="M9 16l1 4h4l1-4" />
+      </svg>
+    ),
+  },
 ];
 
 export default function BottomNav() {
   const pathname = usePathname();
+
+  useEffect(() => {
+    recordActiveDay();
+  }, []);
 
   return (
     <nav

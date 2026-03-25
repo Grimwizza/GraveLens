@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BottomNav from "@/components/layout/BottomNav";
-import { saveGrave, getGrave, getPendingResult, deletePendingResult } from "@/lib/storage";
+import { saveGrave, getGrave, getAllGraves, getPendingResult, deletePendingResult } from "@/lib/storage";
+import { checkAndUnlock, loadStats, type Achievement } from "@/lib/achievements";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import type {
   GraveRecord,
@@ -30,6 +31,7 @@ export default function ResultPage({ id }: { id: string }) {
   const [tags, setTags] = useState<string[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
   const [savePromptDismissed, setSavePromptDismissed] = useState(false);
+  const [achievementToasts, setAchievementToasts] = useState<Achievement[]>([]);
 
   useEffect(() => {
     getPendingResult(id).then(async (raw) => {
@@ -111,6 +113,15 @@ export default function ResultPage({ id }: { id: string }) {
     await saveGrave(record);
     setSaved(true);
     setSavePromptDismissed(true);
+
+    // Check for newly unlocked achievements
+    const allGraves = await getAllGraves();
+    const stats = loadStats();
+    const newUnlocks = checkAndUnlock(allGraves, stats);
+    if (newUnlocks.length > 0) {
+      setAchievementToasts(newUnlocks);
+      setTimeout(() => setAchievementToasts([]), 5000);
+    }
   }, [pending, research, tags]);
 
   // When already saved, persist tag changes immediately
@@ -365,6 +376,43 @@ export default function ResultPage({ id }: { id: string }) {
           record={graveRecord}
           onClose={() => setShareOpen(false)}
         />
+      )}
+
+      {/* Achievement unlock toasts */}
+      {achievementToasts.length > 0 && (
+        <div className="fixed bottom-24 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 pointer-events-none">
+          {achievementToasts.map((a) => (
+            <div
+              key={a.id}
+              className="w-full max-w-sm rounded-2xl px-4 py-3 flex items-center gap-3 animate-fade-up"
+              style={{
+                background: "linear-gradient(135deg, #2a2515, #1e1c18)",
+                border: "1px solid rgba(201,168,76,0.5)",
+                boxShadow: "0 4px 24px rgba(201,168,76,0.2)",
+              }}
+            >
+              <div
+                className="text-2xl w-10 h-10 flex items-center justify-center rounded-lg shrink-0"
+                style={{ background: "rgba(201,168,76,0.15)" }}
+              >
+                {a.icon}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-widest font-medium" style={{ color: "#c9a84c" }}>
+                  Achievement Unlocked
+                </p>
+                <p className="text-sm font-semibold text-stone-100 leading-tight mt-0.5">{a.title}</p>
+                <p className="text-[11px] text-stone-400 truncate">{a.flavour}</p>
+              </div>
+              <span
+                className="text-xs font-bold shrink-0 px-2 py-1 rounded-lg"
+                style={{ background: "rgba(201,168,76,0.2)", color: "#f5d080" }}
+              >
+                +{a.xp} XP
+              </span>
+            </div>
+          ))}
+        </div>
       )}
 
       <BottomNav />

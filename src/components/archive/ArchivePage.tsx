@@ -8,6 +8,7 @@ import Link from "next/link";
 
 type SortField = "birthYear" | "deathYear";
 type SortDir = "asc" | "desc";
+type ViewMode = "list" | "tile" | "cover";
 
 // ── Learned cemetery storage ───────────────────────────────────────────────
 const LEARNED_KEY = "gl_learned_cemeteries";
@@ -94,6 +95,15 @@ export default function ArchivePage() {
   const [filterCemetery, setFilterCemetery] = useState("");
   const [filterTag, setFilterTag] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === "undefined") return "list";
+    return (localStorage.getItem("gl_archive_view") as ViewMode) ?? "list";
+  });
+
+  const handleViewMode = (mode: ViewMode) => {
+    setViewMode(mode);
+    try { localStorage.setItem("gl_archive_view", mode); } catch { /* ignore */ }
+  };
 
   // ── Load graves ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -353,18 +363,71 @@ export default function ArchivePage() {
 
           <div className="flex items-center gap-2">
             {graves.length > 0 && (
-              <button
-                onClick={() => setFiltersOpen((o) => !o)}
-                className={`relative w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${filtersOpen ? "bg-stone-700" : "bg-stone-800"}`}
-                aria-label="Toggle filters"
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={hasActiveFilters ? "#c9a84c" : "#8a8580"} strokeWidth="1.5" strokeLinecap="round">
-                  <path d="M1 3h14M3 8h10M6 13h4" />
-                </svg>
-                {hasActiveFilters && (
-                  <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-gold-500 rounded-full" />
-                )}
-              </button>
+              <>
+                {/* View mode toggle */}
+                <div className="flex items-center rounded-lg overflow-hidden border border-stone-700 bg-stone-800">
+                  {(
+                    [
+                      {
+                        mode: "list" as ViewMode,
+                        label: "List",
+                        icon: (
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                            <path d="M2 4h12M2 8h12M2 12h12" />
+                          </svg>
+                        ),
+                      },
+                      {
+                        mode: "tile" as ViewMode,
+                        label: "Tile",
+                        icon: (
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="1" y="1" width="6" height="6" rx="1" />
+                            <rect x="9" y="1" width="6" height="6" rx="1" />
+                            <rect x="1" y="9" width="6" height="6" rx="1" />
+                            <rect x="9" y="9" width="6" height="6" rx="1" />
+                          </svg>
+                        ),
+                      },
+                      {
+                        mode: "cover" as ViewMode,
+                        label: "Cover",
+                        icon: (
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="1" y="2" width="14" height="12" rx="2" />
+                            <path d="M4 13V9" strokeWidth="1" opacity="0.5" />
+                            <path d="M12 13V9" strokeWidth="1" opacity="0.5" />
+                          </svg>
+                        ),
+                      },
+                    ] as const
+                  ).map(({ mode, label, icon }) => (
+                    <button
+                      key={mode}
+                      onClick={() => handleViewMode(mode)}
+                      aria-label={label}
+                      className="w-8 h-8 flex items-center justify-center transition-colors"
+                      style={{ color: viewMode === mode ? "#c9a84c" : "#6a6560", background: viewMode === mode ? "rgba(201,168,76,0.12)" : "transparent" }}
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Filter button */}
+                <button
+                  onClick={() => setFiltersOpen((o) => !o)}
+                  className={`relative w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${filtersOpen ? "bg-stone-700" : "bg-stone-800"}`}
+                  aria-label="Toggle filters"
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={hasActiveFilters ? "#c9a84c" : "#8a8580"} strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M1 3h14M3 8h10M6 13h4" />
+                  </svg>
+                  {hasActiveFilters && (
+                    <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-gold-500 rounded-full" />
+                  )}
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -454,14 +517,36 @@ export default function ArchivePage() {
               </div>
             )}
 
-            <GraveList
-              graves={filteredGraves}
-              enriching={enriching}
-              deleteConfirm={deleteConfirm}
-              onDeleteRequest={setDeleteConfirm}
-              onDeleteConfirm={handleDelete}
-              onDeleteCancel={() => setDeleteConfirm(null)}
-            />
+            {viewMode === "list" && (
+              <GraveList
+                graves={filteredGraves}
+                enriching={enriching}
+                deleteConfirm={deleteConfirm}
+                onDeleteRequest={setDeleteConfirm}
+                onDeleteConfirm={handleDelete}
+                onDeleteCancel={() => setDeleteConfirm(null)}
+              />
+            )}
+            {viewMode === "tile" && (
+              <GraveTileGrid
+                graves={filteredGraves}
+                enriching={enriching}
+                deleteConfirm={deleteConfirm}
+                onDeleteRequest={setDeleteConfirm}
+                onDeleteConfirm={handleDelete}
+                onDeleteCancel={() => setDeleteConfirm(null)}
+              />
+            )}
+            {viewMode === "cover" && (
+              <GraveCoverFlow
+                graves={filteredGraves}
+                enriching={enriching}
+                deleteConfirm={deleteConfirm}
+                onDeleteRequest={setDeleteConfirm}
+                onDeleteConfirm={handleDelete}
+                onDeleteCancel={() => setDeleteConfirm(null)}
+              />
+            )}
           </>
         )}
       </main>
