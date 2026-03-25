@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BottomNav from "@/components/layout/BottomNav";
-import { saveGrave } from "@/lib/storage";
+import { saveGrave, getPendingResult, deletePendingResult } from "@/lib/storage";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import type {
   GraveRecord,
@@ -31,16 +31,16 @@ export default function ResultPage({ id }: { id: string }) {
   const [savePromptDismissed, setSavePromptDismissed] = useState(false);
 
   useEffect(() => {
-    const raw = sessionStorage.getItem(`pending-${id}`);
-    if (!raw) {
-      router.replace("/");
-      return;
-    }
-    const data: PendingResult = JSON.parse(raw);
-    setPending(data);
+    getPendingResult(id).then((raw) => {
+      if (!raw) {
+        router.replace("/");
+        return;
+      }
+      const data = raw as PendingResult;
+      setPending(data);
+      deletePendingResult(id).catch(() => {});
 
-    // Kick off background research lookups
-    if (data.extracted?.name) {
+      if (!data.extracted?.name) return;
       setResearchLoading(true);
       fetch("/api/lookup", {
         method: "POST",
@@ -73,7 +73,7 @@ export default function ResultPage({ id }: { id: string }) {
         })
         .catch(() => setResearch({}))
         .finally(() => setResearchLoading(false));
-    }
+    });
   }, [id, router]);
 
   const handleSave = useCallback(async () => {

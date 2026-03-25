@@ -1,6 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 
+export const config = {
+  api: { bodyParser: { sizeLimit: "20mb" } },
+};
+
 const client = new Anthropic();
 
 const SYSTEM_PROMPT = `You are an expert at reading grave markers and historical headstones.
@@ -45,7 +49,7 @@ export async function POST(req: NextRequest) {
     const finalMime = validMime.includes(mimeType) ? mimeType : "image/jpeg";
 
     const message = await client.messages.create({
-      model: "claude-opus-4-5",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: [

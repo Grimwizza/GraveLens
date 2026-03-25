@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import BottomNav from "@/components/layout/BottomNav";
 import { fileToDataUrl, extractExifLocation, generateId } from "@/lib/exif";
 import { runTesseract } from "@/lib/ocr";
+import { savePendingResult } from "@/lib/storage";
 import type { ExtractedGraveData, GeoLocation } from "@/types";
 
 type Phase = "idle" | "previewing" | "processing" | "done";
@@ -45,40 +46,45 @@ export default function CapturePage() {
       setProgressLabel("Extracting location…");
       const exifLoc = await extractExifLocation(selectedFile);
 
-      // Step 2: Try Tesseract OCR first
+      // Step 2: Tesseract OCR (always run — provides fallback if Claude fails)
       setProgress(35);
       setProgressLabel("Reading inscription…");
-      let extracted: ExtractedGraveData | null = null;
 
       const ocrResult = await runTesseract(selectedFile);
-      const useClaudeBackup = ocrResult.confidence < 60 || ocrResult.text.length < 10;
+      // Always build a Tesseract baseline so we have something to show
+      let extracted: ExtractedGraveData = buildFromOcr(ocrResult.text);
+      const preferClaude = ocrResult.confidence < 60 || ocrResult.text.length < 10;
 
-      if (!useClaudeBackup) {
-        // Build a basic structured result from Tesseract
-        extracted = buildFromOcr(ocrResult.text);
-      }
-
-      // Step 3: Claude API (primary or backup)
+      // Step 3: Claude API — always try it; it reads weathered markers far better
       setProgress(55);
-      setProgressLabel(
-        useClaudeBackup ? "Enhancing with AI…" : "Verifying with AI…"
-      );
+      setProgressLabel("Analyzing with AI…");
 
-      // Convert to base64 for Claude
-      const base64 = previewUrl.split(",")[1];
-      const mimeType = selectedFile.type || "image/jpeg";
+      try {
+        // Resize to max 1536px before sending — full-size photos (10–20 MB as
+        // base64) exceed Next.js's 4 MB body limit and cause a silent 413 failure.
+        const { base64, mimeType } = await resizeForClaude(previewUrl);
 
-      const claudeRes = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: base64, mimeType }),
-      });
+        const claudeRes = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64, mimeType }),
+        });
 
-      if (claudeRes.ok) {
-        const { extracted: claudeExtracted } = await claudeRes.json();
-        extracted = claudeExtracted;
-      } else if (!extracted) {
-        throw new Error("Both OCR and AI analysis failed");
+        if (claudeRes.ok) {
+          const { extracted: claudeExtracted } = await claudeRes.json();
+          if (claudeExtracted) extracted = claudeExtracted;
+        } else {
+          console.warn(
+            "Claude API returned",
+            claudeRes.status,
+            "— using Tesseract result"
+          );
+          // Downgrade confidence label if we're relying on Tesseract alone
+          if (preferClaude) extracted.confidence = "low";
+        }
+      } catch (claudeErr) {
+        console.warn("Claude request failed — using Tesseract result:", claudeErr);
+        if (preferClaude) extracted.confidence = "low";
       }
 
       // Step 4: Reverse geocode if we have GPS
@@ -114,7 +120,7 @@ export default function CapturePage() {
         }
       }
 
-      // Step 5: Store result in sessionStorage and navigate
+      // Step 5: Store result in IndexedDB and navigate
       setProgress(95);
       setProgressLabel("Almost done…");
 
@@ -126,7 +132,7 @@ export default function CapturePage() {
         location,
         timestamp: Date.now(),
       };
-      sessionStorage.setItem(`pending-${id}`, JSON.stringify(pendingResult));
+      await savePendingResult(id, pendingResult);
 
       setProgress(100);
       router.push(`/result/${id}`);
@@ -442,6 +448,37 @@ function ProcessingState({
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Resize + re-encode to JPEG before sending to Claude.
+ * Keeps the longest edge ≤ 1536 px and quality at 88%.
+ * A typical phone photo goes from ~15 MB base64 → ~250 KB — well under
+ * Next.js's 4 MB default request body limit.
+ */
+function resizeForClaude(
+  dataUrl: string,
+  maxPx = 1536,
+  quality = 0.88
+): Promise<{ base64: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Canvas unavailable"));
+      ctx.drawImage(img, 0, 0, w, h);
+      const resized = canvas.toDataURL("image/jpeg", quality);
+      resolve({ base64: resized.split(",")[1], mimeType: "image/jpeg" });
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
 
 function buildFromOcr(text: string): ExtractedGraveData {
   const lines = text

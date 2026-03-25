@@ -1,13 +1,69 @@
 @import "tailwindcss";
 
-* {
-  -webkit-tap-highlight-color: transparent;
-  box-sizing: border-box;
+/* ── Tailwind v4 theme — all custom tokens live here ─────────────────────── */
+@theme {
+  /* Override/extend stone palette with GraveLens values */
+  --color-stone-950: #0f0e0d;
+  --color-stone-900: #1a1917;
+  --color-stone-800: #242220;
+  --color-stone-700: #2e2b28;
+  --color-stone-600: #3a3633;
+  --color-stone-500: #5a5550;
+  --color-stone-400: #8a8580;
+  --color-stone-300: #b5b0aa;
+  --color-stone-200: #d5d0ca;
+  --color-stone-100: #eae7e2;
+  --color-stone-50:  #f5f2ed;
+
+  /* Gold accent palette */
+  --color-gold-600: #a07830;
+  --color-gold-500: #c9a84c;
+  --color-gold-400: #d4b76a;
+  --color-gold-300: #dfc888;
+  --color-gold-100: #f5ead0;
+
+  /* Moss accent palette */
+  --color-moss-700: #3a4f3a;
+  --color-moss-600: #4a6b4a;
+  --color-moss-500: #5c7a5c;
+  --color-moss-400: #7a9a7a;
+  --color-moss-100: #e8f0e8;
+
+  /* Typography — variables set by next/font in layout.tsx */
+  --font-serif: var(--font-playfair), Georgia, "Times New Roman", serif;
+  --font-sans:  var(--font-inter), system-ui, sans-serif;
+
+  /* Animations */
+  --animate-fade-up: fadeUp 0.4s ease-out both;
+  --animate-fade-in: fadeIn 0.3s ease-out both;
+  --animate-shimmer: shimmer 1.5s infinite;
 }
+
+/* ── Keyframes ────────────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+/* ── Animation utility classes ───────────────────────────────────────────── */
+.animate-fade-up  { animation: fadeUp  0.4s ease-out both; }
+.animate-fade-in  { animation: fadeIn  0.3s ease-out both; }
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+*  { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
 html {
   background-color: #1a1917;
-  color: #f5f2ed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -19,58 +75,30 @@ body {
   overscroll-behavior: none;
 }
 
-/* Prevent zoom on input focus (iOS) */
-input, select, textarea {
-  font-size: 16px;
-}
+/* Prevent iOS zoom on input focus (requires font-size >= 16px) */
+input, select, textarea { font-size: 16px; }
 
-/* Scrollbar styling */
-::-webkit-scrollbar { width: 4px; }
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 4px; }
 ::-webkit-scrollbar-track { background: #1a1917; }
 ::-webkit-scrollbar-thumb { background: #3a3633; border-radius: 2px; }
 
-/* Shimmer loading */
+/* ── Shimmer skeleton ─────────────────────────────────────────────────────── */
 .shimmer {
   background: linear-gradient(90deg, #242220 25%, #2e2b28 50%, #242220 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
 
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.animate-fade-up { animation: fadeUp 0.4s ease-out both; }
-.animate-fade-in { animation: fadeIn 0.3s ease-out both; }
-
-/* Leaflet map dark mode overrides */
-.leaflet-container {
-  background: #1a1917 !important;
-}
-.leaflet-tile {
-  filter: brightness(0.65) saturate(0.5) sepia(0.15);
-}
+/* ── Leaflet dark-mode overrides ──────────────────────────────────────────── */
+.leaflet-container         { background: #1a1917 !important; }
+.leaflet-tile              { filter: brightness(0.65) saturate(0.5) sepia(0.15); }
 .leaflet-control-attribution {
   background: rgba(26,25,23,0.8) !important;
   color: #5a5550 !important;
   font-size: 10px !important;
 }
-.leaflet-control-zoom a {
-  background: #242220 !important;
-  color: #f5f2ed !important;
-  border-color: #3a3633 !important;
-}
+.leaflet-control-zoom a    { background: #242220 !important; color: #f5f2ed !important; border-color: #3a3633 !important; }
 .leaflet-popup-content-wrapper {
   background: #242220 !important;
   color: #f5f2ed !important;
@@ -78,4 +106,4 @@ input, select, textarea {
   border-radius: 8px !important;
   box-shadow: 0 4px 24px rgba(0,0,0,0.5) !important;
 }
-.leaflet-popup-tip { background: #242220 !important; }
+.leaflet-popup-tip         { background: #242220 !important; }
