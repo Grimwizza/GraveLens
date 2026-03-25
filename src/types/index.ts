@@ -89,8 +89,19 @@ export interface HistoricalContext {
   lifetimeLandmarks?: LifetimeLandmark[]; // major events they lived through
 }
 
+export interface MilitaryContext {
+  likelyConflict?: string;      // e.g. "World War I"
+  servedDuring?: string;        // e.g. "1917–1918"
+  theater?: string;             // e.g. "Western Front, France"
+  role?: string;                // e.g. "Tank Commander"
+  roleDescription?: string;     // factual historical context for that role
+  historicalNote?: string;      // broader service-era context
+  inferredFrom?: "inscription" | "symbols" | "dates";
+}
+
 export interface ResearchData {
   military?: MilitaryRecord[];
+  militaryContext?: MilitaryContext;
   newspapers?: NewspaperArticle[];
   landRecords?: LandRecord[];
   naraRecords?: NaraRecord[];
@@ -105,6 +116,7 @@ export interface GraveRecord {
   location: GeoLocation;
   extracted: ExtractedGraveData;
   research: ResearchData;
+  tags?: string[];
   userNotes?: string;
 }
 

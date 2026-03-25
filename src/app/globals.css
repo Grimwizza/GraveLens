@@ -90,20 +90,35 @@ input, select, textarea { font-size: 16px; }
   animation: shimmer 1.5s infinite;
 }
 
-/* ── Leaflet dark-mode overrides ──────────────────────────────────────────── */
-.leaflet-container         { background: #1a1917 !important; }
-.leaflet-tile              { filter: brightness(0.65) saturate(0.5) sepia(0.15); }
+/* ── Leaflet dark-mode overrides (must come after leaflet/dist/leaflet.css) ── */
+.leaflet-container { background: #1a1917 !important; }
+
+/* Darken and desaturate OSM tiles to match the stone palette */
+.leaflet-tile-pane { filter: brightness(0.65) saturate(0.5) sepia(0.15); }
+
 .leaflet-control-attribution {
-  background: rgba(26,25,23,0.8) !important;
+  background: rgba(26,25,23,0.85) !important;
   color: #5a5550 !important;
   font-size: 10px !important;
+  border-radius: 4px !important;
 }
-.leaflet-control-zoom a    { background: #242220 !important; color: #f5f2ed !important; border-color: #3a3633 !important; }
+.leaflet-control-attribution a { color: #8a8580 !important; }
+
+.leaflet-control-zoom a {
+  background: #242220 !important;
+  color: #f5f2ed !important;
+  border-color: #3a3633 !important;
+}
+.leaflet-control-zoom a:hover { background: #2e2b28 !important; }
+
 .leaflet-popup-content-wrapper {
   background: #242220 !important;
   color: #f5f2ed !important;
   border: 1px solid #3a3633 !important;
   border-radius: 8px !important;
   box-shadow: 0 4px 24px rgba(0,0,0,0.5) !important;
+  padding: 0 !important;
 }
-.leaflet-popup-tip         { background: #242220 !important; }
+.leaflet-popup-content { margin: 12px !important; }
+.leaflet-popup-tip-container { display: none; }
+.leaflet-popup-close-button { color: #8a8580 !important; top: 6px !important; right: 6px !important; }

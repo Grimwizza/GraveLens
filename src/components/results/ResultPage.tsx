@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BottomNav from "@/components/layout/BottomNav";
-import { saveGrave, getPendingResult, deletePendingResult } from "@/lib/storage";
+import { saveGrave, getGrave, getPendingResult, deletePendingResult } from "@/lib/storage";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import type {
   GraveRecord,
@@ -27,15 +27,33 @@ export default function ResultPage({ id }: { id: string }) {
   const [research, setResearch] = useState<ResearchData | null>(null);
   const [researchLoading, setResearchLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
   const [savePromptDismissed, setSavePromptDismissed] = useState(false);
 
   useEffect(() => {
-    getPendingResult(id).then((raw) => {
+    getPendingResult(id).then(async (raw) => {
+      // Fall back to the saved archive if there's no in-flight pending result
       if (!raw) {
-        router.replace("/");
+        const archived = await getGrave(id);
+        if (!archived) {
+          router.replace("/");
+          return;
+        }
+        setPending({
+          id: archived.id,
+          photoDataUrl: archived.photoDataUrl,
+          extracted: archived.extracted,
+          location: archived.location,
+          timestamp: archived.timestamp,
+        });
+        setResearch(archived.research ?? {});
+        setTags(archived.tags ?? []);
+        setSaved(true);
+        setSavePromptDismissed(true);
         return;
       }
+
       const data = raw as PendingResult;
       setPending(data);
       deletePendingResult(id).catch(() => {});
@@ -53,6 +71,8 @@ export default function ResultPage({ id }: { id: string }) {
           deathYear: data.extracted.deathYear,
           state: data.location?.state,
           cemetery: data.location?.cemetery,
+          inscription: data.extracted.inscription ?? "",
+          symbols: data.extracted.symbols ?? [],
         }),
       })
         .then((r) => r.json())
@@ -62,6 +82,7 @@ export default function ResultPage({ id }: { id: string }) {
             naraRecords: d.naraRecords ?? [],
             landRecords: d.landRecords ?? [],
             historical: d.historical ?? {},
+            militaryContext: d.militaryContext ?? undefined,
             cemetery: data.location?.cemetery
               ? {
                   name: data.location.cemetery,
@@ -85,11 +106,20 @@ export default function ResultPage({ id }: { id: string }) {
       location: pending.location ?? { lat: 0, lng: 0 },
       extracted: pending.extracted,
       research: research ?? {},
+      tags,
     };
     await saveGrave(record);
     setSaved(true);
     setSavePromptDismissed(true);
-  }, [pending, research]);
+  }, [pending, research, tags]);
+
+  // When already saved, persist tag changes immediately
+  const handleTagsChange = useCallback(async (next: string[]) => {
+    setTags(next);
+    if (!saved || !pending) return;
+    const existing = await getGrave(pending.id);
+    if (existing) await saveGrave({ ...existing, tags: next });
+  }, [saved, pending]);
 
   const handleShare = useCallback(async () => {
     if (!pending) return;
@@ -126,6 +156,7 @@ export default function ResultPage({ id }: { id: string }) {
     location: location ?? { lat: 0, lng: 0 },
     extracted,
     research: research ?? {},
+    tags,
   };
 
   return (
@@ -214,6 +245,15 @@ export default function ResultPage({ id }: { id: string }) {
           {/* Cemetery & Location */}
           {location && <CemeteryCard location={location} research={research} />}
 
+          {/* Military context */}
+          {(research?.militaryContext || researchLoading) && (
+            <MilitaryCard
+              context={research?.militaryContext}
+              naraRecords={research?.naraRecords}
+              loading={researchLoading}
+            />
+          )}
+
           {/* Historical context */}
           {(research?.historical || researchLoading) && (
             <HistoricalCard
@@ -233,6 +273,9 @@ export default function ResultPage({ id }: { id: string }) {
             <SymbolsCard symbols={extracted.symbols} />
           )}
 
+          {/* Tags */}
+          <TagsCard tags={tags} onChange={handleTagsChange} />
+
           {/* Newspaper records */}
           {(research?.newspapers?.length || researchLoading) ? (
             <RecordsCard
@@ -248,8 +291,9 @@ export default function ResultPage({ id }: { id: string }) {
             />
           ) : null}
 
-          {/* NARA records */}
-          {(research?.naraRecords?.length || researchLoading) ? (
+          {/* NARA records — only show standalone card when there's no military section
+              (military section already embeds them when militaryContext is present) */}
+          {!research?.militaryContext && (research?.naraRecords?.length || researchLoading) ? (
             <RecordsCard
               title="National Archives"
               icon="🏛"
@@ -716,6 +760,253 @@ function RecordItem({
         <p className="text-gold-500 text-xs mt-1">View record →</p>
       )}
     </>
+  );
+}
+
+// ── Military Card ─────────────────────────────────────────────────────────────
+
+function MilitaryCard({
+  context,
+  naraRecords,
+  loading,
+}: {
+  context: import("@/types").MilitaryContext | undefined;
+  naraRecords: import("@/types").NaraRecord[] | undefined;
+  loading: boolean;
+}) {
+  if (loading && !context) {
+    return (
+      <div className="py-5 animate-fade-up" style={{ animationDelay: "0.08s" }}>
+        <SectionHeader icon="🎖" title="Military Service" />
+        <div className="mt-3 space-y-2">
+          <div className="h-4 shimmer rounded w-2/3" />
+          <div className="h-4 shimmer rounded w-5/6" />
+          <div className="h-4 shimmer rounded w-3/4" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!context) return null;
+
+  const naraSearchName = context.likelyConflict
+    ? `https://catalog.archives.gov/search?q=${encodeURIComponent(context.likelyConflict)}&levelOfDescription=item`
+    : "https://catalog.archives.gov";
+
+  return (
+    <div className="py-5 animate-fade-up" style={{ animationDelay: "0.08s" }}>
+      <SectionHeader icon="🎖" title="Military Service" />
+
+      <div className="mt-3 space-y-4">
+        {/* Conflict + service dates */}
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          {context.likelyConflict && (
+            <div>
+              <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">Conflict</p>
+              <p className="text-stone-200 font-medium">{context.likelyConflict}</p>
+            </div>
+          )}
+          {context.servedDuring && (
+            <div>
+              <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">US Service Period</p>
+              <p className="text-stone-200 font-medium">{context.servedDuring}</p>
+            </div>
+          )}
+          {context.theater && (
+            <div>
+              <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">Theater</p>
+              <p className="text-stone-200 font-medium">{context.theater}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Role + description */}
+        {(context.role || context.roleDescription) && (
+          <div className="p-3 rounded-xl bg-stone-800 border border-stone-700/60">
+            {context.role && (
+              <p className="text-xs text-stone-500 uppercase tracking-widest mb-1.5">{context.role}</p>
+            )}
+            {context.roleDescription && (
+              <p className="text-stone-300 text-sm leading-relaxed">{context.roleDescription}</p>
+            )}
+          </div>
+        )}
+
+        {/* Historical note */}
+        {context.historicalNote && (
+          <p className="text-stone-400 text-sm leading-relaxed italic border-l-2 border-stone-700 pl-3">
+            {context.historicalNote}
+          </p>
+        )}
+
+        {/* Inferred disclaimer */}
+        {context.inferredFrom === "dates" && (
+          <p className="text-stone-600 text-xs">
+            Conflict inferred from life dates — not confirmed by inscription.
+          </p>
+        )}
+
+        {/* NARA records if found */}
+        {naraRecords && naraRecords.length > 0 && (
+          <div>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-2">National Archives Records</p>
+            <ul className="space-y-2">
+              {naraRecords.map((r, i) => (
+                <li key={i}>
+                  <a
+                    href={r.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750"
+                  >
+                    <p className="text-stone-200 text-sm font-medium line-clamp-2">{r.title}</p>
+                    {r.recordGroup && (
+                      <p className="text-stone-500 text-xs mt-0.5">Record Group {r.recordGroup}</p>
+                    )}
+                    {r.description && (
+                      <p className="text-stone-400 text-xs mt-1 line-clamp-2">{r.description}</p>
+                    )}
+                    <p className="text-gold-500 text-xs mt-1">View in NARA →</p>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Always offer a NARA search link */}
+        <a
+          href={naraSearchName}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-gold-500 text-sm"
+        >
+          Search National Archives
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 6h8M6 2l4 4-4 4" />
+          </svg>
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ── Tags ─────────────────────────────────────────────────────────────────────
+
+const PRESET_TAGS = [
+  "Relative",
+  "Ancestor",
+  "Veteran",
+  "Notable",
+  "Historic",
+  "Needs research",
+  "Mystery",
+];
+
+function TagsCard({
+  tags,
+  onChange,
+}: {
+  tags: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [customValue, setCustomValue] = useState("");
+
+  const customTags = tags.filter((t) => !PRESET_TAGS.includes(t));
+
+  const toggle = (tag: string) => {
+    onChange(tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag]);
+  };
+
+  const addCustom = () => {
+    const val = customValue.trim();
+    if (!val || tags.includes(val)) return;
+    onChange([...tags, val]);
+    setCustomValue("");
+    setAdding(false);
+  };
+
+  const remove = (tag: string) => onChange(tags.filter((t) => t !== tag));
+
+  return (
+    <div className="py-5 animate-fade-up" style={{ animationDelay: "0.22s" }}>
+      <SectionHeader icon="🏷" title="Tags" />
+      <div className="mt-3 flex flex-wrap gap-2">
+        {PRESET_TAGS.map((tag) => {
+          const active = tags.includes(tag);
+          return (
+            <button
+              key={tag}
+              onClick={() => toggle(tag)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                active
+                  ? "bg-gold-500/15 border-gold-500/50 text-gold-400"
+                  : "bg-stone-800 border-stone-700 text-stone-400 active:border-stone-500"
+              }`}
+            >
+              {active && <span className="mr-1 text-gold-500">✓</span>}
+              {tag}
+            </button>
+          );
+        })}
+
+        {/* Custom tags */}
+        {customTags.map((tag) => (
+          <span
+            key={tag}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-moss-700/30 border border-moss-600/40 text-moss-400"
+          >
+            {tag}
+            <button
+              onClick={() => remove(tag)}
+              className="text-stone-500 active:text-red-400 ml-0.5 leading-none"
+              aria-label={`Remove ${tag}`}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+
+        {/* Add custom tag */}
+        {adding ? (
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              type="text"
+              value={customValue}
+              onChange={(e) => setCustomValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addCustom();
+                if (e.key === "Escape") { setAdding(false); setCustomValue(""); }
+              }}
+              placeholder="Tag name…"
+              className="px-3 py-1.5 rounded-full text-xs bg-stone-800 border border-stone-600 text-stone-200 w-28 outline-none focus:border-gold-500"
+            />
+            <button
+              onClick={addCustom}
+              disabled={!customValue.trim()}
+              className="text-gold-500 text-xs disabled:opacity-40"
+            >
+              Add
+            </button>
+            <button
+              onClick={() => { setAdding(false); setCustomValue(""); }}
+              className="text-stone-500 text-xs"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setAdding(true)}
+            className="px-3 py-1.5 rounded-full text-xs border border-dashed border-stone-600 text-stone-500 active:border-stone-400"
+          >
+            + Custom
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

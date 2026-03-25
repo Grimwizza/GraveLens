@@ -42,6 +42,25 @@ const tabs = [
       </svg>
     ),
   },
+  {
+    href: "/map",
+    label: "Map",
+    icon: (active: boolean) => (
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={active ? "#c9a84c" : "#8a8580"}
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 11 7 11s7-5.75 7-11c0-3.87-3.13-7-7-7z" strokeLinejoin="round" />
+        <circle cx="12" cy="9" r="2.5" />
+      </svg>
+    ),
+  },
 ];
 
 export default function BottomNav() {
@@ -58,7 +77,7 @@ export default function BottomNav() {
             const isActive =
               tab.href === "/"
                 ? pathname === "/" || pathname.startsWith("/result")
-                : pathname.startsWith(tab.href);
+                : pathname === tab.href || pathname.startsWith(tab.href + "/");
 
             return (
               <Link
