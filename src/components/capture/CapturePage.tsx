@@ -74,10 +74,12 @@ export default function CapturePage() {
           const { extracted: claudeExtracted } = await claudeRes.json();
           if (claudeExtracted) extracted = claudeExtracted;
         } else {
+          const errorData = await claudeRes.json().catch(() => ({}));
           console.warn(
             "Claude API returned",
             claudeRes.status,
-            "— using Tesseract result"
+            "— using Tesseract result.",
+            "Details:", errorData.details || "Unknown error"
           );
           // Downgrade confidence label if we're relying on Tesseract alone
           if (preferClaude) extracted.confidence = "low";

@@ -47,8 +47,9 @@ export async function POST(req: NextRequest) {
     const validMime = ["image/jpeg", "image/png", "image/webp", "image/gif"];
     const finalMime = validMime.includes(mimeType) ? mimeType : "image/jpeg";
 
+    // Reverting to the originally used model name which is confirmed valid in this SDK version
     const message = await client.messages.create({
-      model: "claude-3-5-sonnet-20241022",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: [
@@ -91,11 +92,20 @@ export async function POST(req: NextRequest) {
     extracted.source = "claude";
 
     return NextResponse.json({ extracted });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Claude analysis error:", error);
+    
+    // Provide more detail in the response for debugging
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStatus = error?.status || 500;
+    
     return NextResponse.json(
-      { error: "Analysis failed. Please try again." },
-      { status: 500 }
+      { 
+        error: "Analysis failed", 
+        details: errorMessage,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
+      { status: errorStatus }
     );
   }
 }
