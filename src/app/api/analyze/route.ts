@@ -37,6 +37,21 @@ Rules:
 - If text is partially obscured, include what is legible with [?] for uncertain characters.`;
 
 export async function POST(req: NextRequest) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+
+  if (!apiKey) {
+    console.error("ANTHROPIC_API_KEY is missing from environment variables");
+    return NextResponse.json(
+      { 
+        error: "Configuration error", 
+        details: "API key is missing on the server. Please check environment variables." 
+      },
+      { status: 500 }
+    );
+  }
+
+  const client = new Anthropic({ apiKey });
+
   try {
     const { imageBase64, mimeType } = await req.json();
 
