@@ -1,4 +1,4 @@
-const CACHE_NAME = "gravelens-v1";
+const CACHE_NAME = "gravelens-v2";
 const STATIC_ASSETS = ["/", "/archive", "/manifest.json"];
 
 self.addEventListener("install", (event) => {
