@@ -1,0 +1,108 @@
+export interface ExtractedGraveData {
+  name: string;
+  firstName: string;
+  lastName: string;
+  birthDate: string;
+  birthYear: number | null;
+  deathDate: string;
+  deathYear: number | null;
+  ageAtDeath: number | null;
+  inscription: string;
+  epitaph: string;
+  symbols: string[];
+  markerType: string;
+  material: string;
+  condition: string;
+  confidence: "high" | "medium" | "low";
+  source: "claude" | "tesseract";
+}
+
+export interface GeoLocation {
+  lat: number;
+  lng: number;
+  cemetery?: string;
+  cemeteryWikipedia?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+}
+
+export interface MilitaryRecord {
+  conflict: string;
+  branch: string;
+  rank: string;
+  unit: string;
+  source: string;
+  sourceUrl?: string;
+  details?: string;
+}
+
+export interface NewspaperArticle {
+  title: string;
+  date: string;
+  newspaper: string;
+  location: string;
+  url: string;
+  snippet: string;
+}
+
+export interface LandRecord {
+  patentNumber: string;
+  date: string;
+  state: string;
+  county: string;
+  acres: number;
+  documentUrl?: string;
+  coordinates?: { lat: number; lng: number };
+}
+
+export interface NaraRecord {
+  title: string;
+  recordGroup: string;
+  description: string;
+  url: string;
+  thumbnailUrl?: string;
+}
+
+export interface CemeteryInfo {
+  name: string;
+  established?: string;
+  denominiation?: string;
+  description?: string;
+  wikipediaUrl?: string;
+  location?: GeoLocation;
+}
+
+export interface HistoricalContext {
+  birthEra?: string;
+  deathEra?: string;
+  lifeExpectancyAtDeath?: number;
+  notableEvents?: string[];
+  worldEvents?: string[];
+}
+
+export interface ResearchData {
+  military?: MilitaryRecord[];
+  newspapers?: NewspaperArticle[];
+  landRecords?: LandRecord[];
+  naraRecords?: NaraRecord[];
+  cemetery?: CemeteryInfo;
+  historical?: HistoricalContext;
+}
+
+export interface GraveRecord {
+  id: string;
+  timestamp: number;
+  photoDataUrl: string;
+  location: GeoLocation;
+  extracted: ExtractedGraveData;
+  research: ResearchData;
+  userNotes?: string;
+}
+
+export interface AnalysisResult {
+  extracted: ExtractedGraveData;
+  location: GeoLocation | null;
+  photoDataUrl: string;
+}
