@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
+import ServiceWorkerRegister from "./sw-register";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -45,7 +46,8 @@ export default function RootLayout({
       lang="en"
       className={`${playfair.variable} ${inter.variable} h-full`}
     >
-      <body className="min-h-dvh flex flex-col bg-stone-900 text-stone-50 font-sans">
+      <body className="min-h-dvh flex flex-col bg-[#1a1917] text-[#f5f2ed] font-sans">
+        <ServiceWorkerRegister />
         {children}
       </body>
     </html>

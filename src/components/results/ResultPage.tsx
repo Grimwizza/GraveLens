@@ -479,7 +479,7 @@ function HistoricalCard({
               <strong className="text-stone-200">
                 ~{historical.lifeExpectancyAtDeath} years
               </strong>
-              . {extracted.extracted?.name ?? "This person"} lived to{" "}
+              . {extracted.name || "This person"} lived to{" "}
               <strong className="text-stone-200">
                 {extracted.ageAtDeath}
               </strong>
