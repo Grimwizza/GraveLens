@@ -2,13 +2,15 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Cropper from "react-easy-crop";
+import type { Area } from "react-easy-crop";
 import BottomNav from "@/components/layout/BottomNav";
 import { fileToDataUrl, extractExifLocation, generateId } from "@/lib/exif";
 import { runTesseract } from "@/lib/ocr";
 import { savePendingResult } from "@/lib/storage";
 import type { ExtractedGraveData, GeoLocation } from "@/types";
 
-type Phase = "idle" | "previewing" | "processing" | "done";
+type Phase = "idle" | "previewing" | "cropping" | "processing" | "done";
 
 export default function CapturePage() {
   const router = useRouter();
@@ -20,6 +22,9 @@ export default function CapturePage() {
   const [progressLabel, setProgressLabel] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  // Crop state — originalUrl preserves the uncropped image so the user can
+  // re-crop if they change their mind before hitting Analyze.
+  const [originalUrl, setOriginalUrl] = useState<string | null>(null);
 
   // Reset scroll on mount
   useEffect(() => {
@@ -152,9 +157,24 @@ export default function CapturePage() {
     }
   }, [selectedFile, previewUrl, router]);
 
+  const handleCrop = useCallback(() => {
+    setOriginalUrl(previewUrl);
+    setPhase("cropping");
+  }, [previewUrl]);
+
+  const handleCropApply = useCallback((croppedUrl: string) => {
+    setPreviewUrl(croppedUrl);
+    setPhase("previewing");
+  }, []);
+
+  const handleCropSkip = useCallback(() => {
+    setPhase("previewing");
+  }, []);
+
   const handleReset = useCallback(() => {
     setPhase("idle");
     setPreviewUrl(null);
+    setOriginalUrl(null);
     setSelectedFile(null);
     setProgress(0);
   }, []);
@@ -196,7 +216,15 @@ export default function CapturePage() {
           <PreviewState
             previewUrl={previewUrl}
             onAnalyze={handleAnalyze}
+            onCrop={handleCrop}
             onRetake={handleReset}
+          />
+        )}
+        {phase === "cropping" && (originalUrl ?? previewUrl) && (
+          <CropState
+            imageUrl={(originalUrl ?? previewUrl)!}
+            onApply={handleCropApply}
+            onSkip={handleCropSkip}
           />
         )}
         {phase === "processing" && previewUrl && (
@@ -352,10 +380,12 @@ function IdleState({
 function PreviewState({
   previewUrl,
   onAnalyze,
+  onCrop,
   onRetake,
 }: {
   previewUrl: string;
   onAnalyze: () => void;
+  onCrop: () => void;
   onRetake: () => void;
 }) {
   return (
@@ -367,17 +397,27 @@ function PreviewState({
           alt="Selected grave marker"
           className="w-full h-full object-cover"
         />
-        {/* Corner brackets overlay */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
           <path d="M5 15 L5 5 L15 5" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
           <path d="M85 5 L95 5 L95 15" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
           <path d="M5 85 L5 95 L15 95" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
           <path d="M85 95 L95 95 L95 85" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
         </svg>
+        {/* Crop shortcut overlay */}
+        <button
+          onClick={onCrop}
+          className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium backdrop-blur-sm transition-all active:scale-95"
+          style={{ background: "rgba(0,0,0,0.55)", color: "#d4b76a", border: "1px solid rgba(201,168,76,0.35)" }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>
+          </svg>
+          Crop
+        </button>
       </div>
 
       <p className="text-stone-400 text-sm text-center">
-        Make sure the inscription is clear and legible.
+        Crop to the marker for best results, then analyze.
       </p>
 
       <div className="flex flex-col gap-3 w-full">
@@ -397,6 +437,84 @@ function PreviewState({
           className="w-full h-12 rounded-2xl text-stone-400 font-medium text-sm transition-all active:scale-[0.97]"
         >
           Use a different photo
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Crop state ────────────────────────────────────────────────────────────────
+
+function CropState({
+  imageUrl,
+  onApply,
+  onSkip,
+}: {
+  imageUrl: string;
+  onApply: (croppedUrl: string) => void;
+  onSkip: () => void;
+}) {
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [applying, setApplying] = useState(false);
+
+  const handleApply = async () => {
+    if (!croppedAreaPixels) { onSkip(); return; }
+    setApplying(true);
+    try {
+      const cropped = await applyCrop(imageUrl, croppedAreaPixels);
+      onApply(cropped);
+    } catch {
+      onSkip();
+    }
+  };
+
+  return (
+    <div className="flex flex-col w-full max-w-sm gap-4 animate-fade-in pt-4">
+      <p className="text-stone-300 text-sm text-center">
+        Drag and pinch to frame the marker tightly.
+      </p>
+
+      {/* Crop canvas — fixed height so the Cropper has a defined container */}
+      <div
+        className="relative w-full rounded-2xl overflow-hidden bg-stone-800"
+        style={{ height: "60vw", maxHeight: "360px", minHeight: "260px" }}
+      >
+        <Cropper
+          image={imageUrl}
+          crop={crop}
+          zoom={zoom}
+          aspect={undefined}
+          onCropChange={setCrop}
+          onZoomChange={setZoom}
+          onCropComplete={(_: Area, pixels: Area) => setCroppedAreaPixels(pixels)}
+          style={{
+            containerStyle: { borderRadius: "1rem" },
+            mediaStyle: {},
+            cropAreaStyle: {
+              border: "2px solid #c9a84c",
+              boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)",
+            },
+          }}
+        />
+      </div>
+
+      <div className="flex gap-3 w-full">
+        <button
+          onClick={handleApply}
+          disabled={applying}
+          className="flex-1 h-13 rounded-2xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.97] disabled:opacity-60"
+          style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)", height: "52px" }}
+        >
+          {applying ? "Applying…" : "Apply Crop"}
+        </button>
+        <button
+          onClick={onSkip}
+          className="flex-1 h-13 rounded-2xl text-stone-400 font-medium text-sm border border-stone-700 transition-all active:scale-[0.97]"
+          style={{ height: "52px" }}
+        >
+          Skip
         </button>
       </div>
     </div>
@@ -458,6 +576,27 @@ function ProcessingState({
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Draw the crop region onto a canvas and return it as a JPEG data URL.
+ * croppedAreaPixels comes directly from react-easy-crop's onCropComplete.
+ */
+function applyCrop(imageUrl: string, area: Area): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = area.width;
+      canvas.height = area.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Canvas unavailable"));
+      ctx.drawImage(img, area.x, area.y, area.width, area.height, 0, 0, area.width, area.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.95));
+    };
+    img.onerror = reject;
+    img.src = imageUrl;
+  });
+}
 
 /**
  * Compress a photo for long-term storage in IndexedDB.

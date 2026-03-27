@@ -7,11 +7,11 @@
   --color-stone-900: #1a1917;
   --color-stone-800: #242220;
   --color-stone-700: #2e2b28;
-  --color-stone-600: #3a3633;
-  --color-stone-500: #5a5550;
-  --color-stone-400: #8a8580;
-  --color-stone-300: #b5b0aa;
-  --color-stone-200: #d5d0ca;
+  --color-stone-600: #504c48;  /* was #3a3633 — raised for legibility (~3.3:1 contrast) */
+  --color-stone-500: #7a7570;  /* was #5a5550 — raised to pass WCAG AA (~4.5:1 contrast) */
+  --color-stone-400: #a09b96;  /* was #8a8580 — raised for clear secondary text (~6:1 contrast) */
+  --color-stone-300: #c0bbb4;  /* was #b5b0aa — slightly brighter */
+  --color-stone-200: #d8d3cd;  /* was #d5d0ca */
   --color-stone-100: #eae7e2;
   --color-stone-50:  #f5f2ed;
 
@@ -66,6 +66,17 @@ html {
   background-color: #1a1917;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Fluid base: 15px on small mobile → 16px on tablet/desktop.
+     All rem-based Tailwind utilities scale with this. */
+  font-size: clamp(15px, 1.5vw + 12px, 16px);
+}
+
+/* Bump the fixed-pixel micro-text classes up on wider screens so captions
+   and metadata are readable without a magnifier. */
+@media (min-width: 640px) {
+  .text-\[10px\] { font-size: 12px; }
+  .text-\[11px\] { font-size: 13px; }
+  .text-\[9px\]  { font-size: 11px; }
 }
 
 body {
