@@ -10,15 +10,25 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE_NAME)
+            .map((key) => caches.delete(key))
+        )
       )
-    )
+      .then(() => self.clients.claim())
+      .then(() =>
+        // Tell every open tab that a new version is live so they can reload.
+        self.clients.matchAll({ type: "window" }).then((clients) =>
+          clients.forEach((client) =>
+            client.postMessage({ type: "SW_UPDATED" })
+          )
+        )
+      )
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
