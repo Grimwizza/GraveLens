@@ -171,7 +171,7 @@ export default function ResultPage({ id }: { id: string }) {
   };
 
   return (
-    <div className="flex flex-col min-h-dvh bg-stone-900">
+    <div className="flex flex-col h-dvh bg-stone-900 overflow-hidden">
       {/* Header */}
       <header
         className="flex items-center justify-between px-5 py-3 bg-stone-900/95 backdrop-blur-sm sticky top-0 z-30 border-b border-stone-800"
@@ -204,7 +204,7 @@ export default function ResultPage({ id }: { id: string }) {
         </button>
       </header>
 
-      <main className="flex-1 flex flex-col max-w-lg mx-auto w-full pb-32">
+      <main className="scroll-container max-w-lg mx-auto w-full pb-8">
         {/* Hero photo */}
         <div className="relative w-full aspect-[4/3] bg-stone-800 overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -380,7 +380,7 @@ export default function ResultPage({ id }: { id: string }) {
 
       {/* Achievement unlock toasts */}
       {achievementToasts.length > 0 && (
-        <div className="fixed bottom-24 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 pointer-events-none">
+        <div className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 pb-24 pointer-events-none" style={{ paddingBottom: "calc(5rem + env(safe-area-inset-bottom))" }}>
           {achievementToasts.map((a) => (
             <div
               key={a.id}

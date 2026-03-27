@@ -112,7 +112,7 @@ export default function ArchiveMap({ graves }: { graves: GraveRecord[] }) {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [graves]);
 
   const hasNoLocation = graves.every((g) => !g.location?.lat || !g.location?.lng);
 

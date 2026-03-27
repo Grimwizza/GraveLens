@@ -357,11 +357,13 @@ export default function AchievementsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
-    getAllGraves().then((g) => {
-      setGraves(g);
-      setUnlocks(loadUnlocks());
-      setLoaded(true);
-    });
+    getAllGraves()
+      .then((g) => {
+        setGraves(g);
+        setUnlocks(loadUnlocks());
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
   }, []);
 
   const stats = loadStats();
@@ -373,7 +375,7 @@ export default function AchievementsPage() {
   const totalCount = ACHIEVEMENTS.length;
 
   return (
-    <div className="flex flex-col min-h-dvh bg-stone-900">
+    <div className="flex flex-col h-dvh bg-stone-900 overflow-hidden">
       {/* Header */}
       <header
         className="px-5 py-4 bg-stone-900/95 backdrop-blur-sm sticky top-0 z-30 border-b border-stone-800"
@@ -385,7 +387,7 @@ export default function AchievementsPage() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-lg mx-auto w-full px-4 pb-28 space-y-6 mt-5">
+      <main className="scroll-container max-w-lg mx-auto w-full px-4 pb-8 space-y-6 mt-5">
         {/* Rank card */}
         <div
           className="rounded-2xl p-5"

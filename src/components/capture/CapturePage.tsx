@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 import BottomNav from "@/components/layout/BottomNav";
+import BrandLogo from "@/components/ui/BrandLogo";
 import { fileToDataUrl, extractExifLocation, generateId } from "@/lib/exif";
 import { runTesseract } from "@/lib/ocr";
 import { savePendingResult } from "@/lib/storage";
@@ -180,29 +181,14 @@ export default function CapturePage() {
   }, []);
 
   return (
-    <div className="flex flex-col min-h-dvh bg-stone-900">
+    <div className="flex flex-col h-dvh bg-stone-900 overflow-hidden">
       {/* Header */}
       <header
-        className="flex items-center justify-center px-5 pt-4 pb-3 flex-shrink-0"
+        className="flex items-center justify-center px-5 pt-2 pb-2 flex-shrink-0"
         style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
       >
         <div className="flex items-center gap-2.5">
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <path
-              d="M11 2L11 4M11 18L11 20M4 11L2 11M20 11L18 11"
-              stroke="#c9a84c"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-            <circle cx="11" cy="11" r="4" stroke="#c9a84c" strokeWidth="1.5" />
-            <path
-              d="M7.5 3.5C5 4.5 3 7 3 11"
-              stroke="#5c7a5c"
-              strokeWidth="1"
-              strokeLinecap="round"
-              opacity="0.6"
-            />
-          </svg>
+          <BrandLogo size={22} color="#c9a84c" />
           <span className="font-serif text-xl font-semibold tracking-wide text-stone-50">
             GraveLens
           </span>
@@ -210,7 +196,7 @@ export default function CapturePage() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center px-5 pb-28">
+      <main className="flex-1 flex flex-col items-center justify-center px-5 overflow-y-auto no-scrollbar" style={{ scrollbarWidth: "none" }}>
         {phase === "idle" && <IdleState onCamera={() => cameraInputRef.current?.click()} onUpload={() => fileInputRef.current?.click()} />}
         {phase === "previewing" && previewUrl && (
           <PreviewState
@@ -276,9 +262,9 @@ function IdleState({
   onUpload: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center flex-1 w-full max-w-sm gap-8 animate-fade-in">
-      {/* Viewfinder graphic */}
-      <div className="relative flex items-center justify-center w-64 h-64">
+    <div className="flex flex-col items-center w-full max-w-sm gap-4 animate-fade-in pt-1">
+      {/* Viewfinder graphic - sized to fit 375x667 with NO scrolling */}
+      <div className="relative flex items-center justify-center w-48 h-48 flex-shrink-0">
         {/* Corner brackets */}
         <svg className="absolute inset-0 w-full h-full" viewBox="0 0 256 256">
           <path
@@ -313,9 +299,6 @@ function IdleState({
             fill="none"
             opacity="0.8"
           />
-          {/* Center cross */}
-          <line x1="128" y1="116" x2="128" y2="140" stroke="#5c7a5c" strokeWidth="1" opacity="0.5" />
-          <line x1="116" y1="128" x2="140" y2="128" stroke="#5c7a5c" strokeWidth="1" opacity="0.5" />
           {/* Headstone silhouette */}
           <path
             d="M96 190 L96 120 Q96 96 128 96 Q160 96 160 120 L160 190 Z"
@@ -324,20 +307,26 @@ function IdleState({
             strokeWidth="1.5"
           />
         </svg>
-        <div className="flex flex-col items-center gap-1 text-center">
-          <span className="font-serif text-3xl text-stone-400 leading-none">†</span>
-          <span className="text-stone-500 text-xs tracking-widest uppercase mt-1">
-            Point & scan
-          </span>
+        <div className="absolute inset-0 pointer-events-none">
+          {/* Logo centered on grave silhouette (y=142 of 256 -> 55.5%) */}
+          <div style={{ position: "absolute", left: "50%", top: "55.5%", transform: "translate(-50%, -50%)" }}>
+            <BrandLogo size={28} color="#c9a84c" className="drop-shadow-[0_0_12px_rgba(201,168,76,0.5)]" />
+          </div>
+          {/* Text centered below brackets (y=240 of 256 -> 94%) */}
+          <div style={{ position: "absolute", left: "50%", top: "94%", transform: "translate(-50%, -50%)" }}>
+            <span className="text-stone-300 text-[10px] font-bold tracking-[0.3em] whitespace-nowrap uppercase opacity-50">
+              Point & scan
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="flex flex-col items-center gap-2 text-center px-4">
-        <h1 className="font-serif text-2xl font-semibold text-stone-100">
-          Read a grave marker
+      <div className="flex flex-col items-center gap-2 text-center px-4 -translate-y-2">
+        <h1 className="font-serif text-xl font-semibold text-stone-100 leading-tight">
+          Bring the story behind every stone into focus.
         </h1>
-        <p className="text-stone-400 text-sm leading-relaxed">
-          Photograph any headstone to uncover the story of the person buried there.
+        <p className="text-stone-400 text-sm leading-relaxed max-w-[280px]">
+          Photograph any headstone to instantly uncover and preserve their legacy.
         </p>
       </div>
 
@@ -345,7 +334,7 @@ function IdleState({
       <div className="flex flex-col gap-3 w-full">
         <button
           onClick={onCamera}
-          className="flex items-center justify-center gap-3 w-full h-14 rounded-2xl text-stone-900 font-semibold text-base transition-all active:scale-[0.97]"
+          className="flex items-center justify-center gap-3 w-full h-11 rounded-xl text-stone-900 font-semibold text-base transition-all active:scale-[0.97]"
           style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -357,9 +346,9 @@ function IdleState({
 
         <button
           onClick={onUpload}
-          className="flex items-center justify-center gap-3 w-full h-14 rounded-2xl border border-stone-600 text-stone-200 font-medium text-base transition-all active:scale-[0.97] bg-stone-800/50"
+          className="flex items-center justify-center gap-3 w-full h-11 rounded-xl border border-stone-600 text-stone-200 font-medium text-sm transition-all active:scale-[0.97] bg-stone-800/50"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="17 8 12 3 7 8"/>
             <line x1="12" y1="3" x2="12" y2="15"/>
@@ -368,7 +357,7 @@ function IdleState({
         </button>
       </div>
 
-      <p className="text-stone-600 text-xs text-center px-6">
+      <p className="text-stone-600 text-[10px] text-center px-6 leading-tight mt-6">
         Photos with GPS data will automatically identify the cemetery location.
       </p>
     </div>
@@ -632,14 +621,17 @@ function resizeForStorage(dataUrl: string): Promise<string> {
 
 /**
  * Resize + re-encode to JPEG before sending to Claude.
- * Keeps the longest edge ≤ 1536 px and quality at 88%.
- * A typical phone photo goes from ~15 MB base64 → ~250 KB — well under
- * Next.js's 4 MB default request body limit.
+ * Keeps the longest edge ≤ 1024 px at 78% quality.
+ * Anthropic enforces a 5 MB decoded-image limit; 1536 px / 88% can exceed
+ * this on high-frequency textures (grass, weathered stone). At 1024 px / 78%
+ * typical grave marker photos land at 150–400 KB — well under both the
+ * Anthropic limit and Next.js's 4 MB request body limit.
+ * Claude reads inscriptions accurately at this resolution.
  */
 function resizeForClaude(
   dataUrl: string,
-  maxPx = 1536,
-  quality = 0.88
+  maxPx = 1024,
+  quality = 0.78
 ): Promise<{ base64: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
     const img = new Image();

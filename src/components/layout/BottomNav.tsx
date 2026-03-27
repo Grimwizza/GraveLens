@@ -93,12 +93,9 @@ export default function BottomNav() {
   }, []);
 
   return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-40"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-    >
-      <div className="bg-stone-900/95 backdrop-blur-md border-t border-stone-700/50">
-        <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-4">
+    <nav className="shrink-0 glass border-t border-stone-700/50 pb-safe">
+      <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-4">
+
           {tabs.map((tab) => {
             const isActive =
               tab.href === "/"
@@ -109,11 +106,11 @@ export default function BottomNav() {
               <Link
                 key={tab.href}
                 href={tab.href}
-                className="flex flex-col items-center gap-0.5 min-w-[64px] py-1"
+                className="flex flex-col items-center gap-1 min-w-[72px] py-1 transition-all active:scale-95"
               >
                 {tab.icon(isActive)}
                 <span
-                  className="text-[10px] font-medium tracking-wide uppercase"
+                  className="text-[11px] font-semibold tracking-wide uppercase"
                   style={{ color: isActive ? "#c9a84c" : "#8a8580" }}
                 >
                   {tab.label}
@@ -122,7 +119,6 @@ export default function BottomNav() {
             );
           })}
         </div>
-      </div>
-    </nav>
+      </nav>
   );
 }

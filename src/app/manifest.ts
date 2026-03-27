@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "GraveLens",
     short_name: "GraveLens",
     description:
-      "Photograph a grave marker and uncover the story of the person buried there.",
+      "Bring the story behind every stone into focus. Photograph any headstone to uncover and preserve their legacy.",
     start_url: "/",
     display: "standalone",
     background_color: "#1a1917",

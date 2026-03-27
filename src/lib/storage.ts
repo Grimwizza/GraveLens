@@ -2,18 +2,22 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { GraveRecord } from "@/types";
 
 const DB_NAME = "gravelens";
-const DB_VERSION = 2; // bumped to add pending store
+const DB_VERSION = 3; // bumped to force store creation
 const STORE_NAME = "graves";
 const PENDING_STORE = "pending";
 
 async function getDB(): Promise<IDBPDatabase> {
+  console.log(`[Storage] Opening DB version ${DB_VERSION}...`);
   return openDB(DB_NAME, DB_VERSION, {
-    upgrade(db) {
+    upgrade(db, oldVersion, newVersion) {
+      console.log(`[Storage] Upgrading DB from ${oldVersion} to ${newVersion}`);
       if (!db.objectStoreNames.contains(STORE_NAME)) {
+        console.log(`[Storage] Creating store: ${STORE_NAME}`);
         const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
         store.createIndex("timestamp", "timestamp");
       }
       if (!db.objectStoreNames.contains(PENDING_STORE)) {
+        console.log(`[Storage] Creating store: ${PENDING_STORE}`);
         db.createObjectStore(PENDING_STORE, { keyPath: "id" });
       }
     },
@@ -33,9 +37,18 @@ export async function getGrave(id: string): Promise<GraveRecord | undefined> {
 }
 
 export async function getAllGraves(): Promise<GraveRecord[]> {
-  const db = await getDB();
-  const records = await db.getAll(STORE_NAME);
-  return records.sort((a, b) => b.timestamp - a.timestamp);
+  try {
+    const db = await getDB();
+    if (!db.objectStoreNames.contains(STORE_NAME)) {
+      console.error(`[Storage] Store ${STORE_NAME} missing!`);
+      return [];
+    }
+    const records = await db.getAll(STORE_NAME);
+    return records.sort((a, b) => b.timestamp - a.timestamp);
+  } catch (err) {
+    console.error("[Storage] Failed to get all graves:", err);
+    throw err;
+  }
 }
 
 export async function deleteGrave(id: string): Promise<void> {

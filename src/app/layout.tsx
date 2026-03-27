@@ -19,7 +19,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "GraveLens",
   description:
-    "Photograph a grave marker and uncover the story of the person buried there.",
+    "Bring the story behind every stone into focus. Photograph any headstone to uncover and preserve their legacy.",
   // manifest.ts handles /manifest.webmanifest — no static reference needed
   appleWebApp: {
     capable: true,
@@ -45,9 +45,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${playfair.variable} ${inter.variable} h-full`}
+      className={`${playfair.variable} ${inter.variable} h-dvh overflow-hidden`}
     >
-      <body className="min-h-dvh flex flex-col bg-[#1a1917] text-[#f5f2ed] font-sans">
+      <body className="h-dvh flex flex-col bg-[#1a1917] text-[#f5f2ed] font-sans overflow-hidden">
         <ServiceWorkerRegister />
         {children}
         <InstallPrompt />

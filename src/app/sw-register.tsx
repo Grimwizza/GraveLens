@@ -22,17 +22,8 @@ export default function ServiceWorkerRegister() {
       .catch((err) => console.error("SW registration failed:", err));
 
     // ── 2. SW-based update notification ────────────────────────────────────
-    // The service worker posts SW_UPDATED after it activates and claims all
-    // clients. This fires when a new sw.js has been deployed.
-    const onMessage = (event: MessageEvent) => {
-      if (event.data?.type === "SW_UPDATED") {
-        setUpdateReady(true);
-      }
-    };
-    navigator.serviceWorker.addEventListener("message", onMessage);
-
-    // controllerchange fires when a waiting SW takes control. Belt-and-
-    // suspenders alongside the postMessage approach above.
+    // controllerchange fires when a waiting SW takes control (e.g. after a
+    // new sw.js has been deployed and the user navigates or reloads).
     const onControllerChange = () => setUpdateReady(true);
     navigator.serviceWorker.addEventListener(
       "controllerchange",
@@ -73,7 +64,6 @@ export default function ServiceWorkerRegister() {
     const initialCheck = setTimeout(checkVersion, 3000);
 
     return () => {
-      navigator.serviceWorker.removeEventListener("message", onMessage);
       navigator.serviceWorker.removeEventListener(
         "controllerchange",
         onControllerChange

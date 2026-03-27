@@ -1,135 +1,57 @@
 @import "tailwindcss";
 
-/* ── Tailwind v4 theme — all custom tokens live here ─────────────────────── */
 @theme {
-  /* Override/extend stone palette with GraveLens values */
   --color-stone-950: #0f0e0d;
   --color-stone-900: #1a1917;
   --color-stone-800: #242220;
   --color-stone-700: #2e2b28;
-  --color-stone-600: #504c48;  /* was #3a3633 — raised for legibility (~3.3:1 contrast) */
-  --color-stone-500: #7a7570;  /* was #5a5550 — raised to pass WCAG AA (~4.5:1 contrast) */
-  --color-stone-400: #a09b96;  /* was #8a8580 — raised for clear secondary text (~6:1 contrast) */
-  --color-stone-300: #c0bbb4;  /* was #b5b0aa — slightly brighter */
-  --color-stone-200: #d8d3cd;  /* was #d5d0ca */
+  --color-stone-600: #5c5854;
+  --color-stone-500: #8a8580;
+  --color-stone-400: #b0aba6;
+  --color-stone-300: #d0cbc5;
+  --color-stone-200: #e5e1dc;
   --color-stone-100: #eae7e2;
   --color-stone-50:  #f5f2ed;
-
-  /* Gold accent palette */
-  --color-gold-600: #a07830;
-  --color-gold-500: #c9a84c;
-  --color-gold-400: #d4b76a;
-  --color-gold-300: #dfc888;
-  --color-gold-100: #f5ead0;
-
-  /* Moss accent palette */
-  --color-moss-700: #3a4f3a;
-  --color-moss-600: #4a6b4a;
-  --color-moss-500: #5c7a5c;
-  --color-moss-400: #7a9a7a;
-  --color-moss-100: #e8f0e8;
-
-  /* Typography — variables set by next/font in layout.tsx */
-  --font-serif: var(--font-playfair), Georgia, "Times New Roman", serif;
-  --font-sans:  var(--font-inter), system-ui, sans-serif;
-
-  /* Animations */
-  --animate-fade-up: fadeUp 0.4s ease-out both;
-  --animate-fade-in: fadeIn 0.3s ease-out both;
-  --animate-shimmer: shimmer 1.5s infinite;
 }
-
-/* ── Keyframes ────────────────────────────────────────────────────────────── */
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position:  200% 0; }
-}
-
-/* ── Animation utility classes ───────────────────────────────────────────── */
-.animate-fade-up  { animation: fadeUp  0.4s ease-out both; }
-.animate-fade-in  { animation: fadeIn  0.3s ease-out both; }
-
-/* ── Base ─────────────────────────────────────────────────────────────────── */
-*  { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
 html {
   background-color: #1a1917;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  /* Fluid base: 15px on small mobile → 16px on tablet/desktop.
-     All rem-based Tailwind utilities scale with this. */
-  font-size: clamp(15px, 1.5vw + 12px, 16px);
-}
-
-/* Bump the fixed-pixel micro-text classes up on wider screens so captions
-   and metadata are readable without a magnifier. */
-@media (min-width: 640px) {
-  .text-\[10px\] { font-size: 12px; }
-  .text-\[11px\] { font-size: 13px; }
-  .text-\[9px\]  { font-size: 11px; }
-}
-
-body {
-  min-height: 100dvh;
-  background-color: #1a1917;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  height: 100dvh;
+  overflow: hidden;
   overscroll-behavior: none;
 }
 
-/* Prevent iOS zoom on input focus (requires font-size >= 16px) */
-input, select, textarea { font-size: 16px; }
-
-/* ── Scrollbar ────────────────────────────────────────────────────────────── */
-::-webkit-scrollbar       { width: 4px; }
-::-webkit-scrollbar-track { background: #1a1917; }
-::-webkit-scrollbar-thumb { background: #3a3633; border-radius: 2px; }
-
-/* ── Shimmer skeleton ─────────────────────────────────────────────────────── */
-.shimmer {
-  background: linear-gradient(90deg, #242220 25%, #2e2b28 50%, #242220 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+body {
+  background-color: #1a1917;
+  color: #f5f2ed;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  touch-action: manipulation;
 }
 
-/* ── Leaflet dark-mode overrides (must come after leaflet/dist/leaflet.css) ── */
-.leaflet-container { background: #1a1917 !important; }
-
-/* Darken and desaturate OSM tiles to match the stone palette */
-.leaflet-tile-pane { filter: brightness(0.65) saturate(0.5) sepia(0.15); }
-
-.leaflet-control-attribution {
-  background: rgba(26,25,23,0.85) !important;
-  color: #5a5550 !important;
-  font-size: 10px !important;
-  border-radius: 4px !important;
+/* Scroll container for internal page content */
+.scroll-container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
 }
-.leaflet-control-attribution a { color: #8a8580 !important; }
-
-.leaflet-control-zoom a {
-  background: #242220 !important;
-  color: #f5f2ed !important;
-  border-color: #3a3633 !important;
+.scroll-container::-webkit-scrollbar {
+  display: none;
 }
-.leaflet-control-zoom a:hover { background: #2e2b28 !important; }
 
-.leaflet-popup-content-wrapper {
-  background: #242220 !important;
-  color: #f5f2ed !important;
-  border: 1px solid #3a3633 !important;
-  border-radius: 8px !important;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.5) !important;
-  padding: 0 !important;
+/* Utility to ensure content isn't hidden under the safe area */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
 }
-.leaflet-popup-content { margin: 12px !important; }
-.leaflet-popup-tip-container { display: none; }
-.leaflet-popup-close-button { color: #8a8580 !important; top: 6px !important; right: 6px !important; }
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+

@@ -79,10 +79,10 @@ export default function InstallPrompt() {
     <div
       className="fixed left-4 right-4 z-50 animate-fade-up"
       // Sits just above the bottom nav (nav is ~64px + safe-area)
-      style={{ bottom: "calc(72px + env(safe-area-inset-bottom))" }}
+      style={{ bottom: "calc(82px + env(safe-area-inset-bottom))" }}
     >
       {state === "android" && (
-        <div className="flex items-center gap-3 bg-stone-800 border border-stone-700 rounded-2xl p-4 shadow-2xl max-w-lg mx-auto">
+        <div className="flex items-center gap-3 glass-gold rounded-2xl p-3.5 shadow-2xl max-w-md mx-auto">
           {/* App icon */}
           <div
             className="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center border border-stone-600"
@@ -132,7 +132,7 @@ export default function InstallPrompt() {
       )}
 
       {state === "ios" && (
-        <div className="bg-stone-800 border border-stone-700 rounded-2xl p-4 shadow-2xl max-w-lg mx-auto">
+        <div className="glass-gold rounded-2xl p-4 shadow-2xl max-w-md mx-auto">
           <div className="flex items-center justify-between mb-3">
             <p className="text-stone-100 text-sm font-semibold">
               Install GraveLens

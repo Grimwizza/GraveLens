@@ -5,6 +5,7 @@ import BottomNav from "@/components/layout/BottomNav";
 import { getAllGraves, deleteGrave, saveGrave } from "@/lib/storage";
 import type { GraveRecord } from "@/types";
 import Link from "next/link";
+import ThematicIllustration from "@/components/ui/ThematicIllustration";
 
 type SortField = "birthYear" | "deathYear";
 type SortDir = "asc" | "desc";
@@ -95,6 +96,8 @@ export default function ArchivePage() {
   const [filterCemetery, setFilterCemetery] = useState("");
   const [filterTag, setFilterTag] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "list";
     return (localStorage.getItem("gl_archive_view") as ViewMode) ?? "list";
@@ -107,7 +110,21 @@ export default function ArchivePage() {
 
   // ── Load graves ──────────────────────────────────────────────────────────
   useEffect(() => {
-    getAllGraves().then((g) => { setGraves(g); setLoading(false); });
+    // Failsafe: ensure loading finishes eventually
+    const timer = setTimeout(() => setLoading(false), 1500);
+    
+    getAllGraves()
+      .then((g) => { 
+        setGraves(g); 
+        setLoading(false); 
+        clearTimeout(timer);
+      })
+      .catch(() => {
+        setLoading(false);
+        clearTimeout(timer);
+      });
+      
+    return () => clearTimeout(timer);
   }, []);
 
   // ── Cemetery enrichment ──────────────────────────────────────────────────
@@ -307,6 +324,28 @@ export default function ArchivePage() {
   // ── Filtered + sorted graves ──────────────────────────────────────────────
   const filteredGraves = useMemo(() => {
     let result = graves.filter((g) => {
+      // Text search
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const name = g.extracted.name?.toLowerCase() || "";
+        const cemetery = g.location?.cemetery?.toLowerCase() || "";
+        const city = g.location?.city?.toLowerCase() || "";
+        const state = g.location?.state?.toLowerCase() || "";
+        const tags = (g.tags || []).join(" ").toLowerCase();
+        const inscription = g.extracted.inscription?.toLowerCase() || "";
+
+        if (
+          !name.includes(q) &&
+          !cemetery.includes(q) &&
+          !city.includes(q) &&
+          !state.includes(q) &&
+          !tags.includes(q) &&
+          !inscription.includes(q)
+        ) {
+          return false;
+        }
+      }
+
       if (filterState && g.location?.state !== filterState) return false;
       if (filterCity && g.location?.city !== filterCity) return false;
       if (filterCemetery && g.location?.cemetery !== filterCemetery) return false;
@@ -322,7 +361,7 @@ export default function ArchivePage() {
       return sortDir === "asc" ? aVal - bVal : bVal - aVal;
     });
     return result;
-  }, [graves, filterState, filterCity, filterCemetery, filterTag, sortField, sortDir]);
+  }, [graves, filterState, filterCity, filterCemetery, filterTag, searchQuery, sortField, sortDir]);
 
   const handleDelete = async (id: string) => {
     await deleteGrave(id);
@@ -340,7 +379,7 @@ export default function ArchivePage() {
   const showAssignBanner = assignmentQueue.length > 0 && !enriching && !activeAssignmentId && !nearbyConfirm;
 
   return (
-    <div className="flex flex-col min-h-dvh bg-stone-900">
+    <div className="flex flex-col h-dvh bg-stone-900 overflow-hidden">
       {/* Header */}
       <header
         className="sticky top-0 z-30 bg-stone-900 border-b border-stone-800"
@@ -414,13 +453,52 @@ export default function ArchivePage() {
                   ))}
                 </div>
 
+                {/* Search button */}
+                <button
+                  onClick={() => {
+                    setSearchOpen((o) => !o);
+                    if (filtersOpen) setFiltersOpen(false);
+                  }}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                    searchOpen ? "bg-stone-700" : "bg-stone-800"
+                  }`}
+                  aria-label="Toggle search"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke={searchQuery ? "#c9a84c" : "#8a8580"}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.3-4.3" />
+                  </svg>
+                </button>
+
                 {/* Filter button */}
                 <button
-                  onClick={() => setFiltersOpen((o) => !o)}
-                  className={`relative w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${filtersOpen ? "bg-stone-700" : "bg-stone-800"}`}
+                  onClick={() => {
+                    setFiltersOpen((o) => !o);
+                    if (searchOpen) setSearchOpen(false);
+                  }}
+                  className={`relative w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                    filtersOpen ? "bg-stone-700" : "bg-stone-800"
+                  }`}
                   aria-label="Toggle filters"
                 >
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={hasActiveFilters ? "#c9a84c" : "#8a8580"} strokeWidth="1.5" strokeLinecap="round">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke={hasActiveFilters ? "#c9a84c" : "#8a8580"}
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  >
                     <path d="M1 3h14M3 8h10M6 13h4" />
                   </svg>
                   {hasActiveFilters && (
@@ -431,8 +509,39 @@ export default function ArchivePage() {
             )}
           </div>
         </div>
+        {/* Search panel */}
+        {searchOpen && (
+          <div className="px-4 pb-3 border-t border-stone-800 pt-3">
+            <div className="relative">
+              <input
+                autoFocus
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search name, cemetery, inscription..."
+                className="w-full bg-stone-800 text-stone-200 text-sm rounded-lg pl-9 pr-8 py-1.5 border border-stone-700 focus:outline-none focus:border-gold-500/50"
+              />
+              <div className="absolute left-3 top-2 text-stone-500">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+              </div>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-2 text-stone-500 active:text-stone-300"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
-        {/* Filter panel */}
+         {/* Filter panel */}
         {filtersOpen && graves.length > 0 && (
           <div className="px-4 pb-3 border-t border-stone-800 pt-3 flex flex-col gap-2">
             <div className="flex gap-2">
@@ -485,7 +594,7 @@ export default function ArchivePage() {
         )}
       </header>
 
-      <main className="flex-1 flex flex-col pb-20">
+      <main className="scroll-container pb-8">
         {loading ? (
           <div className="flex items-center justify-center flex-1">
             <div className="w-6 h-6 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
@@ -1013,22 +1122,19 @@ function GraveCoverFlow({
 // ── EmptyState ─────────────────────────────────────────────────────────────
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center flex-1 gap-6 px-8 text-center animate-fade-in">
-      <div className="w-20 h-20 rounded-full bg-stone-800 flex items-center justify-center">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#5a5550" strokeWidth="1.5">
-          <path d="M3 6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6z"/>
-          <path d="M3 12h18M3 18h18"/>
-        </svg>
+    <div className="flex flex-col items-center justify-center flex-1 gap-5 px-10 text-center animate-fade-in">
+      <div className="w-20 h-20 rounded-full bg-stone-800/40 flex items-center justify-center border border-stone-800/60 shadow-inner">
+        <ThematicIllustration type="stone" size={40} />
       </div>
-      <div>
-        <h2 className="font-serif text-xl text-stone-200 mb-2">Your archive is empty</h2>
-        <p className="text-stone-500 text-sm leading-relaxed">
-          When you photograph and save a grave marker, it will appear here as a pin on the map.
+      <div className="flex flex-col gap-2">
+        <h2 className="font-serif text-stone-200 text-xl font-medium leading-tight">Your archive is empty</h2>
+        <p className="text-stone-500 text-sm leading-relaxed max-w-[240px] mx-auto">
+          When you photograph and save a grave marker, it will appear here.
         </p>
       </div>
       <Link
         href="/"
-        className="flex items-center justify-center gap-2 h-12 px-6 rounded-2xl font-semibold text-stone-900 text-sm"
+        className="mt-2 h-12 px-6 rounded-2xl flex items-center justify-center font-semibold text-stone-900 transition-all active:scale-[0.98]"
         style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
       >
         Scan your first marker
