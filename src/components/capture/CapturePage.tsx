@@ -6,7 +6,7 @@ import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 import BottomNav from "@/components/layout/BottomNav";
 import BrandLogo from "@/components/ui/BrandLogo";
-import { fileToDataUrl, extractExifLocation, generateId } from "@/lib/exif";
+import { fileToDataUrl, extractExifLocation, correctOrientation, generateId } from "@/lib/exif";
 import { savePendingResult, addToQueue } from "@/lib/storage";
 import { QUEUE_CHANGED_EVENT } from "@/lib/queue";
 import { reverseGeocode } from "@/lib/apis/nominatim";
@@ -41,7 +41,8 @@ export default function CapturePage() {
   }, []);
 
   const handleFileChosen = useCallback(async (file: File) => {
-    const dataUrl = await fileToDataUrl(file);
+    const raw = await fileToDataUrl(file);
+    const dataUrl = await correctOrientation(file, raw);
     setPreviewUrl(dataUrl);
     setSelectedFile(file);
     setPhase("previewing");
