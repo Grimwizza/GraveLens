@@ -424,9 +424,9 @@ export default function ArchivePage() {
       >
         <div className="flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2">
-            <svg width="18" height="18" viewBox="0 0 22 22" fill="none">
-              <path d="M11 2L11 4M11 18L11 20M4 11L2 11M20 11L18 11" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" />
-              <circle cx="11" cy="11" r="4" stroke="#c9a84c" strokeWidth="1.5" />
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6z" />
+              <path d="M3 12h18M3 18h18M7 12v6M12 12v6M17 12v6" />
             </svg>
             <span className="font-serif text-stone-100 text-lg font-semibold">Archive</span>
             {graves.length > 0 && (

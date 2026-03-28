@@ -32,7 +32,7 @@ const CATEGORY_ICONS: Record<AchievementCategory, string> = {
   "Discovery": "✨",
 };
 
-function RankBadge({ level, title }: { level: number; title: string }) {
+function RankBadge({ level, title: _title }: { level: number; title: string }) {
   const isMax = level === 10;
   return (
     <div
@@ -379,13 +379,17 @@ export default function AchievementsPage() {
     <div className="flex flex-col h-full bg-stone-900 overflow-hidden">
       {/* Header */}
       <header
-        className="px-5 py-4 bg-stone-900/95 backdrop-blur-sm sticky top-0 z-30 border-b border-stone-800"
-        style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
+        className="bg-stone-900/95 backdrop-blur-sm sticky top-0 z-30 border-b border-stone-800"
+        style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
       >
-        <div className="max-w-lg mx-auto flex items-center justify-between">
-          <div>
+        <div className="max-w-lg mx-auto flex items-center justify-between px-5 py-3">
+          <div className="flex items-center gap-2">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M8 8H4l2 8h12l2-8h-4" />
+              <path d="M9 16l1 4h4l1-4" />
+            </svg>
             <h1 className="font-serif text-lg text-stone-100 font-semibold">History Explorer</h1>
-            <p className="text-xs text-stone-500 mt-0.5">Your journey through the ages</p>
           </div>
           <ProfileBadge />
         </div>

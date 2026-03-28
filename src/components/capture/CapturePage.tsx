@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 import BottomNav from "@/components/layout/BottomNav";
-import BrandLogo from "@/components/ui/BrandLogo";
+
 import { fileToDataUrl, extractExifLocation, correctOrientation, generateId } from "@/lib/exif";
 import { savePendingResult, addToQueue } from "@/lib/storage";
 import { QUEUE_CHANGED_EVENT } from "@/lib/queue";
@@ -34,18 +34,34 @@ export default function CapturePage() {
     typeof navigator !== "undefined" ? !navigator.onLine : false
   );
 
-  // Reset scroll on mount + track connectivity
+  // Reset scroll on mount + track connectivity + auto-open camera if flagged
   useEffect(() => {
     window.scrollTo(0, 0);
     const onOnline  = () => setIsOffline(false);
     const onOffline = () => setIsOffline(true);
     window.addEventListener("online",  onOnline);
     window.addEventListener("offline", onOffline);
+
+    // BottomNav camera FAB navigated here from another page
+    if (sessionStorage.getItem("openCamera") === "1") {
+      sessionStorage.removeItem("openCamera");
+      setTimeout(() => cameraInputRef.current?.click(), 150);
+    }
+
     return () => {
       window.removeEventListener("online",  onOnline);
       window.removeEventListener("offline", onOffline);
     };
   }, []);
+
+  // BottomNav camera FAB tapped while already on this page
+  useEffect(() => {
+    const handler = () => {
+      if (phase === "idle") cameraInputRef.current?.click();
+    };
+    window.addEventListener("gravelens:open-camera", handler);
+    return () => window.removeEventListener("gravelens:open-camera", handler);
+  }, [phase]);
 
   // Keep the screen awake while the user is on this page
   useEffect(() => {
@@ -251,26 +267,22 @@ export default function CapturePage() {
   }, [selectedFile, previewUrl, handleReset]);
 
   return (
-    <div className="flex flex-col h-full bg-stone-900 overflow-hidden relative">
+    <div className="flex flex-col h-full overflow-hidden relative">
       {/* Header */}
       <header
-        className="flex items-center justify-between px-5 pb-2 flex-shrink-0 bg-stone-900"
+        className="flex items-center justify-between px-5 pb-2 flex-shrink-0"
         style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
       >
-        <div className="flex items-center gap-3">
-          <BrandLogo size={28} color="#c9a84c" />
-          <span className="font-serif text-2xl font-semibold tracking-wide text-stone-50">
-            GraveLens
-          </span>
-        </div>
+        <span className="font-serif text-2xl font-semibold tracking-wide">
+          <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
+        </span>
         <ProfileBadge />
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center px-5 overflow-y-auto no-scrollbar pb-32" style={{ scrollbarWidth: "none" }}>
+      <main className="flex-1 flex flex-col items-center px-5 overflow-y-auto no-scrollbar" style={{ scrollbarWidth: "none" }}>
         {phase === "idle" && (
           <IdleState
-            onCamera={() => cameraInputRef.current?.click()}
             onUpload={() => fileInputRef.current?.click()}
           />
         )}
@@ -339,14 +351,12 @@ export default function CapturePage() {
 // ── Idle state ─────────────────────────────────────────────────────────────
 
 function IdleState({
-  onCamera,
   onUpload,
 }: {
-  onCamera: () => void;
   onUpload: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center w-full max-w-sm animate-fade-in self-stretch py-4">
+    <div className="flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 pt-4 pb-32">
       {/* Graphic + text — takes all available space and centers content within it */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6">
         {/* Viewfinder graphic */}
@@ -394,9 +404,21 @@ function IdleState({
             />
           </svg>
           <div className="absolute inset-0 pointer-events-none">
-            {/* Logo centered on grave silhouette (y=142 of 256 -> 55.5%) */}
-            <div style={{ position: "absolute", left: "50%", top: "55.5%", transform: "translate(-50%, -50%)" }}>
-              <BrandLogo size={32} color="#c9a84c" className="drop-shadow-[0_0_12px_rgba(201,168,76,0.5)]" />
+            {/* Camera AF box centered on grave silhouette (y=142 of 256 -> 55.5%) */}
+            <div style={{ position: "absolute", left: "50%", top: "55.5%", transform: "translate(-50%, -50%)" }}
+              className="drop-shadow-[0_0_10px_rgba(201,168,76,0.4)]">
+              <svg width="40" height="40" viewBox="0 0 100 100" fill="none">
+                {/* Top-left corner */}
+                <path d="M18 38 L18 18 L38 18" stroke="#c9a84c" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
+                {/* Top-right corner */}
+                <path d="M82 38 L82 18 L62 18" stroke="#c9a84c" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
+                {/* Bottom-left corner */}
+                <path d="M18 62 L18 82 L38 82" stroke="#c9a84c" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
+                {/* Bottom-right corner */}
+                <path d="M82 62 L82 82 L62 82" stroke="#c9a84c" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
+                {/* Center focus point */}
+                <circle cx="50" cy="50" r="3" fill="#c9a84c" opacity="0.7"/>
+              </svg>
             </div>
             {/* Text centered below brackets (y=240 of 256 -> 94%) */}
             <div style={{ position: "absolute", left: "50%", top: "94%", transform: "translate(-50%, -50%)" }}>
@@ -412,25 +434,13 @@ function IdleState({
             Bring the story behind every stone into focus.
           </h1>
           <p className="text-stone-400 text-base leading-relaxed">
-            Photograph any headstone to travel through history and reveal a lifetime of memories.
+            Photograph any headstone and experience history like never before.
           </p>
         </div>
       </div>
 
       {/* Action buttons — anchored to bottom */}
       <div className="flex flex-col gap-3 w-full pt-6">
-        <button
-          onClick={onCamera}
-          className="flex items-center justify-center gap-3 w-full h-14 rounded-2xl text-stone-900 font-semibold text-base transition-all active:scale-[0.97]"
-          style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-          Take a Photo
-        </button>
-
         <button
           onClick={onUpload}
           className="flex items-center justify-center gap-3 w-full h-12 rounded-2xl border border-stone-600 text-stone-200 font-medium text-sm transition-all active:scale-[0.97] bg-stone-800/50"

@@ -1,24 +1,20 @@
 "use client";
 
-import React from "react";
-
 interface BrandLogoProps {
   className?: string;
   size?: number;
   color?: string;
-  strokeWidth?: number;
 }
 
 /**
  * The official GraveLens brand logo.
- * A stylized "lens" with four crosshair tick marks.
- * Designed to be religion-neutral and professional.
+ * A camera autofocus box — four corner brackets framing a focal point,
+ * the universal symbol of a digital camera locking onto its subject.
  */
 export default function BrandLogo({
   className = "",
   size = 24,
-  color = "#c9a84c", // Gold-500
-  strokeWidth = 1.5,
+  color = "#c9a84c",
 }: BrandLogoProps) {
   return (
     <svg
@@ -29,25 +25,16 @@ export default function BrandLogo({
       xmlns="http://www.w3.org/2000/svg"
       className={className}
     >
-      {/* Horizontal Crosshairs */}
-      <rect x="0" y="47" width="22" height="6" fill={color} rx="3" />
-      <rect x="78" y="47" width="22" height="6" fill={color} rx="3" />
-      
-      {/* Vertical Crosshairs */}
-      <rect x="47" y="0" width="6" height="22" fill={color} rx="3" />
-      <rect x="47" y="78" width="6" height="22" fill={color} rx="3" />
-
-      {/* Outer Lens Circle */}
-      <circle
-        cx="50"
-        cy="50"
-        r="32"
-        stroke={color}
-        strokeWidth={strokeWidth * 4}
-      />
-      
-      {/* Center Dot */}
-      <circle cx="50" cy="50" r="8" fill={color} />
+      {/* Top-left corner */}
+      <path d="M18 38 L18 18 L38 18" stroke={color} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Top-right corner */}
+      <path d="M82 38 L82 18 L62 18" stroke={color} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Bottom-left corner */}
+      <path d="M18 62 L18 82 L38 82" stroke={color} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Bottom-right corner */}
+      <path d="M82 62 L82 82 L62 82" stroke={color} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Center focus point */}
+      <circle cx="50" cy="50" r="3.5" fill={color} opacity="0.8" />
     </svg>
   );
 }

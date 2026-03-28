@@ -15,14 +15,20 @@
 }
 
 html {
-  background-color: #1a1917;
+  /* Memorial park background — place memorial-bg.jpg in /public/ */
+  background-color: #0a0908;
+  background-image: url('/memorial-bg.jpg');
+  background-size: cover;
+  background-position: center 30%;
+  background-attachment: fixed;
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
 }
 
 body {
-  background-color: #1a1917;
+  /* Dark overlay over the background image — adjust opacity to taste (0.82 = subtle image, 0.92 = nearly hidden) */
+  background-color: rgba(10, 9, 8, 0.82);
   color: #f5f2ed;
   /*
    * position: fixed + inset: 0 anchors the body to the physical screen edges,

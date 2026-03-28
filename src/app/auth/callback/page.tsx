@@ -84,8 +84,8 @@ export default function AuthCallbackPage() {
     >
       <div className="flex items-center gap-2.5 mb-10">
         <BrandLogo size={28} color="#c9a84c" />
-        <span className="font-serif text-2xl font-semibold tracking-wide text-stone-50">
-          GraveLens
+        <span className="font-serif text-2xl font-semibold tracking-wide">
+          <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
         </span>
       </div>
 

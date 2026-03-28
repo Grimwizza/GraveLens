@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { recordActiveDay } from "@/lib/achievements";
 import { getQueueCount } from "@/lib/storage";
 import { startQueueProcessor, QUEUE_CHANGED_EVENT } from "@/lib/queue";
 
-const tabs = [
+const leftTabs = [
   {
     href: "/",
     label: "Scan",
@@ -46,6 +46,9 @@ const tabs = [
       </svg>
     ),
   },
+];
+
+const rightTabs = [
   {
     href: "/map",
     label: "Map",
@@ -89,21 +92,19 @@ const tabs = [
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [queueCount, setQueueCount] = useState(0);
 
   useEffect(() => {
     recordActiveDay();
 
-    // Load initial queue count
     getQueueCount().then(setQueueCount).catch(() => {});
 
-    // Update count when queue changes
     const onQueueChanged = () => {
       getQueueCount().then(setQueueCount).catch(() => {});
     };
     window.addEventListener(QUEUE_CHANGED_EVENT, onQueueChanged);
 
-    // Start the background processor
     const cleanup = startQueueProcessor();
 
     return () => {
@@ -112,42 +113,107 @@ export default function BottomNav() {
     };
   }, []);
 
+  const handleCameraClick = () => {
+    if (pathname === "/") {
+      // Capture page is already mounted — dispatch event directly
+      window.dispatchEvent(new Event("gravelens:open-camera"));
+    } else {
+      // Navigate to capture page and flag to auto-open camera on mount
+      sessionStorage.setItem("openCamera", "1");
+      router.push("/");
+    }
+  };
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-stone-700/50 pb-safe shadow-[0_-8px_24px_rgba(0,0,0,0.4)]">
-      <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-4">
-        {tabs.map((tab) => {
-          const isActive =
-            tab.href === "/"
-              ? pathname === "/" || pathname.startsWith("/result")
-              : pathname === tab.href || pathname.startsWith(tab.href + "/");
+    <nav className="fixed bottom-0 left-0 right-0 z-50">
+      {/* Camera FAB — protrudes above the nav bar */}
+      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: "-34px" }}>
+        <button
+          onClick={handleCameraClick}
+          className="w-[68px] h-[68px] rounded-full flex items-center justify-center transition-transform active:scale-90"
+          style={{
+            background: "linear-gradient(145deg, #d4b76a, #c9a84c, #a8873a)",
+            boxShadow: "0 4px 20px rgba(201, 168, 76, 0.5), 0 2px 8px rgba(0,0,0,0.6)",
+          }}
+          aria-label="Take a photo"
+        >
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#1a1917" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </button>
+      </div>
 
-          const showBadge = tab.href === "/" && queueCount > 0;
+      {/* Nav bar */}
+      <div className="glass border-t border-stone-700/50 pb-safe shadow-[0_-8px_24px_rgba(0,0,0,0.4)]">
+        <div className="flex items-center h-16 max-w-lg mx-auto">
+          {/* Left tabs */}
+          <div className="flex-1 flex items-center justify-around">
+            {leftTabs.map((tab) => {
+              const isActive =
+                tab.href === "/"
+                  ? pathname === "/" || pathname.startsWith("/result")
+                  : pathname === tab.href || pathname.startsWith(tab.href + "/");
 
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className="relative flex flex-col items-center gap-1 min-w-[72px] py-1 transition-all active:scale-95"
-            >
-              {tab.icon(isActive)}
-              {showBadge && (
-                <span
-                  className="absolute -top-0.5 right-3 min-w-[16px] h-4 rounded-full text-[10px] font-bold flex items-center justify-center px-1"
-                  style={{ background: "#c9a84c", color: "#1a1917" }}
+              const showBadge = tab.href === "/" && queueCount > 0;
+
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  className="relative flex flex-col items-center gap-1 min-w-[72px] py-1 transition-all active:scale-95"
                 >
-                  {queueCount > 9 ? "9+" : queueCount}
-                </span>
-              )}
-              <span
-                className="text-[11px] font-semibold tracking-wide uppercase"
-                style={{ color: isActive ? "#c9a84c" : "#8a8580" }}
-              >
-                {tab.label}
-              </span>
-            </Link>
-          );
-        })}
+                  {tab.icon(isActive)}
+                  {showBadge && (
+                    <span
+                      className="absolute -top-0.5 right-3 min-w-[16px] h-4 rounded-full text-[10px] font-bold flex items-center justify-center px-1"
+                      style={{ background: "#c9a84c", color: "#1a1917" }}
+                    >
+                      {queueCount > 9 ? "9+" : queueCount}
+                    </span>
+                  )}
+                  <span
+                    className="text-[11px] font-semibold tracking-wide uppercase"
+                    style={{ color: isActive ? "#c9a84c" : "#8a8580" }}
+                  >
+                    {tab.label}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Center spacer for FAB */}
+          <div className="w-[88px] flex-shrink-0" />
+
+          {/* Right tabs */}
+          <div className="flex-1 flex items-center justify-around">
+            {rightTabs.map((tab) => {
+              const isActive =
+                pathname === tab.href || pathname.startsWith(tab.href + "/");
+
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  className="relative flex flex-col items-center gap-1 min-w-[72px] py-1 transition-all active:scale-95"
+                >
+                  {tab.icon(isActive)}
+                  <span
+                    className="text-[11px] font-semibold tracking-wide uppercase"
+                    style={{ color: isActive ? "#c9a84c" : "#8a8580" }}
+                  >
+                    {tab.label}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </nav>
   );
 }
+
+// Exporting the event name so CapturePage can listen for it
+export const OPEN_CAMERA_EVENT = "gravelens:open-camera";

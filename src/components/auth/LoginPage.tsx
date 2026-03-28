@@ -229,8 +229,8 @@ export default function LoginPage() {
       <div className="flex-1 flex flex-col items-center justify-center px-6 max-w-sm mx-auto w-full">
         <div className="flex items-center gap-2.5 mb-8">
           <BrandLogo size={28} color="#c9a84c" />
-          <span className="font-serif text-2xl font-semibold tracking-wide text-stone-50">
-            GraveLens
+          <span className="font-serif text-2xl font-semibold tracking-wide">
+            <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
           </span>
         </div>
 

@@ -3,7 +3,14 @@ import { ImageResponse } from "next/og";
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
+// Camera autofocus box logo — built with divs for reliable Satori rendering.
 export default function AppleIcon() {
+  const gold = "#c9a84c";
+  const box = 118;
+  const arm = 30;
+  const bar = 7;
+  const r = 4;
+
   return new ImageResponse(
     (
       <div
@@ -17,47 +24,29 @@ export default function AppleIcon() {
           borderRadius: "40px",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{ width: 7, height: 32, background: "#c9a84c", borderRadius: 4 }}
-          />
-          <div style={{ display: "flex", alignItems: "center" }}>
-            <div
-              style={{ height: 7, width: 32, background: "#c9a84c", borderRadius: 4 }}
-            />
-            <div
-              style={{
-                width: 78,
-                height: 78,
-                borderRadius: "50%",
-                border: "7px solid #c9a84c",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <div
-                style={{
-                  width: 14,
-                  height: 14,
-                  borderRadius: "50%",
-                  background: "#c9a84c",
-                }}
-              />
-            </div>
-            <div
-              style={{ height: 7, width: 32, background: "#c9a84c", borderRadius: 4 }}
-            />
-          </div>
-          <div
-            style={{ width: 7, height: 32, background: "#c9a84c", borderRadius: 4 }}
-          />
+        <div style={{ position: "relative", width: box, height: box, display: "flex" }}>
+          {/* Top-left — horizontal */}
+          <div style={{ position: "absolute", top: 0, left: 0, width: arm, height: bar, background: gold, borderRadius: r }} />
+          {/* Top-left — vertical */}
+          <div style={{ position: "absolute", top: 0, left: 0, width: bar, height: arm, background: gold, borderRadius: r }} />
+
+          {/* Top-right — horizontal */}
+          <div style={{ position: "absolute", top: 0, right: 0, width: arm, height: bar, background: gold, borderRadius: r }} />
+          {/* Top-right — vertical */}
+          <div style={{ position: "absolute", top: 0, right: 0, width: bar, height: arm, background: gold, borderRadius: r }} />
+
+          {/* Bottom-left — horizontal */}
+          <div style={{ position: "absolute", bottom: 0, left: 0, width: arm, height: bar, background: gold, borderRadius: r }} />
+          {/* Bottom-left — vertical */}
+          <div style={{ position: "absolute", bottom: 0, left: 0, width: bar, height: arm, background: gold, borderRadius: r }} />
+
+          {/* Bottom-right — horizontal */}
+          <div style={{ position: "absolute", bottom: 0, right: 0, width: arm, height: bar, background: gold, borderRadius: r }} />
+          {/* Bottom-right — vertical */}
+          <div style={{ position: "absolute", bottom: 0, right: 0, width: bar, height: arm, background: gold, borderRadius: r }} />
+
+          {/* Center focus dot */}
+          <div style={{ position: "absolute", top: (box - 8) / 2, left: (box - 8) / 2, width: 8, height: 8, borderRadius: "50%", background: gold, opacity: 0.85 }} />
         </div>
       </div>
     ),
