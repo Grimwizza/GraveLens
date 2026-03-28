@@ -9,11 +9,13 @@ import { checkAndUnlock, loadStats, type Achievement } from "@/lib/achievements"
 import { createClient } from "@/lib/supabase/browser";
 import { uploadPhoto, upsertGrave } from "@/lib/cloudSync";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
+import { interpretSymbols } from "@/lib/apis/symbols";
 import type {
   GraveRecord,
   ResearchData,
   ExtractedGraveData,
   GeoLocation,
+  LifeNarrative,
 } from "@/types";
 
 interface PendingResult {
@@ -34,6 +36,8 @@ export default function ResultPage({ id }: { id: string }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [savePromptDismissed, setSavePromptDismissed] = useState(false);
   const [achievementToasts, setAchievementToasts] = useState<Achievement[]>([]);
+  const [narrative, setNarrative] = useState<LifeNarrative | null>(null);
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
 
   useEffect(() => {
     getPendingResult(id).then(async (raw) => {
@@ -52,6 +56,7 @@ export default function ResultPage({ id }: { id: string }) {
           timestamp: archived.timestamp,
         });
         setResearch(archived.research ?? {});
+        setNarrative(archived.research?.narrative ?? null);
         setTags(archived.tags ?? []);
         setSaved(true);
         setSavePromptDismissed(true);
@@ -175,6 +180,50 @@ export default function ResultPage({ id }: { id: string }) {
       setShareOpen(true);
     }
   }, [pending, research]);
+
+  const handleGenerateNarrative = useCallback(async () => {
+    if (!pending || narrativeLoading) return;
+    setNarrativeLoading(true);
+    try {
+      const { extracted, location } = pending;
+      const historical = research?.historical;
+      const militaryContext = research?.militaryContext;
+      const res = await fetch("/api/narrative", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: extracted.name,
+          birthYear: extracted.birthYear,
+          deathYear: extracted.deathYear,
+          birthDate: extracted.birthDate,
+          deathDate: extracted.deathDate,
+          ageAtDeath: extracted.ageAtDeath,
+          city: location?.city,
+          state: location?.state,
+          country: location?.country,
+          inscription: extracted.inscription,
+          epitaph: extracted.epitaph,
+          symbols: extracted.symbols ?? [],
+          birthEra: historical?.birthEra,
+          deathEra: historical?.deathEra,
+          lifeExpectancyAtDeath: historical?.lifeExpectancyAtDeath,
+          militaryConflict: militaryContext?.likelyConflict,
+          militaryTheater: militaryContext?.theater,
+          militaryRole: militaryContext?.role,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNarrative(data);
+        // Persist narrative into research so it's saved with the record
+        setResearch((prev) => ({ ...(prev ?? {}), narrative: data }));
+      }
+    } catch (err) {
+      console.warn("Narrative generation failed:", err);
+    } finally {
+      setNarrativeLoading(false);
+    }
+  }, [pending, research, narrativeLoading]);
 
   if (!pending) {
     return (
@@ -300,12 +349,25 @@ export default function ResultPage({ id }: { id: string }) {
             />
           )}
 
-          {/* Inscription */}
+          {/* A Life in Context — on-demand narrative */}
+          <NarrativeCard
+            narrative={narrative}
+            loading={narrativeLoading}
+            onGenerate={handleGenerateNarrative}
+            extracted={extracted}
+          />
+
+          {/* Inscription + epitaph */}
           {extracted.inscription && (
-            <InscriptionCard inscription={extracted.inscription} epitaph={extracted.epitaph} />
+            <InscriptionCard
+              inscription={extracted.inscription}
+              epitaph={extracted.epitaph}
+              epitaphSource={narrative?.epitaphSource}
+              epitaphMeaning={narrative?.epitaphMeaning}
+            />
           )}
 
-          {/* Symbols */}
+          {/* Symbols with database meanings */}
           {extracted.symbols && extracted.symbols.length > 0 && (
             <SymbolsCard symbols={extracted.symbols} />
           )}
@@ -707,9 +769,13 @@ function HistoricalCard({
 function InscriptionCard({
   inscription,
   epitaph,
+  epitaphSource,
+  epitaphMeaning,
 }: {
   inscription: string;
   epitaph: string;
+  epitaphSource?: string;
+  epitaphMeaning?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const shouldTruncate = inscription.length > 200;
@@ -718,9 +784,21 @@ function InscriptionCard({
     <div className="py-5 animate-fade-up" style={{ animationDelay: "0.15s" }}>
       <SectionHeader icon="✦" title="Inscription" />
       {epitaph && (
-        <p className="mt-3 font-serif text-stone-300 italic text-base leading-relaxed border-l-2 border-gold-500/50 pl-3 mb-3">
-          &ldquo;{epitaph}&rdquo;
-        </p>
+        <div className="mt-3 mb-3">
+          <p className="font-serif text-stone-300 italic text-base leading-relaxed border-l-2 border-gold-500/50 pl-3">
+            &ldquo;{epitaph}&rdquo;
+          </p>
+          {(epitaphSource || epitaphMeaning) && (
+            <div className="mt-2 pl-3 space-y-1">
+              {epitaphSource && (
+                <p className="text-gold-500/80 text-xs font-medium">{epitaphSource}</p>
+              )}
+              {epitaphMeaning && (
+                <p className="text-stone-400 text-xs leading-relaxed">{epitaphMeaning}</p>
+              )}
+            </div>
+          )}
+        </div>
       )}
       <div
         className={`mt-2 font-mono text-stone-400 text-sm leading-relaxed whitespace-pre-wrap ${
@@ -742,16 +820,56 @@ function InscriptionCard({
 }
 
 function SymbolsCard({ symbols }: { symbols: string[] }) {
+  const interpretations = interpretSymbols(symbols);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggle = (sym: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(sym) ? next.delete(sym) : next.add(sym);
+      return next;
+    });
+
   return (
     <div className="py-5 animate-fade-up" style={{ animationDelay: "0.2s" }}>
       <SectionHeader icon="✦" title="Symbols & Emblems" />
-      <ul className="mt-3 space-y-2">
-        {symbols.map((s, i) => (
-          <li key={i} className="flex items-start gap-2 text-sm">
-            <span className="text-gold-500 mt-0.5">—</span>
-            <span className="text-stone-300">{s}</span>
-          </li>
-        ))}
+      <ul className="mt-3 space-y-3">
+        {symbols.map((s, i) => {
+          const interp = interpretations.get(s);
+          const isExpanded = expanded.has(s);
+          return (
+            <li key={i} className="text-sm">
+              <div className="flex items-start gap-2">
+                <span className="text-gold-500 mt-0.5 shrink-0">—</span>
+                <div className="flex-1 min-w-0">
+                  <span className="text-stone-300">{s}</span>
+                  {interp && (
+                    <button
+                      onClick={() => toggle(s)}
+                      className="ml-2 text-gold-500/70 text-xs underline-offset-2 hover:text-gold-400"
+                    >
+                      {isExpanded ? "less" : "what this means"}
+                    </button>
+                  )}
+                  {interp && isExpanded && (
+                    <div className="mt-2 p-3 rounded-xl bg-stone-800 border border-stone-700/60 space-y-1.5">
+                      <p className="text-stone-200 text-xs font-semibold uppercase tracking-wide">
+                        {interp.name}
+                        <span className="ml-2 text-stone-600 font-normal capitalize">
+                          {interp.category}
+                        </span>
+                      </p>
+                      <p className="text-stone-300 text-xs leading-relaxed">{interp.meaning}</p>
+                      {interp.era && (
+                        <p className="text-stone-500 text-xs italic">{interp.era}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -1079,6 +1197,85 @@ function TagsCard({
             + Custom
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Narrative Card ────────────────────────────────────────────────────────────
+
+function NarrativeCard({
+  narrative,
+  loading,
+  onGenerate,
+  extracted,
+}: {
+  narrative: import("@/types").LifeNarrative | null;
+  loading: boolean;
+  onGenerate: () => void;
+  extracted: ExtractedGraveData;
+}) {
+  // Only offer the feature when we have enough data to generate something meaningful
+  const hasEnoughData = !!(extracted.birthYear || extracted.deathYear || extracted.inscription);
+  if (!hasEnoughData) return null;
+
+  if (!narrative && !loading) {
+    return (
+      <div className="py-5 animate-fade-up" style={{ animationDelay: "0.12s" }}>
+        <SectionHeader icon="📜" title="A Life in Context" />
+        <p className="mt-2 text-stone-500 text-sm leading-relaxed">
+          Generate a historical narrative about what life was like for someone of this era, place, and background.
+        </p>
+        <button
+          onClick={onGenerate}
+          className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-stone-900 transition-all active:scale-[0.97]"
+          style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+          Tell me their story
+        </button>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="py-5 animate-fade-up" style={{ animationDelay: "0.12s" }}>
+        <SectionHeader icon="📜" title="A Life in Context" />
+        <div className="mt-3 space-y-2">
+          <div className="h-4 shimmer rounded w-full" />
+          <div className="h-4 shimmer rounded w-5/6" />
+          <div className="h-4 shimmer rounded w-4/5" />
+          <div className="h-4 shimmer rounded w-full mt-3" />
+          <div className="h-4 shimmer rounded w-3/4" />
+          <div className="h-4 shimmer rounded w-5/6" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!narrative) return null;
+
+  // Split narrative into paragraphs for better formatting
+  const paragraphs = narrative.narrative
+    .split(/\n\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  return (
+    <div className="py-5 animate-fade-up" style={{ animationDelay: "0.12s" }}>
+      <SectionHeader icon="📜" title="A Life in Context" />
+      <div className="mt-3 space-y-3">
+        {paragraphs.map((p, i) => (
+          <p key={i} className="text-stone-300 text-sm leading-relaxed">
+            {p}
+          </p>
+        ))}
+        <p className="text-stone-600 text-[10px] italic pt-1">
+          Historical narrative generated by AI based on verified era context. Not specific to this individual.
+        </p>
       </div>
     </div>
   );

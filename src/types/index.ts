@@ -99,6 +99,12 @@ export interface MilitaryContext {
   inferredFrom?: "inscription" | "symbols" | "dates";
 }
 
+export interface LifeNarrative {
+  narrative: string;
+  epitaphSource?: string;
+  epitaphMeaning?: string;
+}
+
 export interface ResearchData {
   military?: MilitaryRecord[];
   militaryContext?: MilitaryContext;
@@ -107,6 +113,7 @@ export interface ResearchData {
   naraRecords?: NaraRecord[];
   cemetery?: CemeteryInfo;
   historical?: HistoricalContext;
+  narrative?: LifeNarrative;
 }
 
 export interface GraveRecord {
