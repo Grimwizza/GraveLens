@@ -45,9 +45,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${playfair.variable} ${inter.variable} h-dvh overflow-hidden`}
+      className={`${playfair.variable} ${inter.variable} overflow-hidden`}
     >
-      <body className="h-dvh flex flex-col bg-[#1a1917] text-[#f5f2ed] font-sans overflow-hidden">
+      <body className="flex flex-col bg-[#1a1917] text-[#f5f2ed] font-sans overflow-hidden">
         <ServiceWorkerRegister />
         {children}
         <InstallPrompt />

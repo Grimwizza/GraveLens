@@ -157,7 +157,7 @@ export default function CapturePage() {
     <div className="flex flex-col h-dvh bg-stone-900 overflow-hidden">
       {/* Header */}
       <header
-        className="flex items-center justify-center px-5 pt-2 pb-2 flex-shrink-0"
+        className="flex items-center justify-center px-5 pt-2 pb-2 flex-shrink-0 bg-stone-900"
         style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
       >
         <div className="flex items-center gap-2.5">
