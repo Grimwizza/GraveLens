@@ -391,7 +391,7 @@ export default function AchievementsPage() {
         </div>
       </header>
 
-      <main className="scroll-container max-w-lg mx-auto w-full px-4 pb-8 space-y-6 mt-5">
+      <main className="scroll-container max-w-lg mx-auto w-full px-4 pb-32 space-y-6 mt-5">
         {/* Rank card */}
         <div
           className="rounded-2xl p-5"

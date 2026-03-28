@@ -15,6 +15,7 @@ export interface ExtractedGraveData {
   condition: string;
   confidence: "high" | "medium" | "low";
   source: "claude" | "tesseract";
+  analysisModel?: string;
 }
 
 export interface GeoLocation {

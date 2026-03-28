@@ -114,10 +114,13 @@ export async function POST(req: NextRequest) {
 
     if (needsEscalation) {
       usedModel = MODEL_SONNET;
+      console.log("[Analyze] Escalating to Sonnet — Haiku confidence:", extracted?.confidence ?? "failed");
       extracted = await callClaude(client, MODEL_SONNET, imageBase64, finalMime);
+      console.log("[Analyze] Sonnet returned confidence:", extracted?.confidence);
     }
 
     extracted!.source = "claude";
+    extracted!.analysisModel = usedModel;
 
     return NextResponse.json({ extracted, _model: usedModel });
   } catch (error: unknown) {

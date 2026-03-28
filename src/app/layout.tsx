@@ -46,6 +46,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${playfair.variable} ${inter.variable} overflow-hidden`}
+      suppressHydrationWarning
     >
       <body className="flex flex-col h-full bg-[#1a1917] text-[#f5f2ed] font-sans overflow-hidden">
         <ServiceWorkerRegister />

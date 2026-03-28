@@ -359,7 +359,7 @@ export default function ResultPage({ id }: { id: string }) {
         </div>
       </header>
 
-      <main className="scroll-container max-w-lg mx-auto w-full pb-8">
+      <main className="scroll-container max-w-lg mx-auto w-full pb-32">
         {/* Hero photo */}
         <div className="relative w-full aspect-[4/3] bg-stone-800 overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}

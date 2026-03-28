@@ -128,8 +128,14 @@ export default function CapturePage() {
         });
 
         if (claudeRes.ok) {
-          const { extracted: claudeExtracted } = await claudeRes.json();
-          if (claudeExtracted) extracted = claudeExtracted;
+          const { extracted: claudeExtracted, _model } = await claudeRes.json();
+          if (claudeExtracted) {
+            extracted = claudeExtracted;
+            // If Sonnet was used as fallback, surface it in the label
+            if (_model && _model.includes("sonnet")) {
+              setProgressLabel("Enhanced analysis complete…");
+            }
+          }
         } else {
           const errorData = await claudeRes.json().catch(() => ({}));
           console.warn("Claude API returned", claudeRes.status, errorData.details ?? "");
@@ -245,7 +251,7 @@ export default function CapturePage() {
   }, [selectedFile, previewUrl, handleReset]);
 
   return (
-    <div className="flex flex-col h-full bg-stone-900 overflow-hidden">
+    <div className="flex flex-col h-full bg-stone-900 overflow-hidden relative">
       {/* Header */}
       <header
         className="flex items-center justify-between px-5 pb-2 flex-shrink-0 bg-stone-900"
@@ -261,7 +267,7 @@ export default function CapturePage() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center px-5 overflow-y-auto no-scrollbar" style={{ scrollbarWidth: "none" }}>
+      <main className="flex-1 flex flex-col items-center px-5 overflow-y-auto no-scrollbar pb-32" style={{ scrollbarWidth: "none" }}>
         {phase === "idle" && (
           <IdleState
             onCamera={() => cameraInputRef.current?.click()}

@@ -27,12 +27,12 @@ body {
   /*
    * position: fixed + inset: 0 anchors the body to the physical screen edges,
    * bypassing all dvh/svh/fill-available quirks on iOS PWA.
-   * With viewport-fit=cover, bottom: 0 reaches BELOW the home indicator,
-   * so no black strip ever shows at the bottom.
-   * All internal scrolling already happens in child .scroll-container elements.
+   * With viewport-fit=cover, absolute positioning reaches BELOW the home indicator.
    */
   position: fixed;
   inset: 0;
+  height: 100dvh;
+  width: 100dvw;
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
