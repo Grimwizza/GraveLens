@@ -632,7 +632,7 @@ export default function ArchivePage() {
         )}
       </header>
 
-      <main className="scroll-container pb-32">
+      <main className="scroll-container pb-44">
         {loading ? (
           <div className="flex items-center justify-center flex-1">
             <div className="w-6 h-6 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />

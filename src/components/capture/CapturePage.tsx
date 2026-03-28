@@ -356,7 +356,7 @@ function IdleState({
   onUpload: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 pt-4 pb-32">
+    <div className="flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 pt-4 pb-44">
       {/* Graphic + text — takes all available space and centers content within it */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6">
         {/* Viewfinder graphic */}
