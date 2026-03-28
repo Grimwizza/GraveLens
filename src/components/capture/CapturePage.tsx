@@ -390,7 +390,7 @@ function IdleState({
           Bring the story behind every stone into focus.
         </h1>
         <p className="text-stone-400 text-sm leading-relaxed max-w-[280px]">
-          Photograph any headstone to instantly uncover and preserve their legacy.
+          Photograph any headstone to travel through history and reveal a lifetime of memories.
         </p>
       </div>
 
