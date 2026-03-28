@@ -114,7 +114,7 @@ export default function BottomNav() {
 
   return (
     <nav className="shrink-0 glass border-t border-stone-700/50 pb-safe">
-      <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-4">
+      <div className="flex items-center justify-around h-14 max-w-lg mx-auto px-4">
         {tabs.map((tab) => {
           const isActive =
             tab.href === "/"

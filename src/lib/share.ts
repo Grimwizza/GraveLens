@@ -88,9 +88,9 @@ export async function shareGrave(record: GraveRecord): Promise<boolean> {
     }
     return true;
   } catch (err) {
-    if ((err as Error).name !== "AbortError") {
-      await copyToClipboard(text);
-    }
+    // AbortError = user dismissed the native sheet intentionally — no fallback needed
+    if ((err as Error).name === "AbortError") return true;
+    await copyToClipboard(text);
     return false;
   }
 }
