@@ -6,6 +6,8 @@ import Link from "next/link";
 import BottomNav from "@/components/layout/BottomNav";
 import { saveGrave, getGrave, getAllGraves, getPendingResult, deletePendingResult } from "@/lib/storage";
 import { checkAndUnlock, loadStats, type Achievement } from "@/lib/achievements";
+import { createClient } from "@/lib/supabase/browser";
+import { uploadPhoto, upsertGrave } from "@/lib/cloudSync";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import type {
   GraveRecord,
@@ -110,9 +112,25 @@ export default function ResultPage({ id }: { id: string }) {
       research: research ?? {},
       tags,
     };
+
+    // Always save locally first — cloud sync is best-effort
     await saveGrave(record);
     setSaved(true);
     setSavePromptDismissed(true);
+
+    // Cloud sync — non-fatal if offline or not logged in
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const photoUrl = await uploadPhoto(supabase, user.id, record.id, record.photoDataUrl);
+        await upsertGrave(supabase, user.id, record, photoUrl);
+        // Update local copy with CDN URL so it loads from cloud going forward
+        await saveGrave({ ...record, photoDataUrl: photoUrl, syncedAt: Date.now() });
+      }
+    } catch (err) {
+      console.warn("[Sync] Cloud save failed — local save succeeded:", err);
+    }
 
     // Check for newly unlocked achievements
     const allGraves = await getAllGraves();
@@ -129,7 +147,15 @@ export default function ResultPage({ id }: { id: string }) {
     setTags(next);
     if (!saved || !pending) return;
     const existing = await getGrave(pending.id);
-    if (existing) await saveGrave({ ...existing, tags: next });
+    if (!existing) return;
+    const updated = { ...existing, tags: next };
+    await saveGrave(updated);
+    // Sync tag update to cloud
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) await upsertGrave(supabase, user.id, updated, updated.photoDataUrl);
+    } catch { /* non-fatal */ }
   }, [saved, pending]);
 
   const handleShare = useCallback(async () => {

@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import BottomNav from "@/components/layout/BottomNav";
+import ProfileBadge from "@/components/auth/ProfileBadge";
 import { getAllGraves, deleteGrave, saveGrave } from "@/lib/storage";
+import { createClient } from "@/lib/supabase/browser";
+import { fetchAllFromCloud, deleteFromCloud } from "@/lib/cloudSync";
 import type { GraveRecord } from "@/types";
 import Link from "next/link";
 import ThematicIllustration from "@/components/ui/ThematicIllustration";
@@ -109,21 +112,49 @@ export default function ArchivePage() {
   };
 
   // ── Load graves ──────────────────────────────────────────────────────────
+  // Stale-while-revalidate: show local IndexedDB data immediately, then
+  // merge with Supabase cloud records if the user is logged in.
   useEffect(() => {
-    // Failsafe: ensure loading finishes eventually
     const timer = setTimeout(() => setLoading(false), 1500);
-    
+
     getAllGraves()
-      .then((g) => { 
-        setGraves(g); 
-        setLoading(false); 
+      .then(async (local) => {
+        setGraves(local);
+        setLoading(false);
         clearTimeout(timer);
+
+        // Background cloud merge — non-fatal
+        try {
+          const supabase = createClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+
+          const cloud = await fetchAllFromCloud(supabase);
+          if (cloud.length === 0) return;
+
+          // Merge: cloud wins on conflict (handles edits from other devices)
+          const byId = new Map(local.map((r) => [r.id, r]));
+          cloud.forEach((r) => byId.set(r.id, r));
+          const merged = Array.from(byId.values()).sort(
+            (a, b) => b.timestamp - a.timestamp
+          );
+
+          // Warm the local cache with any new cloud records
+          const localIds = new Set(local.map((r) => r.id));
+          await Promise.all(
+            cloud
+              .filter((r) => !localIds.has(r.id))
+              .map((r) => saveGrave(r).catch(() => {}))
+          );
+
+          setGraves(merged);
+        } catch { /* offline or not logged in — local data stands */ }
       })
       .catch(() => {
         setLoading(false);
         clearTimeout(timer);
       });
-      
+
     return () => clearTimeout(timer);
   }, []);
 
@@ -367,6 +398,12 @@ export default function ArchivePage() {
     await deleteGrave(id);
     setGraves((prev) => prev.filter((g) => g.id !== id));
     setDeleteConfirm(null);
+    // Cloud delete — non-fatal
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) await deleteFromCloud(supabase, user.id, id);
+    } catch { /* offline or not logged in */ }
   };
 
   const handleFilterState = (val: string) => { setFilterState(val); setFilterCity(""); setFilterCemetery(""); };
@@ -507,6 +544,7 @@ export default function ArchivePage() {
                 </button>
               </>
             )}
+            <ProfileBadge />
           </div>
         </div>
         {/* Search panel */}

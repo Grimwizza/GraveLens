@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import BottomNav from "@/components/layout/BottomNav";
+import ProfileBadge from "@/components/auth/ProfileBadge";
 import {
   ACHIEVEMENTS,
   ACHIEVEMENT_CATEGORIES,
@@ -381,9 +382,12 @@ export default function AchievementsPage() {
         className="px-5 py-4 bg-stone-900/95 backdrop-blur-sm sticky top-0 z-30 border-b border-stone-800"
         style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
       >
-        <div className="max-w-lg mx-auto">
-          <h1 className="font-serif text-lg text-stone-100 font-semibold">History Explorer</h1>
-          <p className="text-xs text-stone-500 mt-0.5">Your journey through the ages</p>
+        <div className="max-w-lg mx-auto flex items-center justify-between">
+          <div>
+            <h1 className="font-serif text-lg text-stone-100 font-semibold">History Explorer</h1>
+            <p className="text-xs text-stone-500 mt-0.5">Your journey through the ages</p>
+          </div>
+          <ProfileBadge />
         </div>
       </header>
 

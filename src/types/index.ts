@@ -118,6 +118,7 @@ export interface GraveRecord {
   research: ResearchData;
   tags?: string[];
   userNotes?: string;
+  syncedAt?: number; // Unix ms — set after a successful cloud sync
 }
 
 export interface AnalysisResult {
