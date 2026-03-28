@@ -156,7 +156,7 @@ export default function MapPage() {
             </div>
           </div>
         ) : (
-          <ArchiveMap graves={filteredGraves} />
+          <ArchiveMap graves={filteredGraves} allGraves={graves} />
         )}
       </main>
 
