@@ -28,6 +28,29 @@ export default function LoginPage() {
     });
   }, [next, router]);
 
+  // When Google OAuth opens in a new tab, watch for the user returning to this
+  // PWA window after completing sign-in. On iOS the popup may not auto-close,
+  // so we check for a session whenever this page regains visibility.
+  useEffect(() => {
+    if (!googleLoading) return;
+
+    const checkSession = async () => {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        await runPostLoginSync(supabase, data.session.user.id);
+        router.replace(next);
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") checkSession();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [googleLoading, next, router]);
+
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -60,17 +83,33 @@ export default function LoginPage() {
     setGoogleLoading(true);
     setError("");
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
+
+    // skipBrowserRedirect gives us the URL without navigating away —
+    // we open it in a new tab so the PWA shell stays alive in the background.
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        skipBrowserRedirect: true,
       },
     });
-    if (error) {
-      setError(error.message);
+
+    if (error || !data.url) {
+      setError(error?.message ?? "Failed to start sign-in.");
       setGoogleLoading(false);
+      return;
     }
-    // Page navigates away on success — no need to reset loading
+
+    // Open the OAuth flow in a new tab. On iOS the popup will open in Safari;
+    // after the user completes sign-in and returns here the visibilitychange
+    // listener above will detect the session and redirect into the app.
+    const popup = window.open(data.url, "_blank");
+
+    // Fallback: if the browser blocked the popup, navigate the current window
+    // (standard redirect flow — loses PWA context but still works).
+    if (!popup) {
+      window.location.href = data.url;
+    }
   };
 
   return (
