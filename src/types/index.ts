@@ -151,6 +151,16 @@ export interface LocalHistoryContext {
   wikidataEvents?: WikidataEvent[];
 }
 
+export interface CulturalCategory {
+  id: string;
+  summary: string;
+  detail?: string; // loaded on demand via "Tell me more"
+}
+
+export interface CulturalContext {
+  categories: CulturalCategory[];
+}
+
 export interface ResearchData {
   military?: MilitaryRecord[];
   militaryContext?: MilitaryContext;
@@ -161,6 +171,7 @@ export interface ResearchData {
   historical?: HistoricalContext;
   narrative?: LifeNarrative;
   localHistory?: LocalHistoryContext;
+  culturalContext?: CulturalContext;
 }
 
 export interface GraveRecord {

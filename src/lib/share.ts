@@ -24,7 +24,7 @@ function formatShareText(record: GraveRecord): string {
 
   const mil = research?.militaryContext;
   if (mil?.likelyConflict) {
-    const parts = [mil.likelyConflict, mil.branch, mil.rank]
+    const parts = [mil.likelyConflict, mil.role]
       .filter(Boolean)
       .join(", ");
     lines.push(`\n${parts}`);
