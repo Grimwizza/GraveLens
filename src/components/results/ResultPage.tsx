@@ -73,6 +73,22 @@ export default function ResultPage({ id }: { id: string }) {
       setPending(data);
       deletePendingResult(id).catch(() => {});
 
+      // Auto-save immediately so the record is never lost, regardless of
+      // whether the user taps "Save" or navigates away. Research data is
+      // patched into the saved record once the lookup response arrives.
+      const autoRecord: GraveRecord = {
+        id: data.id,
+        timestamp: data.timestamp,
+        photoDataUrl: data.photoDataUrl,
+        location: data.location ?? { lat: 0, lng: 0 },
+        extracted: data.extracted,
+        research: {},
+        tags: [],
+      };
+      saveGrave(autoRecord).catch(() => {});
+      setSaved(true);
+      setSavePromptDismissed(true);
+
       if (!data.extracted?.name) return;
       setResearchLoading(true);
       fetch("/api/lookup", {
@@ -96,7 +112,7 @@ export default function ResultPage({ id }: { id: string }) {
       })
         .then((r) => r.json())
         .then((d) => {
-          setResearch({
+          const researchData: ResearchData = {
             newspapers: d.newspapers ?? [],
             naraRecords: d.naraRecords ?? [],
             landRecords: d.landRecords ?? [],
@@ -110,7 +126,10 @@ export default function ResultPage({ id }: { id: string }) {
                   location: data.location ?? undefined,
                 }
               : undefined,
-          });
+          };
+          setResearch(researchData);
+          // Patch research into the already-saved record
+          saveGrave({ ...autoRecord, research: researchData }).catch(() => {});
         })
         .catch(() => setResearch({}))
         .finally(() => setResearchLoading(false));
