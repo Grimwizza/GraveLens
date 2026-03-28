@@ -453,6 +453,12 @@ function IdleState({
           </div>
         </button>
 
+        <p className="text-stone-600 text-[10px] mt-2 leading-relaxed px-1">
+          {cemeteryMode
+            ? "Each photo is queued for analysis — capture as many markers as you like without waiting. Results process automatically when you're back online."
+            : "Capture multiple graves in one session without waiting for each to analyze. Ideal for larger cemeteries or when offline."}
+        </p>
+
         {cemeteryMode && (
           <div className="mt-2 px-1">
             <input
@@ -462,9 +468,6 @@ function IdleState({
               placeholder="Session name (optional)"
               className="w-full h-10 rounded-lg bg-stone-800 border border-stone-700 px-3 text-stone-200 text-sm placeholder-stone-600 focus:outline-none focus:border-stone-500"
             />
-            <p className="text-stone-600 text-[10px] mt-1.5 leading-tight px-1">
-              Photos are queued and analyzed when you're back online.
-            </p>
           </div>
         )}
       </div>
