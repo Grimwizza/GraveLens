@@ -384,12 +384,12 @@ export default function AchievementsPage() {
       >
         <div className="max-w-lg mx-auto flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="8" r="4" />
               <path d="M8 8H4l2 8h12l2-8h-4" />
               <path d="M9 16l1 4h4l1-4" />
             </svg>
-            <h1 className="font-serif text-lg text-stone-100 font-semibold">History Explorer</h1>
+            <h1 className="font-serif text-xl text-stone-100 font-semibold">History Explorer</h1>
           </div>
           <ProfileBadge />
         </div>

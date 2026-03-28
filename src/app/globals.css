@@ -15,20 +15,26 @@
 }
 
 html {
-  /* Memorial park background — place memorial-bg.jpg in /public/ */
   background-color: #0a0908;
-  background-image: url('/memorial-bg.jpg');
-  background-size: cover;
-  background-position: center 30%;
-  background-attachment: fixed;
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
 }
 
 body {
-  /* Dark overlay over the background image — adjust opacity to taste (0.82 = subtle image, 0.92 = nearly hidden) */
-  background-color: rgba(10, 9, 8, 0.82);
+  /*
+   * Background image + dark overlay both live on body, which is position:fixed;inset:0
+   * so it covers the full physical screen edge-to-edge (including iOS safe areas).
+   * Two-layer background: overlay on top, image underneath.
+   * Adjust the rgba opacity to taste (0.62 = brighter, 0.82 = darker).
+   */
+  background-color: #0a0908; /* fallback if image hasn't loaded */
+  background-image:
+    linear-gradient(rgba(10, 9, 8, 0.62), rgba(10, 9, 8, 0.62)),
+    url('/memorial-bg.jpg');
+  background-size: cover, cover;
+  background-position: center 30%, center 30%;
+  background-attachment: fixed, fixed;
   color: #f5f2ed;
   /*
    * position: fixed + inset: 0 anchors the body to the physical screen edges,

@@ -62,18 +62,18 @@ export default function MapPage() {
       >
         <div className="flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2">
-            <svg width="18" height="18" viewBox="0 0 22 22" fill="none">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <path
-                d="M11 2C7.13 2 4 5.13 4 9c0 5.25 7 11 7 11s7-5.75 7-11c0-3.87-3.13-7-7-7z"
+                d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 11 7 11s7-5.75 7-11c0-3.87-3.13-7-7-7z"
                 stroke="#c9a84c"
                 strokeWidth="1.5"
                 strokeLinejoin="round"
               />
-              <circle cx="11" cy="9" r="2.5" stroke="#c9a84c" strokeWidth="1.5" />
+              <circle cx="12" cy="9" r="2.5" stroke="#c9a84c" strokeWidth="1.5" />
             </svg>
-            <span className="font-serif text-stone-100 text-lg font-semibold">Map</span>
+            <span className="font-serif text-stone-100 text-xl font-semibold">Map</span>
             {!loading && graves.length > 0 && (
-              <span className="text-xs text-stone-500 ml-1">
+              <span className="text-sm text-stone-500 ml-1">
                 ({filteredGraves.length}{filteredGraves.length !== graves.length && `/${graves.length}`}{" "}
                 {graves.length === 1 ? "marker" : "markers"})
               </span>

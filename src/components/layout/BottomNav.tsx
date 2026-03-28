@@ -13,8 +13,8 @@ const leftTabs = [
     label: "Scan",
     icon: (active: boolean) => (
       <svg
-        width="24"
-        height="24"
+        width="28"
+        height="28"
         viewBox="0 0 24 24"
         fill="none"
         stroke={active ? "#c9a84c" : "#8a8580"}
@@ -32,8 +32,8 @@ const leftTabs = [
     label: "Archive",
     icon: (active: boolean) => (
       <svg
-        width="24"
-        height="24"
+        width="28"
+        height="28"
         viewBox="0 0 24 24"
         fill="none"
         stroke={active ? "#c9a84c" : "#8a8580"}
@@ -54,8 +54,8 @@ const rightTabs = [
     label: "Map",
     icon: (active: boolean) => (
       <svg
-        width="24"
-        height="24"
+        width="28"
+        height="28"
         viewBox="0 0 24 24"
         fill="none"
         stroke={active ? "#c9a84c" : "#8a8580"}
@@ -73,8 +73,8 @@ const rightTabs = [
     label: "Explorer",
     icon: (active: boolean) => (
       <svg
-        width="24"
-        height="24"
+        width="28"
+        height="28"
         viewBox="0 0 24 24"
         fill="none"
         stroke={active ? "#c9a84c" : "#8a8580"}
@@ -127,17 +127,17 @@ export default function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50">
       {/* Camera FAB — protrudes above the nav bar */}
-      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: "-34px" }}>
+      <div className="absolute left-1/2 -translate-x-1/2 z-10" style={{ top: "-38px" }}>
         <button
           onClick={handleCameraClick}
-          className="w-[68px] h-[68px] rounded-full flex items-center justify-center transition-transform active:scale-90"
+          className="w-[76px] h-[76px] rounded-full flex items-center justify-center transition-transform active:scale-90"
           style={{
             background: "linear-gradient(145deg, #d4b76a, #c9a84c, #a8873a)",
             boxShadow: "0 4px 20px rgba(201, 168, 76, 0.5), 0 2px 8px rgba(0,0,0,0.6)",
           }}
           aria-label="Take a photo"
         >
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#1a1917" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#1a1917" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
             <circle cx="12" cy="13" r="4"/>
           </svg>
@@ -146,7 +146,7 @@ export default function BottomNav() {
 
       {/* Nav bar */}
       <div className="glass border-t border-stone-700/50 pb-safe shadow-[0_-8px_24px_rgba(0,0,0,0.4)]">
-        <div className="flex items-center h-16 max-w-lg mx-auto">
+        <div className="flex items-center h-[72px] max-w-lg mx-auto">
           {/* Left tabs */}
           <div className="flex-1 flex items-center justify-around">
             {leftTabs.map((tab) => {
@@ -173,7 +173,7 @@ export default function BottomNav() {
                     </span>
                   )}
                   <span
-                    className="text-[11px] font-semibold tracking-wide uppercase"
+                    className="text-[13px] font-semibold tracking-wide uppercase"
                     style={{ color: isActive ? "#c9a84c" : "#8a8580" }}
                   >
                     {tab.label}
@@ -184,7 +184,7 @@ export default function BottomNav() {
           </div>
 
           {/* Center spacer for FAB */}
-          <div className="w-[88px] flex-shrink-0" />
+          <div className="w-[96px] flex-shrink-0" />
 
           {/* Right tabs */}
           <div className="flex-1 flex items-center justify-around">
@@ -200,7 +200,7 @@ export default function BottomNav() {
                 >
                   {tab.icon(isActive)}
                   <span
-                    className="text-[11px] font-semibold tracking-wide uppercase"
+                    className="text-[13px] font-semibold tracking-wide uppercase"
                     style={{ color: isActive ? "#c9a84c" : "#8a8580" }}
                   >
                     {tab.label}

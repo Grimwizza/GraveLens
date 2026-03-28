@@ -424,13 +424,13 @@ export default function ArchivePage() {
       >
         <div className="flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6z" />
               <path d="M3 12h18M3 18h18M7 12v6M12 12v6M17 12v6" />
             </svg>
-            <span className="font-serif text-stone-100 text-lg font-semibold">Archive</span>
+            <span className="font-serif text-stone-100 text-xl font-semibold">Archive</span>
             {graves.length > 0 && (
-              <span className="text-xs text-stone-500 ml-1">
+              <span className="text-sm text-stone-500 ml-1">
                 ({filteredGraves.length}{filteredGraves.length !== graves.length && `/${graves.length}`}{" "}
                 {graves.length === 1 ? "marker" : "markers"})
               </span>

@@ -422,7 +422,7 @@ function IdleState({
             </div>
             {/* Text centered below brackets (y=240 of 256 -> 94%) */}
             <div style={{ position: "absolute", left: "50%", top: "94%", transform: "translate(-50%, -50%)" }}>
-              <span className="text-stone-300 text-[10px] font-bold tracking-[0.3em] whitespace-nowrap uppercase opacity-50">
+              <span className="text-stone-300 text-[13px] font-bold tracking-[0.3em] whitespace-nowrap uppercase opacity-50">
                 Point & scan
               </span>
             </div>
@@ -430,10 +430,10 @@ function IdleState({
         </div>
 
         <div className="flex flex-col items-center gap-3 text-center px-2">
-          <h1 className="font-serif text-2xl font-semibold text-stone-100 leading-tight">
+          <h1 className="font-serif text-3xl font-semibold text-stone-100 leading-tight">
             Bring the story behind every stone into focus.
           </h1>
-          <p className="text-stone-400 text-base leading-relaxed">
+          <p className="text-stone-400 text-lg leading-relaxed">
             Photograph any headstone and experience history like never before.
           </p>
         </div>
@@ -443,9 +443,9 @@ function IdleState({
       <div className="flex flex-col gap-3 w-full pt-6">
         <button
           onClick={onUpload}
-          className="flex items-center justify-center gap-3 w-full h-12 rounded-2xl border border-stone-600 text-stone-200 font-medium text-sm transition-all active:scale-[0.97] bg-stone-800/50"
+          className="flex items-center justify-center gap-3 w-full h-12 rounded-2xl border border-stone-600 text-stone-200 font-medium text-base transition-all active:scale-[0.97] bg-stone-800/50"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="17 8 12 3 7 8"/>
             <line x1="12" y1="3" x2="12" y2="15"/>
