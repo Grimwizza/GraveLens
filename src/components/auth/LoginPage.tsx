@@ -174,12 +174,17 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-stone-600 text-sm mt-6">
-            Didn't receive it?{" "}
-            <button onClick={handleResend} className="text-stone-400 underline">
-              Resend code
-            </button>
-          </p>
+          <div className="mt-6 text-center space-y-2">
+            <p className="text-stone-600 text-xs">
+              Can't find it? Check your <span className="text-stone-400">spam or junk</span> folder.
+            </p>
+            <p className="text-stone-600 text-sm">
+              Didn't receive it?{" "}
+              <button onClick={handleResend} className="text-stone-400 underline">
+                Resend code
+              </button>
+            </p>
+          </div>
         </div>
       </div>
     );
