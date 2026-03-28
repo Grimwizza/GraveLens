@@ -78,6 +78,10 @@ export default function ResultPage({ id }: { id: string }) {
           lastName: data.extracted.lastName,
           birthYear: data.extracted.birthYear,
           deathYear: data.extracted.deathYear,
+          lat: data.location?.lat,
+          lng: data.location?.lng,
+          city: data.location?.city,
+          county: data.location?.county,
           state: data.location?.state,
           cemetery: data.location?.cemetery,
           inscription: data.extracted.inscription ?? "",
@@ -92,6 +96,7 @@ export default function ResultPage({ id }: { id: string }) {
             landRecords: d.landRecords ?? [],
             historical: d.historical ?? {},
             militaryContext: d.militaryContext ?? undefined,
+            localHistory: d.localHistory ?? undefined,
             cemetery: data.location?.cemetery
               ? {
                   name: data.location.cemetery,
@@ -345,6 +350,15 @@ export default function ResultPage({ id }: { id: string }) {
             <HistoricalCard
               historical={research?.historical}
               extracted={extracted}
+              loading={researchLoading}
+            />
+          )}
+
+          {/* Local & regional history */}
+          {(research?.localHistory || researchLoading) && (
+            <LocalHistoryCard
+              localHistory={research?.localHistory}
+              location={location}
               loading={researchLoading}
             />
           )}
@@ -1197,6 +1211,284 @@ function TagsCard({
             + Custom
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Local History Card ────────────────────────────────────────────────────────
+
+function LocalHistoryCard({
+  localHistory,
+  location,
+  loading,
+}: {
+  localHistory: import("@/types").LocalHistoryContext | undefined;
+  location: GeoLocation | null;
+  loading: boolean;
+}) {
+  const [decadeExpanded, setDecadeExpanded] = useState(false);
+  const [censusExpanded, setCensusExpanded] = useState(false);
+
+  if (loading && !localHistory) {
+    return (
+      <div className="py-5 animate-fade-up" style={{ animationDelay: "0.13s" }}>
+        <SectionHeader icon="🗺" title="Local History" />
+        <div className="mt-3 space-y-2">
+          <div className="h-4 shimmer rounded w-4/5" />
+          <div className="h-4 shimmer rounded w-3/4" />
+          <div className="h-4 shimmer rounded w-5/6" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!localHistory) return null;
+
+  const hasContent =
+    localHistory.cityArticle ||
+    localHistory.countyArticle ||
+    localHistory.decadeSnapshots?.length ||
+    localHistory.localNewspaper?.length ||
+    localHistory.nrhpSites?.length ||
+    localHistory.censusPopulation?.length ||
+    localHistory.sanbornMapUrl ||
+    localHistory.wikidataEvents?.length;
+
+  if (!hasContent) return null;
+
+  const placeName = location?.city || location?.county || location?.state || "this area";
+
+  return (
+    <div className="py-5 animate-fade-up" style={{ animationDelay: "0.13s" }}>
+      <SectionHeader icon="🗺" title="Local History" />
+      <div className="mt-3 space-y-5">
+
+        {/* City article */}
+        {localHistory.cityArticle && (
+          <div>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-1.5">
+              {localHistory.cityArticle.title}
+            </p>
+            <p className="text-stone-300 text-sm leading-relaxed">
+              {localHistory.cityArticle.summary}
+            </p>
+            <a
+              href={localHistory.cityArticle.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gold-500 text-xs mt-1 inline-block"
+            >
+              Read more on Wikipedia →
+            </a>
+          </div>
+        )}
+
+        {/* County article — only if different from city */}
+        {localHistory.countyArticle &&
+          localHistory.countyArticle.title !== localHistory.cityArticle?.title && (
+          <div>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-1.5">
+              {localHistory.countyArticle.title}
+            </p>
+            <p className="text-stone-300 text-sm leading-relaxed">
+              {localHistory.countyArticle.summary}
+            </p>
+            <a
+              href={localHistory.countyArticle.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gold-500 text-xs mt-1 inline-block"
+            >
+              Read more on Wikipedia →
+            </a>
+          </div>
+        )}
+
+        {/* Decade snapshots */}
+        {localHistory.decadeSnapshots && localHistory.decadeSnapshots.length > 0 && (
+          <div>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-2">
+              The Region Through the Decades
+            </p>
+            <div className="space-y-3">
+              {(decadeExpanded
+                ? localHistory.decadeSnapshots
+                : localHistory.decadeSnapshots.slice(0, 2)
+              ).map((snap, i) => (
+                <div key={i} className="p-3 rounded-xl bg-stone-800 border border-stone-700/60">
+                  <p className="text-stone-400 text-xs uppercase tracking-wide mb-1.5">
+                    {snap.label}
+                  </p>
+                  <ul className="space-y-1">
+                    {snap.events.map((e, j) => (
+                      <li key={j} className="text-stone-300 text-xs leading-relaxed flex gap-2">
+                        <span className="text-stone-600 shrink-0">—</span>
+                        <span>{e}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            {localHistory.decadeSnapshots.length > 2 && (
+              <button
+                onClick={() => setDecadeExpanded((e) => !e)}
+                className="text-gold-500 text-xs mt-2"
+              >
+                {decadeExpanded
+                  ? "Show fewer decades"
+                  : `Show all ${localHistory.decadeSnapshots.length} decades`}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* NRHP historic sites */}
+        {localHistory.nrhpSites && localHistory.nrhpSites.length > 0 && (
+          <div>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-2">
+              Historic Sites Nearby
+            </p>
+            <ul className="space-y-2">
+              {localHistory.nrhpSites.map((site, i) => (
+                <li key={i} className="p-3 rounded-xl bg-stone-800 border border-stone-700/60">
+                  <p className="text-stone-200 text-sm font-medium leading-snug">{site.name}</p>
+                  {site.address && (
+                    <p className="text-stone-500 text-xs mt-0.5">{site.address}</p>
+                  )}
+                  {site.wikidataUrl && (
+                    <a
+                      href={site.wikidataUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-gold-500 text-xs mt-1 inline-block"
+                    >
+                      View on Wikidata →
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Wikidata local events */}
+        {localHistory.wikidataEvents && localHistory.wikidataEvents.length > 0 && (
+          <div>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-2">
+              Events Near {placeName}
+            </p>
+            <ul className="space-y-2">
+              {localHistory.wikidataEvents.map((evt, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="text-gold-500 text-xs font-mono shrink-0 w-10 text-right">
+                    {evt.year}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-stone-300 text-sm leading-snug">{evt.label}</p>
+                    {evt.description && (
+                      <p className="text-stone-500 text-xs mt-0.5 leading-snug">{evt.description}</p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Census county population */}
+        {localHistory.censusPopulation && localHistory.censusPopulation.length > 0 && (
+          <div>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-2">
+              {localHistory.censusPopulation[0].countyName
+                ? `${localHistory.censusPopulation[0].countyName} Population`
+                : "County Population"}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {(censusExpanded
+                ? localHistory.censusPopulation
+                : localHistory.censusPopulation.slice(0, 3)
+              ).map((entry, i) => (
+                <div
+                  key={i}
+                  className="px-3 py-2 rounded-xl bg-stone-800 border border-stone-700/60 text-center"
+                >
+                  <p className="text-stone-500 text-[10px] uppercase tracking-wide">{entry.year}</p>
+                  <p className="text-stone-200 text-sm font-medium mt-0.5">
+                    {entry.population.toLocaleString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {localHistory.censusPopulation.length > 3 && (
+              <button
+                onClick={() => setCensusExpanded((e) => !e)}
+                className="text-gold-500 text-xs mt-2"
+              >
+                {censusExpanded ? "Show fewer" : "Show all census years"}
+              </button>
+            )}
+            <p className="text-stone-600 text-[10px] mt-1.5">
+              Census Bureau data — coverage begins 1990.
+            </p>
+          </div>
+        )}
+
+        {/* Local newspaper coverage */}
+        {localHistory.localNewspaper && localHistory.localNewspaper.length > 0 && (
+          <div>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-2">
+              Local Newspaper Coverage
+            </p>
+            <ul className="space-y-2">
+              {localHistory.localNewspaper.map((article, i) => (
+                <li key={i}>
+                  <a
+                    href={article.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750"
+                  >
+                    <p className="text-stone-200 text-sm font-medium line-clamp-1">
+                      {article.newspaper}
+                    </p>
+                    <p className="text-stone-500 text-xs mt-0.5">{article.date}</p>
+                    {article.snippet && (
+                      <p className="text-stone-400 text-xs mt-1 line-clamp-2">{article.snippet}</p>
+                    )}
+                    <p className="text-gold-500 text-xs mt-1">View page →</p>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Sanborn map link */}
+        {localHistory.sanbornMapUrl && (
+          <div>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-1.5">
+              Historical Fire Insurance Map
+            </p>
+            <a
+              href={localHistory.sanbornMapUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750"
+            >
+              <span className="text-xl">🗺</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-stone-200 text-sm font-medium">Sanborn Fire Insurance Map</p>
+                <p className="text-stone-500 text-xs mt-0.5">
+                  View historic street-level maps of {placeName} from the LOC collection
+                </p>
+              </div>
+              <p className="text-gold-500 text-xs shrink-0">View →</p>
+            </a>
+          </div>
+        )}
+
       </div>
     </div>
   );

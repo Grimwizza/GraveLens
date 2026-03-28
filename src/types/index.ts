@@ -24,6 +24,7 @@ export interface GeoLocation {
   cemeteryWikipedia?: string;
   address?: string;
   city?: string;
+  county?: string;
   state?: string;
   country?: string;
 }
@@ -105,6 +106,51 @@ export interface LifeNarrative {
   epitaphMeaning?: string;
 }
 
+// ── Local / geographic history ────────────────────────────────────────────────
+
+export interface WikipediaArticle {
+  title: string;
+  summary: string;
+  url: string;
+}
+
+export interface DecadeSnapshot {
+  label: string;   // e.g. "1880s in Wisconsin"
+  events: string[];
+}
+
+export interface NrhpSite {
+  name: string;
+  address?: string;
+  description?: string;
+  wikidataId?: string;
+  wikidataUrl?: string;
+}
+
+export interface CensusEntry {
+  year: number;
+  population: number;
+  countyName?: string;
+}
+
+export interface WikidataEvent {
+  label: string;
+  year: number;
+  description?: string;
+  wikidataId?: string;
+}
+
+export interface LocalHistoryContext {
+  cityArticle?: WikipediaArticle;
+  countyArticle?: WikipediaArticle;
+  decadeSnapshots?: DecadeSnapshot[];
+  localNewspaper?: NewspaperArticle[];
+  nrhpSites?: NrhpSite[];
+  censusPopulation?: CensusEntry[];
+  sanbornMapUrl?: string;
+  wikidataEvents?: WikidataEvent[];
+}
+
 export interface ResearchData {
   military?: MilitaryRecord[];
   militaryContext?: MilitaryContext;
@@ -114,6 +160,7 @@ export interface ResearchData {
   cemetery?: CemeteryInfo;
   historical?: HistoricalContext;
   narrative?: LifeNarrative;
+  localHistory?: LocalHistoryContext;
 }
 
 export interface GraveRecord {

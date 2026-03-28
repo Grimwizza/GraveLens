@@ -43,6 +43,7 @@ export async function reverseGeocode(
     cemetery,
     address: data.display_name,
     city,
+    county: addr.county,
     state: addr.state,
     country: addr.country,
   };
