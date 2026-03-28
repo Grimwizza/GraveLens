@@ -14,7 +14,7 @@ export default function ProfileBadge() {
   const [syncResult, setSyncResult] = useState<string | null>(null);
 
   if (loading) {
-    return <div className="w-8 h-8 rounded-full bg-stone-800 animate-pulse" />;
+    return <div className="w-10 h-10 rounded-full bg-stone-800 animate-pulse" />;
   }
 
   const initials = user?.email
@@ -52,7 +52,7 @@ export default function ProfileBadge() {
       {/* Avatar button */}
       <button
         onClick={() => setSheetOpen(true)}
-        className="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90"
+        className="w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90"
         style={
           user
             ? { background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }
@@ -61,9 +61,9 @@ export default function ProfileBadge() {
         aria-label={user ? "Account" : "Sign in"}
       >
         {user && initials ? (
-          <span className="text-[11px] font-bold text-stone-900">{initials}</span>
+          <span className="text-[13px] font-bold text-stone-900">{initials}</span>
         ) : (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a8580" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a8580" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="8" r="4" />
             <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
           </svg>

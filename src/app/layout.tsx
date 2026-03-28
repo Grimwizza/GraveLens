@@ -47,7 +47,7 @@ export default function RootLayout({
       lang="en"
       className={`${playfair.variable} ${inter.variable} overflow-hidden`}
     >
-      <body className="flex flex-col bg-[#1a1917] text-[#f5f2ed] font-sans overflow-hidden">
+      <body className="flex flex-col h-full bg-[#1a1917] text-[#f5f2ed] font-sans overflow-hidden">
         <ServiceWorkerRegister />
         {children}
         <InstallPrompt />
