@@ -52,10 +52,11 @@ export default function LoginPage() {
         if (data.user) await runPostLoginSync(supabase, data.user.id);
         router.replace(next);
       } else {
-        // Sign up — Supabase sends a confirmation email containing both a link
-        // and a 6-digit code ({{ .Token }} in the email template). We then show
-        // the in-app OTP screen so the user never has to leave the PWA.
-        const { error } = await supabase.auth.signUp({
+        // Sign up — if "Confirm email" is enabled in Supabase, this sends a
+        // confirmation email with a 6-digit OTP and session is null. We show
+        // the in-app verify screen. If confirmation is disabled, Supabase
+        // returns a session immediately and we sign the user in directly.
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -63,7 +64,14 @@ export default function LoginPage() {
           },
         });
         if (error) { setError(error.message); return; }
-        setMode("verify");
+        if (data.session) {
+          // Email confirmation is disabled — signed in immediately
+          await runPostLoginSync(supabase, data.session.user.id);
+          router.replace(next);
+        } else {
+          // Email confirmation is enabled — show OTP entry screen
+          setMode("verify");
+        }
       }
     } finally {
       setLoading(false);
