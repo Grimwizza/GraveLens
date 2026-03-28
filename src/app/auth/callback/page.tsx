@@ -24,6 +24,8 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
+    const tokenHash = params.get("token_hash");
+    const type = params.get("type") ?? "signup";
     const next = params.get("next") ?? "/";
     const oauthError = params.get("error");
 
@@ -33,14 +35,22 @@ export default function AuthCallbackPage() {
       return;
     }
 
-    if (!code) {
+    if (!code && !tokenHash) {
       setErrorMsg("No authentication code received.");
       setStatus("error");
       return;
     }
 
     const supabase = createClient();
-    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+
+    // token_hash is used by email confirmation links — it requires no stored
+    // PKCE verifier so it works when the link is opened in any browser context.
+    // code is used by the OAuth/PKCE popup flow.
+    const authPromise = tokenHash
+      ? supabase.auth.verifyOtp({ token_hash: tokenHash, type: type as "signup" | "magiclink" | "recovery" | "email_change" | "email" })
+      : supabase.auth.exchangeCodeForSession(code!);
+
+    authPromise.then(({ error }) => {
       if (error) {
         setErrorMsg(error.message);
         setStatus("error");
@@ -50,7 +60,6 @@ export default function AuthCallbackPage() {
       setStatus("success");
 
       // Popup flow: try to close this tab so the user lands back in the PWA.
-      // This works when the tab was opened via window.open().
       try {
         window.close();
       } catch {
@@ -58,7 +67,6 @@ export default function AuthCallbackPage() {
       }
 
       // Redirect flow (or if window.close() was blocked): navigate to the app.
-      // Small delay so the "success" state renders briefly before navigation.
       setTimeout(() => {
         router.replace(next);
       }, 400);

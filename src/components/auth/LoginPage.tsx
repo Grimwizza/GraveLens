@@ -64,6 +64,12 @@ export default function LoginPage() {
           },
         });
         if (error) { setError(error.message); return; }
+        // Supabase returns a user with empty identities when the email is
+        // already registered — it won't send an email and won't error (by design).
+        if (data.user && (data.user.identities?.length ?? 0) === 0) {
+          setError("An account with this email already exists. Please sign in instead.");
+          return;
+        }
         if (data.session) {
           // Email confirmation is disabled — signed in immediately
           await runPostLoginSync(supabase, data.session.user.id);
@@ -90,7 +96,7 @@ export default function LoginPage() {
       const { data, error } = await supabase.auth.verifyOtp({
         email,
         token,
-        type: "email",
+        type: "signup",
       });
       if (error) { setError(error.message); return; }
       if (data.user) await runPostLoginSync(supabase, data.user.id);
