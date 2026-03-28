@@ -53,7 +53,7 @@ export default function LoginPage() {
         router.replace(next);
       } else {
         // Sign up — if "Confirm email" is enabled in Supabase, this sends a
-        // confirmation email with a 6-digit OTP and session is null. We show
+        // confirmation email with an 8-character OTP and session is null. We show
         // the in-app verify screen. If confirmation is disabled, Supabase
         // returns a session immediately and we sign the user in directly.
         const { data, error } = await supabase.auth.signUp({
@@ -87,7 +87,7 @@ export default function LoginPage() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = otpCode.trim();
-    if (token.length !== 6) { setError("Enter the 6-digit code from your email."); return; }
+    if (token.length !== 8) { setError("Enter the 8-character code from your email."); return; }
 
     setLoading(true);
     setError("");
@@ -155,7 +155,7 @@ export default function LoginPage() {
             Check your email
           </h1>
           <p className="text-stone-400 text-sm text-center mb-8 leading-relaxed">
-            We sent a 6-digit code to{" "}
+            We sent an 8-character code to{" "}
             <span className="text-stone-200">{email}</span>.
             Enter it below to verify your account.
           </p>
@@ -170,17 +170,18 @@ export default function LoginPage() {
             <input
               ref={otpInputRef}
               type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
+              inputMode="text"
+              autoCapitalize="none"
+              autoCorrect="off"
+              maxLength={8}
               value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-              placeholder="000000"
+              onChange={(e) => setOtpCode(e.target.value.replace(/\W/g, ""))}
+              placeholder="00000000"
               className="w-full h-14 rounded-xl bg-stone-800 border border-stone-700 px-4 text-center text-stone-100 text-2xl tracking-[0.5em] font-mono placeholder-stone-600 focus:outline-none focus:border-stone-500"
             />
             <button
               type="submit"
-              disabled={loading || otpCode.length !== 6}
+              disabled={loading || otpCode.length !== 8}
               className="w-full h-12 rounded-xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.97] disabled:opacity-60"
               style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
             >
