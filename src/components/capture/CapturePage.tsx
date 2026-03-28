@@ -251,38 +251,42 @@ export default function CapturePage() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center justify-center px-5 overflow-y-auto no-scrollbar" style={{ scrollbarWidth: "none" }}>
+      <main className="flex-1 flex flex-col items-center px-5 overflow-y-auto no-scrollbar" style={{ scrollbarWidth: "none" }}>
         {phase === "idle" && (
           <IdleState
             onCamera={() => cameraInputRef.current?.click()}
             onUpload={() => fileInputRef.current?.click()}
           />
         )}
-        {phase === "previewing" && previewUrl && (
-          <PreviewState
-            previewUrl={previewUrl}
-            onAnalyze={isOffline ? handleQueueCapture : handleAnalyze}
-            analyzeLabel={isOffline ? "Save to Queue" : "Analyze Marker"}
-            onCrop={handleCrop}
-            onRetake={handleReset}
-          />
-        )}
-        {phase === "cropping" && (originalUrl ?? previewUrl) && (
-          <CropState
-            imageUrl={(originalUrl ?? previewUrl)!}
-            onApply={handleCropApply}
-            onSkip={handleCropSkip}
-          />
-        )}
-        {phase === "processing" && previewUrl && (
-          <ProcessingState
-            previewUrl={previewUrl}
-            progress={progress}
-            label={progressLabel}
-          />
-        )}
-        {phase === "queued" && (
-          <QueuedConfirmation />
+        {phase !== "idle" && (
+          <div className="flex-1 flex flex-col items-center justify-center w-full">
+            {phase === "previewing" && previewUrl && (
+              <PreviewState
+                previewUrl={previewUrl}
+                onAnalyze={isOffline ? handleQueueCapture : handleAnalyze}
+                analyzeLabel={isOffline ? "Save to Queue" : "Analyze Marker"}
+                onCrop={handleCrop}
+                onRetake={handleReset}
+              />
+            )}
+            {phase === "cropping" && (originalUrl ?? previewUrl) && (
+              <CropState
+                imageUrl={(originalUrl ?? previewUrl)!}
+                onApply={handleCropApply}
+                onSkip={handleCropSkip}
+              />
+            )}
+            {phase === "processing" && previewUrl && (
+              <ProcessingState
+                previewUrl={previewUrl}
+                progress={progress}
+                label={progressLabel}
+              />
+            )}
+            {phase === "queued" && (
+              <QueuedConfirmation />
+            )}
+          </div>
         )}
       </main>
 
@@ -326,79 +330,82 @@ function IdleState({
   onUpload: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center w-full max-w-sm gap-4 animate-fade-in pt-1">
-      {/* Viewfinder graphic - sized to fit 375x667 with NO scrolling */}
-      <div className="relative flex items-center justify-center w-48 h-48 flex-shrink-0">
-        {/* Corner brackets */}
-        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 256 256">
-          <path
-            d="M32 80 L32 32 L80 32"
-            stroke="#c9a84c"
-            strokeWidth="2"
-            strokeLinecap="round"
-            fill="none"
-            opacity="0.8"
-          />
-          <path
-            d="M176 32 L224 32 L224 80"
-            stroke="#c9a84c"
-            strokeWidth="2"
-            strokeLinecap="round"
-            fill="none"
-            opacity="0.8"
-          />
-          <path
-            d="M32 176 L32 224 L80 224"
-            stroke="#c9a84c"
-            strokeWidth="2"
-            strokeLinecap="round"
-            fill="none"
-            opacity="0.8"
-          />
-          <path
-            d="M176 224 L224 224 L224 176"
-            stroke="#c9a84c"
-            strokeWidth="2"
-            strokeLinecap="round"
-            fill="none"
-            opacity="0.8"
-          />
-          {/* Headstone silhouette */}
-          <path
-            d="M96 190 L96 120 Q96 96 128 96 Q160 96 160 120 L160 190 Z"
-            fill="none"
-            stroke="#3a3633"
-            strokeWidth="1.5"
-          />
-        </svg>
-        <div className="absolute inset-0 pointer-events-none">
-          {/* Logo centered on grave silhouette (y=142 of 256 -> 55.5%) */}
-          <div style={{ position: "absolute", left: "50%", top: "55.5%", transform: "translate(-50%, -50%)" }}>
-            <BrandLogo size={28} color="#c9a84c" className="drop-shadow-[0_0_12px_rgba(201,168,76,0.5)]" />
+    <div className="flex flex-col items-center w-full max-w-sm animate-fade-in self-stretch py-4">
+      {/* Graphic + text — takes all available space and centers content within it */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-6">
+        {/* Viewfinder graphic */}
+        <div className="relative flex items-center justify-center w-64 h-64 flex-shrink-0">
+          {/* Corner brackets */}
+          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 256 256">
+            <path
+              d="M32 80 L32 32 L80 32"
+              stroke="#c9a84c"
+              strokeWidth="2"
+              strokeLinecap="round"
+              fill="none"
+              opacity="0.8"
+            />
+            <path
+              d="M176 32 L224 32 L224 80"
+              stroke="#c9a84c"
+              strokeWidth="2"
+              strokeLinecap="round"
+              fill="none"
+              opacity="0.8"
+            />
+            <path
+              d="M32 176 L32 224 L80 224"
+              stroke="#c9a84c"
+              strokeWidth="2"
+              strokeLinecap="round"
+              fill="none"
+              opacity="0.8"
+            />
+            <path
+              d="M176 224 L224 224 L224 176"
+              stroke="#c9a84c"
+              strokeWidth="2"
+              strokeLinecap="round"
+              fill="none"
+              opacity="0.8"
+            />
+            {/* Headstone silhouette */}
+            <path
+              d="M96 190 L96 120 Q96 96 128 96 Q160 96 160 120 L160 190 Z"
+              fill="none"
+              stroke="#3a3633"
+              strokeWidth="1.5"
+            />
+          </svg>
+          <div className="absolute inset-0 pointer-events-none">
+            {/* Logo centered on grave silhouette (y=142 of 256 -> 55.5%) */}
+            <div style={{ position: "absolute", left: "50%", top: "55.5%", transform: "translate(-50%, -50%)" }}>
+              <BrandLogo size={32} color="#c9a84c" className="drop-shadow-[0_0_12px_rgba(201,168,76,0.5)]" />
+            </div>
+            {/* Text centered below brackets (y=240 of 256 -> 94%) */}
+            <div style={{ position: "absolute", left: "50%", top: "94%", transform: "translate(-50%, -50%)" }}>
+              <span className="text-stone-300 text-[10px] font-bold tracking-[0.3em] whitespace-nowrap uppercase opacity-50">
+                Point & scan
+              </span>
+            </div>
           </div>
-          {/* Text centered below brackets (y=240 of 256 -> 94%) */}
-          <div style={{ position: "absolute", left: "50%", top: "94%", transform: "translate(-50%, -50%)" }}>
-            <span className="text-stone-300 text-[10px] font-bold tracking-[0.3em] whitespace-nowrap uppercase opacity-50">
-              Point & scan
-            </span>
-          </div>
+        </div>
+
+        <div className="flex flex-col items-center gap-3 text-center px-2">
+          <h1 className="font-serif text-2xl font-semibold text-stone-100 leading-tight">
+            Bring the story behind every stone into focus.
+          </h1>
+          <p className="text-stone-400 text-base leading-relaxed">
+            Photograph any headstone to travel through history and reveal a lifetime of memories.
+          </p>
         </div>
       </div>
 
-      <div className="flex flex-col items-center gap-2 text-center px-4 -translate-y-2">
-        <h1 className="font-serif text-xl font-semibold text-stone-100 leading-tight">
-          Bring the story behind every stone into focus.
-        </h1>
-        <p className="text-stone-400 text-sm leading-relaxed max-w-[280px]">
-          Photograph any headstone to travel through history and reveal a lifetime of memories.
-        </p>
-      </div>
-
-      {/* Action buttons */}
-      <div className="flex flex-col gap-3 w-full">
+      {/* Action buttons — anchored to bottom */}
+      <div className="flex flex-col gap-3 w-full pt-6">
         <button
           onClick={onCamera}
-          className="flex items-center justify-center gap-3 w-full h-11 rounded-xl text-stone-900 font-semibold text-base transition-all active:scale-[0.97]"
+          className="flex items-center justify-center gap-3 w-full h-14 rounded-2xl text-stone-900 font-semibold text-base transition-all active:scale-[0.97]"
           style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -410,7 +417,7 @@ function IdleState({
 
         <button
           onClick={onUpload}
-          className="flex items-center justify-center gap-3 w-full h-11 rounded-xl border border-stone-600 text-stone-200 font-medium text-sm transition-all active:scale-[0.97] bg-stone-800/50"
+          className="flex items-center justify-center gap-3 w-full h-12 rounded-2xl border border-stone-600 text-stone-200 font-medium text-sm transition-all active:scale-[0.97] bg-stone-800/50"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -420,7 +427,6 @@ function IdleState({
           Upload from Library
         </button>
       </div>
-
     </div>
   );
 }
