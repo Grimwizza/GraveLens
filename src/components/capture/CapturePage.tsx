@@ -50,15 +50,25 @@ export default function CapturePage() {
   // Keep the screen awake while the user is on this page
   useEffect(() => {
     if (!("wakeLock" in navigator)) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wl = (navigator as any).wakeLock;
+    let mounted = true;
     let lock: WakeLockSentinel | null = null;
 
     const acquire = async () => {
+      if (!mounted || document.visibilityState !== "visible") return;
       try {
-        lock = await (navigator as Navigator & { wakeLock: { request: (type: string) => Promise<WakeLockSentinel> } }).wakeLock.request("screen");
-      } catch { /* device may deny (low battery, etc.) — silently skip */ }
+        lock = await wl.request("screen");
+        // Re-acquire if the browser releases the lock unexpectedly (battery saver, etc.)
+        lock!.addEventListener("release", () => {
+          if (mounted && document.visibilityState === "visible") acquire();
+        });
+      } catch {
+        // Device denied (low battery, permissions, etc.) — silently skip
+      }
     };
 
-    // Re-acquire after the tab becomes visible again (lock is released on hide)
+    // Browsers release the lock when the page is hidden; re-acquire on return
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") acquire();
     };
@@ -66,6 +76,7 @@ export default function CapturePage() {
     acquire();
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
+      mounted = false;
       document.removeEventListener("visibilitychange", onVisibilityChange);
       lock?.release().catch(() => {});
     };
