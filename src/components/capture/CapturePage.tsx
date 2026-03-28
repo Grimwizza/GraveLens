@@ -7,9 +7,9 @@ import type { Area } from "react-easy-crop";
 import BottomNav from "@/components/layout/BottomNav";
 import BrandLogo from "@/components/ui/BrandLogo";
 import { fileToDataUrl, extractExifLocation, generateId } from "@/lib/exif";
-import { runTesseract } from "@/lib/ocr";
 import { savePendingResult } from "@/lib/storage";
-import type { ExtractedGraveData, GeoLocation } from "@/types";
+import { reverseGeocode } from "@/lib/apis/nominatim";
+import type { ExtractedGraveData } from "@/types";
 
 type Phase = "idle" | "previewing" | "cropping" | "processing" | "done";
 
@@ -47,33 +47,33 @@ export default function CapturePage() {
     setProgressLabel("Reading image…");
 
     try {
-      // Step 1: Extract GPS from EXIF
+      // ── Parallel phase ──────────────────────────────────────────────────
+      // All three independent operations start simultaneously:
+      //   • EXIF extraction  (instant — reads file metadata)
+      //   • Claude analysis  (3–8s — the critical path)
+      //   • Image resize     (instant — canvas op, runs in parallel)
+      // Geocoding starts immediately after EXIF resolves, overlapping Claude.
       setProgress(20);
-      setProgressLabel("Extracting location…");
-      const exifLoc = await extractExifLocation(selectedFile);
+      setProgressLabel("Analyzing marker…");
 
-      // Step 2: Tesseract OCR (always run — provides fallback if Claude fails)
-      setProgress(35);
-      setProgressLabel("Reading inscription…");
+      // Pre-process + resize for Claude while EXIF runs
+      const [preprocessed, exifLoc] = await Promise.all([
+        preprocessAndResize(previewUrl),
+        extractExifLocation(selectedFile),
+      ]);
 
-      const ocrResult = await runTesseract(selectedFile);
-      // Always build a Tesseract baseline so we have something to show
-      let extracted: ExtractedGraveData = buildFromOcr(ocrResult.text);
-      const preferClaude = ocrResult.confidence < 60 || ocrResult.text.length < 10;
+      // Kick off geocoding immediately — it overlaps the Claude call
+      const geocodePromise = exifLoc ? reverseGeocode(exifLoc.lat, exifLoc.lng) : Promise.resolve(null);
 
-      // Step 3: Claude API — always try it; it reads weathered markers far better
-      setProgress(55);
-      setProgressLabel("Analyzing with AI…");
+      // ── Claude analysis ─────────────────────────────────────────────────
+      setProgress(40);
+      let extracted: ExtractedGraveData | null = null;
 
       try {
-        // Resize to max 1536px before sending — full-size photos (10–20 MB as
-        // base64) exceed Next.js's 4 MB body limit and cause a silent 413 failure.
-        const { base64, mimeType } = await resizeForClaude(previewUrl);
-
         const claudeRes = await fetch("/api/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: base64, mimeType }),
+          body: JSON.stringify({ imageBase64: preprocessed.base64, mimeType: preprocessed.mimeType }),
         });
 
         if (claudeRes.ok) {
@@ -81,74 +81,47 @@ export default function CapturePage() {
           if (claudeExtracted) extracted = claudeExtracted;
         } else {
           const errorData = await claudeRes.json().catch(() => ({}));
-          console.warn(
-            "Claude API returned",
-            claudeRes.status,
-            "— using Tesseract result.",
-            "Details:", errorData.details || "Unknown error"
-          );
-          // Downgrade confidence label if we're relying on Tesseract alone
-          if (preferClaude) extracted.confidence = "low";
+          console.warn("Claude API returned", claudeRes.status, errorData.details ?? "");
         }
       } catch (claudeErr) {
-        console.warn("Claude request failed — using Tesseract result:", claudeErr);
-        if (preferClaude) extracted.confidence = "low";
+        console.warn("Claude request failed:", claudeErr);
       }
 
-      // Step 4: Reverse geocode if we have GPS
-      setProgress(75);
-      setProgressLabel("Finding location…");
-
-      let location: GeoLocation | null = null;
-      if (exifLoc) {
+      // ── Tesseract fallback (only if Claude completely failed) ───────────
+      // Dynamically imported so the ~10 MB WASM is never downloaded on the
+      // happy path. Only loads when the network is unavailable or Claude errors.
+      if (!extracted) {
+        setProgressLabel("Reading inscription locally…");
         try {
-          const geoRes = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${exifLoc.lat}&lon=${exifLoc.lng}&format=json&addressdetails=1&zoom=17`,
-            {
-              headers: {
-                "User-Agent": "GraveLens/1.0 (cemetery history app)",
-              },
-            }
-          );
-          if (geoRes.ok) {
-            const geoData = await geoRes.json();
-            const addr = geoData.address ?? {};
-            location = {
-              lat: exifLoc.lat,
-              lng: exifLoc.lng,
-              cemetery: addr.cemetery || addr.leisure || addr.amenity,
-              address: geoData.display_name,
-              city: addr.city || addr.town || addr.village,
-              state: addr.state,
-              country: addr.country,
-            };
-          }
+          const { runTesseract } = await import("@/lib/ocr");
+          const ocr = await runTesseract(selectedFile);
+          extracted = buildFromOcr(ocr.text);
+          extracted.confidence = "low";
         } catch {
-          location = { lat: exifLoc.lat, lng: exifLoc.lng };
+          extracted = buildFromOcr("");
+          extracted.confidence = "low";
         }
       }
 
-      // Step 5: Compress photo for storage, then write to IndexedDB and navigate.
-      // Full-res phone photos are 3–8 MB as base64. We resize to ≤1200px / 80%
-      // JPEG before saving — typically 100–250 KB, a 20–50× reduction.
-      // The compressed version is still sharp enough to read inscriptions on-screen.
+      // ── Await geocode result (likely already done) ──────────────────────
+      setProgress(80);
+      setProgressLabel("Finding location…");
+      const location = await geocodePromise;
+
+      // ── Save ────────────────────────────────────────────────────────────
       setProgress(90);
       setProgressLabel("Saving…");
 
       const storageDataUrl = await resizeForStorage(previewUrl);
 
-      setProgress(95);
-      setProgressLabel("Almost done…");
-
       const id = generateId();
-      const pendingResult = {
+      await savePendingResult(id, {
         id,
         photoDataUrl: storageDataUrl,
         extracted,
         location,
         timestamp: Date.now(),
-      };
-      await savePendingResult(id, pendingResult);
+      });
 
       setProgress(100);
       router.push(`/result/${id}`);
@@ -620,15 +593,11 @@ function resizeForStorage(dataUrl: string): Promise<string> {
 }
 
 /**
- * Resize + re-encode to JPEG before sending to Claude.
- * Keeps the longest edge ≤ 1024 px at 78% quality.
- * Anthropic enforces a 5 MB decoded-image limit; 1536 px / 88% can exceed
- * this on high-frequency textures (grass, weathered stone). At 1024 px / 78%
- * typical grave marker photos land at 150–400 KB — well under both the
- * Anthropic limit and Next.js's 4 MB request body limit.
- * Claude reads inscriptions accurately at this resolution.
+ * Preprocess an image for Claude: contrast stretch + unsharp mask + resize.
+ * Keeps the longest edge ≤ 1024 px at 78% JPEG quality.
+ * Contrast stretch and sharpening improve legibility on weathered stone.
  */
-function resizeForClaude(
+function preprocessAndResize(
   dataUrl: string,
   maxPx = 1024,
   quality = 0.78
@@ -639,12 +608,48 @@ function resizeForClaude(
       const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
       const w = Math.round(img.width * scale);
       const h = Math.round(img.height * scale);
+
+      // Draw at target size
       const canvas = document.createElement("canvas");
       canvas.width = w;
       canvas.height = h;
       const ctx = canvas.getContext("2d");
       if (!ctx) return reject(new Error("Canvas unavailable"));
       ctx.drawImage(img, 0, 0, w, h);
+
+      // ── Contrast stretch ──────────────────────────────────────────────────
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const data = imageData.data;
+      let min = 255, max = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const luma = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        if (luma < min) min = luma;
+        if (luma > max) max = luma;
+      }
+      const range = max - min || 1;
+      for (let i = 0; i < data.length; i += 4) {
+        data[i]     = Math.min(255, ((data[i]     - min) / range) * 255);
+        data[i + 1] = Math.min(255, ((data[i + 1] - min) / range) * 255);
+        data[i + 2] = Math.min(255, ((data[i + 2] - min) / range) * 255);
+      }
+      ctx.putImageData(imageData, 0, 0);
+
+      // ── Unsharp mask (overlay at low opacity) ─────────────────────────────
+      // Blur a copy then composite: original + (original - blurred) * amount
+      const blurCanvas = document.createElement("canvas");
+      blurCanvas.width = w;
+      blurCanvas.height = h;
+      const blurCtx = blurCanvas.getContext("2d");
+      if (blurCtx) {
+        blurCtx.filter = "blur(1px)";
+        blurCtx.drawImage(canvas, 0, 0);
+        ctx.globalCompositeOperation = "overlay";
+        ctx.globalAlpha = 0.25;
+        ctx.drawImage(blurCanvas, 0, 0);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.globalAlpha = 1;
+      }
+
       const resized = canvas.toDataURL("image/jpeg", quality);
       resolve({ base64: resized.split(",")[1], mimeType: "image/jpeg" });
     };

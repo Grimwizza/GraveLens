@@ -1,11 +1,13 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type { MilitaryContext } from "@/types";
 
 // ── Keyword detection ─────────────────────────────────────────────────────
 const MILITARY_RE =
   /\b(war|veteran|vet\b|pvt|sgt|cpl|cpt|maj|col|gen|lt\b|ltr|ltc|rank|tank|infantry|cavalry|regiment|battalion|squadron|division|brigade|corps|platoon|company|army|navy|marine|marines|air\s*force|coast\s*guard|national\s*guard|served|service|honorabl[ey]\s*discharged|killed\s*in\s*action|k\.i\.a|died\s*in\s*service|medal|bronze\s*star|silver\s*star|purple\s*heart|doughboy|soldier|sailor|airman|pilot|gunner|medic|sniper|commander|captain|sergeant|corporal|private|lieutenant|major|colonel|general|admiral)\b/i;
 
-// ── Known US conflicts with inference data ────────────────────────────────
+// ── Known US conflicts with full contextual templates ─────────────────────
+// roleDescription and historicalNote are pre-written factual text for each
+// conflict, eliminating the need for a Claude API call on military markers.
+// All content is verifiable historical fact — nothing is specific to the individual.
 const CONFLICTS = [
   {
     name: "Civil War",
@@ -13,6 +15,11 @@ const CONFLICTS = [
     usDates: "1861–1865",
     birthRange: [1820, 1850] as [number, number],
     serviceYears: [1861, 1865] as [number, number],
+    theater: "Eastern and Western Theaters, United States",
+    roleDescription:
+      "Civil War soldiers on both sides were armed primarily with muzzle-loading rifle-muskets such as the Springfield Model 1861 or Enfield Pattern 1853. Infantry engagements were fought in massed linear formations at close range, making casualties extraordinarily high. Soldiers endured brutal field conditions — disease alone killed more than two men for every one lost in combat.",
+    historicalNote:
+      "The Civil War was the deadliest conflict in American history, claiming an estimated 620,000 to 750,000 soldiers' lives on both sides. It ended slavery in the United States and fundamentally redefined the relationship between the federal government and the states.",
   },
   {
     name: "Spanish-American War",
@@ -20,6 +27,11 @@ const CONFLICTS = [
     usDates: "1898–1899",
     birthRange: [1855, 1882] as [number, number],
     serviceYears: [1898, 1899] as [number, number],
+    theater: "Cuba, Puerto Rico, and the Philippines",
+    roleDescription:
+      "American soldiers in the Spanish-American War fought in tropical climates largely unprepared for the conditions — disease, particularly yellow fever and dysentery, killed far more men than Spanish bullets. The war lasted only ten weeks but established the United States as a global imperial power with territories in the Caribbean and Pacific.",
+    historicalNote:
+      "The Spanish-American War of 1898 marked the United States' emergence onto the world stage as an imperial power. The conflict lasted only ten weeks but resulted in Spain ceding Cuba, Puerto Rico, Guam, and the Philippines, reshaping American foreign policy for the next century.",
   },
   {
     name: "World War I",
@@ -30,6 +42,11 @@ const CONFLICTS = [
     usDates: "1917–1918",
     birthRange: [1873, 1902] as [number, number],
     serviceYears: [1917, 1918] as [number, number],
+    theater: "Western Front, France and Belgium",
+    roleDescription:
+      "American Expeditionary Forces arrived in France in 1917 armed with Springfield M1903 rifles and supported by newly fielded weapons including machine guns, artillery, and early tanks. Soldiers fought from a network of trenches stretching hundreds of miles, enduring artillery barrages, poison gas attacks, and infantry assaults across no man's land in conditions of extreme hardship.",
+    historicalNote:
+      "Over 4 million Americans served in World War I, with more than 116,000 killed. The war introduced industrialized warfare on an unprecedented scale — artillery, poison gas, aircraft, and tanks transformed combat. American forces played a decisive role in breaking the stalemate on the Western Front in 1918.",
   },
   {
     name: "World War II",
@@ -40,6 +57,11 @@ const CONFLICTS = [
     usDates: "1941–1945",
     birthRange: [1895, 1928] as [number, number],
     serviceYears: [1941, 1945] as [number, number],
+    theater: "European and Pacific Theaters",
+    roleDescription:
+      "American forces in World War II fought across two hemispheres — from the beaches of Normandy and North Africa in Europe to the island campaigns of the Pacific. Soldiers were equipped with the M1 Garand, the first standard-issue semi-automatic rifle in the world, and supported by an unprecedented industrial mobilization that produced tanks, ships, and aircraft at a scale no nation had ever achieved.",
+    historicalNote:
+      "Over 16 million Americans served in World War II, making it the largest military mobilization in US history. More than 400,000 Americans were killed. The war ended with the unconditional surrender of Germany in May 1945 and Japan in September 1945 following the use of atomic bombs on Hiroshima and Nagasaki.",
   },
   {
     name: "Korean War",
@@ -47,6 +69,11 @@ const CONFLICTS = [
     usDates: "1950–1953",
     birthRange: [1918, 1936] as [number, number],
     serviceYears: [1950, 1953] as [number, number],
+    theater: "Korean Peninsula",
+    roleDescription:
+      "American soldiers in Korea fought in extreme conditions ranging from the blistering summers of the southern peninsula to the brutal winters of the Chosin Reservoir, where temperatures fell to −35°F. Equipped with M1 rifles and carbines, they faced both North Korean forces and, from late 1950, large numbers of Chinese People's Volunteer Army troops who entered the conflict.",
+    historicalNote:
+      'The Korean War, often called the "Forgotten War," lasted three years and cost over 36,000 American lives. It ended in an armistice rather than a peace treaty, leaving the Korean peninsula divided at roughly the same 38th parallel boundary where the conflict began — a division that persists to this day.',
   },
   {
     name: "Vietnam War",
@@ -54,6 +81,11 @@ const CONFLICTS = [
     usDates: "1965–1975",
     birthRange: [1930, 1957] as [number, number],
     serviceYears: [1965, 1975] as [number, number],
+    theater: "South Vietnam, Cambodia, and Laos",
+    roleDescription:
+      "American troops in Vietnam fought an unconventional guerrilla war in dense jungle and rice paddy terrain against Viet Cong and North Vietnamese Army forces. Armed with the M16 rifle, soldiers faced ambushes, booby traps, and an enemy that blended into the civilian population. The average age of the combat soldier was 19, younger than any previous American war.",
+    historicalNote:
+      "Over 58,000 Americans were killed in Vietnam, and more than 300,000 were wounded. The war deeply divided American society, generated widespread anti-war protests, and ended with the fall of Saigon in April 1975. It remains one of the most contentious conflicts in American history.",
   },
   {
     name: "Gulf War",
@@ -61,6 +93,11 @@ const CONFLICTS = [
     usDates: "1990–1991",
     birthRange: [1950, 1973] as [number, number],
     serviceYears: [1990, 1991] as [number, number],
+    theater: "Kuwait and southern Iraq",
+    roleDescription:
+      "American forces in Operation Desert Storm conducted one of the most decisive conventional military campaigns of the 20th century. Equipped with M1 Abrams tanks, Apache helicopters, and precision-guided munitions, coalition forces liberated Kuwait in a ground war that lasted just 100 hours. The conflict showcased the transformation of the US military since Vietnam toward high-technology combined-arms warfare.",
+    historicalNote:
+      "The Gulf War coalition of 34 nations drove Iraqi forces from Kuwait between August 1990 and February 1991. American forces suffered 148 battle deaths in the conflict. The swift victory led to widespread optimism about a new era of US military dominance, though it left the underlying regional tensions unresolved.",
   },
 ];
 
@@ -68,12 +105,10 @@ const CONFLICTS = [
 function detectConflict(text: string, birthYear: number | null) {
   const lower = text.toLowerCase();
 
-  // 1. Explicit keyword match
   for (const c of CONFLICTS) {
     if (c.keywords.some((k) => lower.includes(k))) return c;
   }
 
-  // 2. Infer from birth year — pick the conflict whose typical service age fits best
   if (birthYear) {
     for (const c of [...CONFLICTS].reverse()) {
       const [minB, maxB] = c.birthRange;
@@ -86,20 +121,17 @@ function detectConflict(text: string, birthYear: number | null) {
   return null;
 }
 
-// Extract military terms from inscription + symbols for use as NARA search boost
 export function extractMilitaryTerms(inscription: string, symbols: string[]): string {
   const all = [inscription, ...symbols].join(" ");
   if (!MILITARY_RE.test(all)) return "";
 
   const terms: string[] = [];
 
-  // Extract ranks / roles
   const rankMatch = all.match(
     /\b(tank\s+commander|pilot|gunner|medic|sniper|infantry(?:man)?|cavalry(?:man)?|sailor|airman|doughboy|corpsman|rifleman|sergeant\s+major|first\s+sergeant|master\s+sergeant|staff\s+sergeant|technical\s+sergeant|gunnery\s+sergeant|lance\s+corporal|petty\s+officer|chief\s+petty|warrant\s+officer)\b/gi
   );
   if (rankMatch) terms.push(...rankMatch.map((r) => r.trim()));
 
-  // Extract conflict names
   for (const c of CONFLICTS) {
     for (const k of c.keywords) {
       if (all.toLowerCase().includes(k)) {
@@ -116,10 +148,9 @@ export function hasMilitaryIndicators(inscription: string, symbols: string[]): b
   return MILITARY_RE.test([inscription, ...symbols].join(" "));
 }
 
-// ── Claude-powered contextual military history ────────────────────────────
-// This generates factual *historical* context about the conflict and role —
-// NOT fabricated claims about the individual. Clearly scoped to what is
-// historically verifiable about the era, branch, and role.
+// ── Local template-based military context ─────────────────────────────────
+// Replaces the previous Claude API call. All content is pre-written factual
+// historical text — no AI generation needed, zero API cost, instant response.
 export async function getMilitaryContext(params: {
   name: string;
   birthYear: number | null;
@@ -127,68 +158,32 @@ export async function getMilitaryContext(params: {
   inscription: string;
   symbols: string[];
 }): Promise<MilitaryContext | null> {
-  const { name, birthYear, deathYear, inscription, symbols } = params;
+  const { birthYear, inscription, symbols } = params;
 
   if (!hasMilitaryIndicators(inscription, symbols)) return null;
 
   const conflict = detectConflict([inscription, ...symbols].join(" "), birthYear);
+  if (!conflict) return null;
 
-  const client = new Anthropic();
+  // Extract role from inscription if present
+  const roleMatch = [inscription, ...symbols]
+    .join(" ")
+    .match(
+      /\b(tank\s+commander|pilot|gunner|medic|sniper|infantry(?:man)?|cavalry(?:man)?|sailor|airman|doughboy|corpsman|rifleman|sergeant\s+major|first\s+sergeant|master\s+sergeant|staff\s+sergeant|technical\s+sergeant|gunnery\s+sergeant|lance\s+corporal|petty\s+officer|chief\s+petty|warrant\s+officer|pvt|sgt|cpl|cpt|maj|col|gen|lt\b|captain|sergeant|corporal|private|lieutenant|major|colonel|general|admiral|commander)\b/i
+    );
+  const role = roleMatch ? roleMatch[0].trim() : "";
 
-  const prompt = `A grave marker has been photographed with the following details:
-- Name: ${name || "Unknown"}
-- Birth year: ${birthYear ?? "unknown"}
-- Death year: ${deathYear ?? "unknown"}
-- Full inscription: "${inscription}"
-- Symbols / emblems on marker: ${symbols.length ? symbols.join("; ") : "none noted"}
-${conflict ? `- Conflict already identified: ${conflict.name} (${conflict.usDates})` : ""}
-
-Provide military historical context for this person's likely service. Return ONLY valid JSON:
-{
-  "likelyConflict": "Full conflict name, e.g. 'World War I'",
-  "servedDuring": "Approximate US service dates, e.g. '1917–1918'",
-  "theater": "Most likely theater of operations based on the conflict and any location clues, e.g. 'Western Front, France and Belgium'",
-  "role": "The specific military role or rank visible on the marker, e.g. 'Tank Commander'",
-  "roleDescription": "2–3 factual sentences describing what this role involved in this specific conflict — equipment used, duties, conditions, historical significance. Do not claim specific facts about this individual.",
-  "historicalNote": "1–2 sentences of broader historical context relevant to service in this era that would help a family member understand what their relative experienced.",
-  "inferredFrom": "inscription"
-}
-
-Critical rules:
-- Every claim in roleDescription and historicalNote must be verifiable historical fact, not speculation about this person specifically.
-- If the conflict is World War I and the role is Tank Commander: describe WWI tanks (Mark IV, Renault FT, etc.), crew size, conditions, the limited but pivotal role tanks played on the Western Front.
-- Set a field to null if you genuinely cannot determine it — do not guess wildly.
-- Do not use the phrase "may have" or "likely served" when describing the role itself — describe what the role historically entailed.`;
-
-  try {
-    const msg = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 600,
-      system:
-        "You are a military historian providing verified historical context about US military service. Return only valid JSON — no markdown fences, no explanation.",
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const text = msg.content[0].type === "text" ? msg.content[0].text : "";
-    const raw = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
-    const ctx = JSON.parse(raw) as MilitaryContext;
-
-    // If Claude missed the conflict we already detected, fill it in
-    if (!ctx.likelyConflict && conflict) {
-      ctx.likelyConflict = conflict.name;
-      ctx.servedDuring = conflict.usDates;
-    }
-
-    return ctx;
-  } catch {
-    // Graceful fallback — return basic inferred data without Claude
-    if (conflict) {
-      return {
-        likelyConflict: conflict.name,
-        servedDuring: conflict.usDates,
-        inferredFrom: "dates",
-      };
-    }
-    return null;
-  }
+  return {
+    likelyConflict: conflict.name,
+    servedDuring: conflict.usDates,
+    theater: conflict.theater,
+    role: role || undefined,
+    roleDescription: conflict.roleDescription,
+    historicalNote: conflict.historicalNote,
+    inferredFrom: conflict.keywords.some((k) =>
+      [inscription, ...symbols].join(" ").toLowerCase().includes(k)
+    )
+      ? "inscription"
+      : "dates",
+  };
 }
