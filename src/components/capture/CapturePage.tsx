@@ -10,6 +10,7 @@ import { fileToDataUrl, extractExifLocation, generateId } from "@/lib/exif";
 import { savePendingResult } from "@/lib/storage";
 import { reverseGeocode } from "@/lib/apis/nominatim";
 import type { ExtractedGraveData } from "@/types";
+import ProfileBadge from "@/components/auth/ProfileBadge";
 
 type Phase = "idle" | "previewing" | "cropping" | "processing" | "done";
 
@@ -157,15 +158,17 @@ export default function CapturePage() {
     <div className="flex flex-col h-dvh bg-stone-900 overflow-hidden">
       {/* Header */}
       <header
-        className="flex items-center justify-center px-5 pt-2 pb-2 flex-shrink-0 bg-stone-900"
+        className="flex items-center justify-between px-5 pt-2 pb-2 flex-shrink-0 bg-stone-900"
         style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
       >
+        <div className="w-8" />
         <div className="flex items-center gap-2.5">
           <BrandLogo size={22} color="#c9a84c" />
           <span className="font-serif text-xl font-semibold tracking-wide text-stone-50">
             GraveLens
           </span>
         </div>
+        <ProfileBadge />
       </header>
 
       {/* Main content */}

@@ -6,6 +6,7 @@ import BottomNav from "@/components/layout/BottomNav";
 import { getAllGraves } from "@/lib/storage";
 import type { GraveRecord } from "@/types";
 import ThematicIllustration from "@/components/ui/ThematicIllustration";
+import ProfileBadge from "@/components/auth/ProfileBadge";
 
 const ArchiveMap = dynamic(() => import("./ArchiveMap"), { ssr: false });
 
@@ -79,6 +80,7 @@ export default function MapPage() {
             )}
           </div>
 
+          <div className="flex items-center gap-2">
           <button
             onClick={() => setSearchOpen((o) => !o)}
             className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
@@ -100,6 +102,8 @@ export default function MapPage() {
               <path d="m21 21-4.3-4.3" />
             </svg>
           </button>
+          <ProfileBadge />
+          </div>
         </div>
 
         {searchOpen && (

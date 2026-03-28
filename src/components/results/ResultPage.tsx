@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/browser";
 import { uploadPhoto, upsertGrave } from "@/lib/cloudSync";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import { interpretSymbols } from "@/lib/apis/symbols";
+import ProfileBadge from "@/components/auth/ProfileBadge";
 import type {
   GraveRecord,
   ResearchData,
@@ -271,17 +272,20 @@ export default function ResultPage({ id }: { id: string }) {
           {extracted.name || "Unknown"}
         </span>
 
-        <button
-          onClick={handleShare}
-          className="flex items-center gap-1.5 text-gold-500 active:text-gold-400"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-            <polyline points="16 6 12 2 8 6"/>
-            <line x1="12" y1="2" x2="12" y2="15"/>
-          </svg>
-          <span className="text-sm">Share</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1.5 text-gold-500 active:text-gold-400"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+              <polyline points="16 6 12 2 8 6"/>
+              <line x1="12" y1="2" x2="12" y2="15"/>
+            </svg>
+            <span className="text-sm">Share</span>
+          </button>
+          <ProfileBadge />
+        </div>
       </header>
 
       <main className="scroll-container max-w-lg mx-auto w-full pb-8">
