@@ -1,24 +1,25 @@
 import { openDB, type IDBPDatabase } from "idb";
-import type { GraveRecord } from "@/types";
+import type { GraveRecord, QueuedCapture } from "@/types";
 
 const DB_NAME = "gravelens";
-const DB_VERSION = 3; // bumped to force store creation
+const DB_VERSION = 4;
 const STORE_NAME = "graves";
 const PENDING_STORE = "pending";
+const QUEUE_STORE = "queue";
 
 async function getDB(): Promise<IDBPDatabase> {
-  console.log(`[Storage] Opening DB version ${DB_VERSION}...`);
   return openDB(DB_NAME, DB_VERSION, {
     upgrade(db, oldVersion, newVersion) {
       console.log(`[Storage] Upgrading DB from ${oldVersion} to ${newVersion}`);
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        console.log(`[Storage] Creating store: ${STORE_NAME}`);
         const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
         store.createIndex("timestamp", "timestamp");
       }
       if (!db.objectStoreNames.contains(PENDING_STORE)) {
-        console.log(`[Storage] Creating store: ${PENDING_STORE}`);
         db.createObjectStore(PENDING_STORE, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(QUEUE_STORE)) {
+        db.createObjectStore(QUEUE_STORE, { keyPath: "id" });
       }
     },
   });
@@ -84,4 +85,32 @@ export async function getPendingResult(
 export async function deletePendingResult(id: string): Promise<void> {
   const db = await getDB();
   await db.delete(PENDING_STORE, id);
+}
+
+// ── Offline capture queue ──────────────────────────────────────────────────
+
+export async function addToQueue(item: QueuedCapture): Promise<void> {
+  const db = await getDB();
+  await db.put(QUEUE_STORE, item);
+}
+
+export async function getQueuedItems(): Promise<QueuedCapture[]> {
+  const db = await getDB();
+  const items = await db.getAll(QUEUE_STORE);
+  return items.sort((a, b) => a.timestamp - b.timestamp);
+}
+
+export async function updateQueueItem(item: QueuedCapture): Promise<void> {
+  const db = await getDB();
+  await db.put(QUEUE_STORE, item);
+}
+
+export async function removeFromQueue(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete(QUEUE_STORE, id);
+}
+
+export async function getQueueCount(): Promise<number> {
+  const db = await getDB();
+  return db.count(QUEUE_STORE);
 }

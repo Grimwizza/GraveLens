@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { recordActiveDay } from "@/lib/achievements";
+import { getQueueCount } from "@/lib/storage";
+import { startQueueProcessor, QUEUE_CHANGED_EVENT } from "@/lib/queue";
 
 const tabs = [
   {
@@ -87,38 +89,65 @@ const tabs = [
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const [queueCount, setQueueCount] = useState(0);
 
   useEffect(() => {
     recordActiveDay();
+
+    // Load initial queue count
+    getQueueCount().then(setQueueCount).catch(() => {});
+
+    // Update count when queue changes
+    const onQueueChanged = () => {
+      getQueueCount().then(setQueueCount).catch(() => {});
+    };
+    window.addEventListener(QUEUE_CHANGED_EVENT, onQueueChanged);
+
+    // Start the background processor
+    const cleanup = startQueueProcessor();
+
+    return () => {
+      window.removeEventListener(QUEUE_CHANGED_EVENT, onQueueChanged);
+      cleanup();
+    };
   }, []);
 
   return (
     <nav className="shrink-0 glass border-t border-stone-700/50 pb-safe">
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-4">
+        {tabs.map((tab) => {
+          const isActive =
+            tab.href === "/"
+              ? pathname === "/" || pathname.startsWith("/result")
+              : pathname === tab.href || pathname.startsWith(tab.href + "/");
 
-          {tabs.map((tab) => {
-            const isActive =
-              tab.href === "/"
-                ? pathname === "/" || pathname.startsWith("/result")
-                : pathname === tab.href || pathname.startsWith(tab.href + "/");
+          const showBadge = tab.href === "/" && queueCount > 0;
 
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className="flex flex-col items-center gap-1 min-w-[72px] py-1 transition-all active:scale-95"
-              >
-                {tab.icon(isActive)}
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className="relative flex flex-col items-center gap-1 min-w-[72px] py-1 transition-all active:scale-95"
+            >
+              {tab.icon(isActive)}
+              {showBadge && (
                 <span
-                  className="text-[11px] font-semibold tracking-wide uppercase"
-                  style={{ color: isActive ? "#c9a84c" : "#8a8580" }}
+                  className="absolute -top-0.5 right-3 min-w-[16px] h-4 rounded-full text-[10px] font-bold flex items-center justify-center px-1"
+                  style={{ background: "#c9a84c", color: "#1a1917" }}
                 >
-                  {tab.label}
+                  {queueCount > 9 ? "9+" : queueCount}
                 </span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
+              )}
+              <span
+                className="text-[11px] font-semibold tracking-wide uppercase"
+                style={{ color: isActive ? "#c9a84c" : "#8a8580" }}
+              >
+                {tab.label}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }

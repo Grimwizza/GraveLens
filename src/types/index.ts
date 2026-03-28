@@ -180,3 +180,14 @@ export interface AnalysisResult {
   location: GeoLocation | null;
   photoDataUrl: string;
 }
+
+export interface QueuedCapture {
+  id: string;
+  timestamp: number;
+  photoDataUrl: string;   // resized for storage (1200 px JPEG)
+  location?: GeoLocation;
+  sessionId?: string;
+  sessionName?: string;
+  status: "pending" | "failed";
+  retries: number;
+}
