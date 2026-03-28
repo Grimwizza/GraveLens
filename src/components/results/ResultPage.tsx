@@ -233,7 +233,7 @@ export default function ResultPage({ id }: { id: string }) {
 
   if (!pending) {
     return (
-      <div className="flex items-center justify-center min-h-dvh bg-stone-900">
+      <div className="flex items-center justify-center min-h-full bg-stone-900">
         <div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -252,7 +252,7 @@ export default function ResultPage({ id }: { id: string }) {
   };
 
   return (
-    <div className="flex flex-col h-dvh bg-stone-900 overflow-hidden">
+    <div className="flex flex-col h-full bg-stone-900 overflow-hidden">
       {/* Header */}
       <header
         className="flex items-center justify-between px-5 py-3 bg-stone-900/95 backdrop-blur-sm sticky top-0 z-30 border-b border-stone-800"

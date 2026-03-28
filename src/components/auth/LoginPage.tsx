@@ -124,7 +124,7 @@ export default function LoginPage() {
   if (mode === "verify") {
     return (
       <div
-        className="flex flex-col h-dvh bg-stone-900"
+        className="flex flex-col h-full bg-stone-900"
         style={{
           paddingTop: "max(2.5rem, env(safe-area-inset-top))",
           paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))",
@@ -207,7 +207,7 @@ export default function LoginPage() {
   // ── Sign in / Sign up screen ───────────────────────────────────────────────
   return (
     <div
-      className="flex flex-col h-dvh bg-stone-900"
+      className="flex flex-col h-full bg-stone-900"
       style={{
         paddingTop: "max(2.5rem, env(safe-area-inset-top))",
         paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))",

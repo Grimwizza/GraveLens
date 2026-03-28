@@ -55,7 +55,7 @@ export default function MapPage() {
   });
 
   return (
-    <div className="flex flex-col h-dvh bg-stone-900 overflow-hidden">
+    <div className="flex flex-col h-full bg-stone-900 overflow-hidden">
       <header
         className="bg-stone-900 sticky top-0 z-30 border-b border-stone-800 transition-all"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}

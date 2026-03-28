@@ -214,7 +214,7 @@ export default function CapturePage() {
   }, [selectedFile, previewUrl, sessionId, sessionName, handleReset]);
 
   return (
-    <div className="flex flex-col h-dvh bg-stone-900 overflow-hidden">
+    <div className="flex flex-col h-full bg-stone-900 overflow-hidden">
       {/* Header */}
       <header
         className="flex items-center justify-between px-5 pt-2 pb-2 flex-shrink-0 bg-stone-900"
@@ -503,11 +503,13 @@ function QueuedConfirmation({ sessionCount, sessionName }: { sessionCount: numbe
 function PreviewState({
   previewUrl,
   onAnalyze,
+  analyzeLabel = "Analyze Marker",
   onCrop,
   onRetake,
 }: {
   previewUrl: string;
   onAnalyze: () => void;
+  analyzeLabel?: string;
   onCrop: () => void;
   onRetake: () => void;
 }) {
@@ -553,7 +555,7 @@ function PreviewState({
             <circle cx="11" cy="11" r="8"/>
             <path d="m21 21-4.35-4.35"/>
           </svg>
-          Analyze Marker
+          {analyzeLabel}
         </button>
         <button
           onClick={onRetake}

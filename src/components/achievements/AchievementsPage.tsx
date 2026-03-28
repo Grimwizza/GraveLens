@@ -376,7 +376,7 @@ export default function AchievementsPage() {
   const totalCount = ACHIEVEMENTS.length;
 
   return (
-    <div className="flex flex-col h-dvh bg-stone-900 overflow-hidden">
+    <div className="flex flex-col h-full bg-stone-900 overflow-hidden">
       {/* Header */}
       <header
         className="px-5 py-4 bg-stone-900/95 backdrop-blur-sm sticky top-0 z-30 border-b border-stone-800"

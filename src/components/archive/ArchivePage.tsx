@@ -416,7 +416,7 @@ export default function ArchivePage() {
   const showAssignBanner = assignmentQueue.length > 0 && !enriching && !activeAssignmentId && !nearbyConfirm;
 
   return (
-    <div className="flex flex-col h-dvh bg-stone-900 overflow-hidden">
+    <div className="flex flex-col h-full bg-stone-900 overflow-hidden">
       {/* Header */}
       <header
         className="sticky top-0 z-30 bg-stone-900 border-b border-stone-800"

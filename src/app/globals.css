@@ -16,9 +16,7 @@
 
 html {
   background-color: #1a1917;
-  /* Fallback for iOS <15.4 that doesn't support dvh */
-  height: -webkit-fill-available;
-  height: 100dvh;
+  height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
 }
@@ -26,9 +24,15 @@ html {
 body {
   background-color: #1a1917;
   color: #f5f2ed;
-  /* Fallback for iOS <15.4 that doesn't support dvh */
-  min-height: -webkit-fill-available;
-  height: 100dvh;
+  /*
+   * position: fixed + inset: 0 anchors the body to the physical screen edges,
+   * bypassing all dvh/svh/fill-available quirks on iOS PWA.
+   * With viewport-fit=cover, bottom: 0 reaches BELOW the home indicator,
+   * so no black strip ever shows at the bottom.
+   * All internal scrolling already happens in child .scroll-container elements.
+   */
+  position: fixed;
+  inset: 0;
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;

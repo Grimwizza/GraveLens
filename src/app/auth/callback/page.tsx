@@ -76,7 +76,7 @@ export default function AuthCallbackPage() {
 
   return (
     <div
-      className="flex flex-col items-center justify-center h-dvh bg-stone-900 px-6 text-center"
+      className="flex flex-col items-center justify-center h-full bg-stone-900 px-6 text-center"
       style={{
         paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",
