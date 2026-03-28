@@ -29,15 +29,46 @@ export default function CapturePage() {
   // re-crop if they change their mind before hitting Analyze.
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
 
-  // Cemetery Mode
-  const [cemeteryMode, setCemeteryMode] = useState(false);
-  const [sessionName, setSessionName] = useState("");
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [sessionCount, setSessionCount] = useState(0);
+  // Offline detection
+  const [isOffline, setIsOffline] = useState(() =>
+    typeof navigator !== "undefined" ? !navigator.onLine : false
+  );
 
-  // Reset scroll on mount
+  // Reset scroll on mount + track connectivity
   useEffect(() => {
     window.scrollTo(0, 0);
+    const onOnline  = () => setIsOffline(false);
+    const onOffline = () => setIsOffline(true);
+    window.addEventListener("online",  onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online",  onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
+  // Keep the screen awake while the user is on this page
+  useEffect(() => {
+    if (!("wakeLock" in navigator)) return;
+    let lock: WakeLockSentinel | null = null;
+
+    const acquire = async () => {
+      try {
+        lock = await (navigator as Navigator & { wakeLock: { request: (type: string) => Promise<WakeLockSentinel> } }).wakeLock.request("screen");
+      } catch { /* device may deny (low battery, etc.) — silently skip */ }
+    };
+
+    // Re-acquire after the tab becomes visible again (lock is released on hide)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") acquire();
+    };
+
+    acquire();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      lock?.release().catch(() => {});
+    };
   }, []);
 
   const handleFileChosen = useCallback(async (file: File) => {
@@ -162,7 +193,6 @@ export default function CapturePage() {
     setProgress(0);
   }, []);
 
-  // Cemetery Mode: queue the photo for later processing instead of running Claude now
   const handleQueueCapture = useCallback(async () => {
     if (!selectedFile || !previewUrl) return;
 
@@ -171,7 +201,6 @@ export default function CapturePage() {
     setProgressLabel("Saving to queue…");
 
     try {
-      // Extract EXIF location from file (works offline)
       const exifLoc = await extractExifLocation(selectedFile);
       let location: GeoLocation | undefined;
 
@@ -185,34 +214,24 @@ export default function CapturePage() {
       const storageDataUrl = await resizeForStorage(previewUrl);
 
       const id = generateId();
-      const sid = sessionId ?? generateId();
-      if (!sessionId) setSessionId(sid);
-
       await addToQueue({
         id,
         timestamp: Date.now(),
         photoDataUrl: storageDataUrl,
         location,
-        sessionId: sid,
-        sessionName: sessionName.trim() || undefined,
         status: "pending",
         retries: 0,
       });
 
-      // Notify BottomNav badge
       window.dispatchEvent(new Event(QUEUE_CHANGED_EVENT));
-
       setProgress(100);
-      setSessionCount((c) => c + 1);
       setPhase("queued");
-
-      // Reset to idle after a brief confirmation
       setTimeout(() => handleReset(), 1400);
     } catch (err) {
       console.error(err);
       setPhase("previewing");
     }
-  }, [selectedFile, previewUrl, sessionId, sessionName, handleReset]);
+  }, [selectedFile, previewUrl, handleReset]);
 
   return (
     <div className="flex flex-col h-full bg-stone-900 overflow-hidden">
@@ -237,22 +256,13 @@ export default function CapturePage() {
           <IdleState
             onCamera={() => cameraInputRef.current?.click()}
             onUpload={() => fileInputRef.current?.click()}
-            cemeteryMode={cemeteryMode}
-            onToggleCemeteryMode={() => {
-              setCemeteryMode((m) => !m);
-              setSessionId(null);
-              setSessionCount(0);
-            }}
-            sessionName={sessionName}
-            onSessionNameChange={setSessionName}
-            sessionCount={sessionCount}
           />
         )}
         {phase === "previewing" && previewUrl && (
           <PreviewState
             previewUrl={previewUrl}
-            onAnalyze={cemeteryMode ? handleQueueCapture : handleAnalyze}
-            analyzeLabel={cemeteryMode ? "Add to Queue" : "Analyze Marker"}
+            onAnalyze={isOffline ? handleQueueCapture : handleAnalyze}
+            analyzeLabel={isOffline ? "Save to Queue" : "Analyze Marker"}
             onCrop={handleCrop}
             onRetake={handleReset}
           />
@@ -272,7 +282,7 @@ export default function CapturePage() {
           />
         )}
         {phase === "queued" && (
-          <QueuedConfirmation sessionCount={sessionCount} sessionName={sessionName} />
+          <QueuedConfirmation />
         )}
       </main>
 
@@ -311,19 +321,9 @@ export default function CapturePage() {
 function IdleState({
   onCamera,
   onUpload,
-  cemeteryMode,
-  onToggleCemeteryMode,
-  sessionName,
-  onSessionNameChange,
-  sessionCount,
 }: {
   onCamera: () => void;
   onUpload: () => void;
-  cemeteryMode: boolean;
-  onToggleCemeteryMode: () => void;
-  sessionName: string;
-  onSessionNameChange: (v: string) => void;
-  sessionCount: number;
 }) {
   return (
     <div className="flex flex-col items-center w-full max-w-sm gap-4 animate-fade-in pt-1">
@@ -421,69 +421,13 @@ function IdleState({
         </button>
       </div>
 
-      {/* Cemetery Mode toggle */}
-      <div className="w-full mt-1">
-        <button
-          onClick={onToggleCemeteryMode}
-          className="flex items-center justify-between w-full px-4 py-3 rounded-xl bg-stone-800/60 border border-stone-700/60 transition-all active:scale-[0.98]"
-        >
-          <div className="flex items-center gap-2.5">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={cemeteryMode ? "#c9a84c" : "#8a8580"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 11 7 11s7-5.75 7-11c0-3.87-3.13-7-7-7z" />
-              <circle cx="12" cy="9" r="2.5" />
-            </svg>
-            <span className="text-sm font-medium" style={{ color: cemeteryMode ? "#c9a84c" : "#a09890" }}>
-              Cemetery Mode
-            </span>
-            {cemeteryMode && sessionCount > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: "rgba(201,168,76,0.15)", color: "#c9a84c" }}>
-                {sessionCount} queued
-              </span>
-            )}
-          </div>
-          {/* Toggle pill */}
-          <div
-            className="w-10 h-6 rounded-full transition-colors flex items-center px-1"
-            style={{ background: cemeteryMode ? "#c9a84c" : "#3a3633" }}
-          >
-            <div
-              className="w-4 h-4 rounded-full bg-white shadow transition-transform"
-              style={{ transform: cemeteryMode ? "translateX(16px)" : "translateX(0)" }}
-            />
-          </div>
-        </button>
-
-        <p className="text-stone-600 text-[10px] mt-2 leading-relaxed px-1">
-          {cemeteryMode
-            ? "Each photo is queued for analysis — capture as many markers as you like without waiting. Results process automatically when you're back online."
-            : "Capture multiple graves in one session without waiting for each to analyze. Ideal for larger cemeteries or when offline."}
-        </p>
-
-        {cemeteryMode && (
-          <div className="mt-2 px-1">
-            <input
-              type="text"
-              value={sessionName}
-              onChange={(e) => onSessionNameChange(e.target.value)}
-              placeholder="Session name (optional)"
-              className="w-full h-10 rounded-lg bg-stone-800 border border-stone-700 px-3 text-stone-200 text-sm placeholder-stone-600 focus:outline-none focus:border-stone-500"
-            />
-          </div>
-        )}
-      </div>
-
-      {!cemeteryMode && (
-        <p className="text-stone-600 text-[10px] text-center px-6 leading-tight">
-          Photos with GPS data will automatically identify the cemetery location.
-        </p>
-      )}
     </div>
   );
 }
 
 // ── Queued confirmation ─────────────────────────────────────────────────────
 
-function QueuedConfirmation({ sessionCount, sessionName }: { sessionCount: number; sessionName: string }) {
+function QueuedConfirmation() {
   return (
     <div className="flex flex-col items-center gap-4 animate-fade-in text-center px-4">
       <div className="w-16 h-16 rounded-2xl bg-stone-800 border border-stone-700 flex items-center justify-center">
@@ -493,10 +437,8 @@ function QueuedConfirmation({ sessionCount, sessionName }: { sessionCount: numbe
         </svg>
       </div>
       <div>
-        <p className="text-stone-100 font-semibold text-base">Added to queue</p>
-        <p className="text-stone-500 text-sm mt-1">
-          {sessionName ? `${sessionName} · ` : ""}{sessionCount} photo{sessionCount !== 1 ? "s" : ""} queued
-        </p>
+        <p className="text-stone-100 font-semibold text-base">Saved to queue</p>
+        <p className="text-stone-500 text-sm mt-1">Will analyze automatically when back online.</p>
       </div>
     </div>
   );
