@@ -270,13 +270,15 @@ export default function CapturePage() {
     <div className="flex flex-col h-full overflow-hidden relative">
       {/* Header */}
       <header
-        className="flex items-center justify-between px-5 pb-2 flex-shrink-0"
-        style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
+        className="flex-shrink-0"
+        style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
       >
-        <span className="font-serif text-2xl font-semibold tracking-wide">
-          <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
-        </span>
-        <ProfileBadge />
+        <div className="flex items-center justify-between px-5 py-3">
+          <span className="font-serif text-2xl font-semibold tracking-wide">
+            <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
+          </span>
+          <ProfileBadge />
+        </div>
       </header>
 
       {/* Main content */}

@@ -9,10 +9,27 @@ import { fetchAllFromCloud, deleteFromCloud } from "@/lib/cloudSync";
 import type { GraveRecord } from "@/types";
 import Link from "next/link";
 import ThematicIllustration from "@/components/ui/ThematicIllustration";
+import { reverseGeocode } from "@/lib/apis/nominatim";
 
 type SortField = "birthYear" | "deathYear";
 type SortDir = "asc" | "desc";
 type ViewMode = "list" | "tile" | "cover";
+
+// ── Viewed-item tracking (dismisses "Recently Added" badge) ───────────────
+const VIEWED_KEY = "gl_viewed_ids";
+const RECENT_DAYS = 5 * 24 * 60 * 60 * 1000;
+
+function loadViewedIds(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(VIEWED_KEY) ?? "[]")); }
+  catch { return new Set(); }
+}
+function persistViewed(id: string): void {
+  try {
+    const ids = loadViewedIds();
+    ids.add(id);
+    localStorage.setItem(VIEWED_KEY, JSON.stringify([...ids]));
+  } catch { /* ignore */ }
+}
 
 // ── Learned cemetery storage ───────────────────────────────────────────────
 const LEARNED_KEY = "gl_learned_cemeteries";
@@ -45,30 +62,6 @@ function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number):
     Math.sin(dLat / 2) ** 2 +
     Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-// ── Nominatim reverse geocode ──────────────────────────────────────────────
-async function reverseCemetery(lat: number, lng: number): Promise<{
-  cemetery?: string; city?: string; state?: string;
-}> {
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/reverse?format=json&zoom=17&lat=${lat}&lon=${lng}`,
-    { headers: { "Accept-Language": "en" } }
-  );
-  if (!res.ok) return {};
-  const data = await res.json();
-  const addr = data.address ?? {};
-  const isCemeteryFeature =
-    data.type === "cemetery" || data.type === "grave_yard" ||
-    (data.category === "landuse" && data.type === "cemetery") ||
-    (data.category === "amenity" && data.type === "grave_yard");
-  const cemetery =
-    addr.cemetery || addr.amenity || (isCemeteryFeature ? data.name : undefined) || undefined;
-  return {
-    cemetery: cemetery || undefined,
-    city: addr.city || addr.town || addr.village || addr.hamlet || undefined,
-    state: addr.state || undefined,
-  };
 }
 
 function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
@@ -109,6 +102,14 @@ export default function ArchivePage() {
   const handleViewMode = (mode: ViewMode) => {
     setViewMode(mode);
     try { localStorage.setItem("gl_archive_view", mode); } catch { /* ignore */ }
+  };
+
+  const [viewedIds, setViewedIds] = useState<Set<string>>(() =>
+    typeof window === "undefined" ? new Set() : loadViewedIds()
+  );
+  const handleView = (id: string) => {
+    persistViewed(id);
+    setViewedIds((prev) => new Set([...prev, id]));
   };
 
   // ── Load graves ──────────────────────────────────────────────────────────
@@ -197,7 +198,7 @@ export default function ArchivePage() {
         nominatimCalls++;
 
         try {
-          const enriched = await reverseCemetery(lat, lng);
+          const enriched = await reverseGeocode(lat, lng);
           if (!active) break;
           const hasNew =
             enriched.cemetery ||
@@ -319,6 +320,31 @@ export default function ArchivePage() {
     // Nearby graves stay in queue — user will be prompted individually
     setNearbyConfirm(null);
     openNextAssignment(assignmentQueue);
+  };
+
+  // ── Manual cemetery edit ──────────────────────────────────────────────────
+  const handleCemeteryEdit = async (id: string, name: string) => {
+    const grave = graves.find((g) => g.id === id);
+    if (!grave) return;
+
+    const updated = { ...grave, location: { ...grave.location, cemetery: name } };
+    await saveGrave(updated);
+    if (grave.location?.lat && grave.location?.lng) {
+      learnCemetery(name, grave.location.lat, grave.location.lng);
+    }
+    setGraves((prev) => prev.map((g) => g.id === id ? updated : g));
+
+    // Check for other records near this location to offer bulk update
+    if (grave.location?.lat && grave.location?.lng) {
+      const nearby = graves.filter((g) => {
+        if (g.id === id) return false;
+        if (!g.location?.lat || !g.location?.lng) return false;
+        return distanceMeters(grave.location.lat, grave.location.lng, g.location.lat, g.location.lng) < PROXIMITY_METERS;
+      });
+      if (nearby.length > 0) {
+        setNearbyConfirm({ name, graves: nearby });
+      }
+    }
   };
 
   // ── Derived filter options ────────────────────────────────────────────────
@@ -672,6 +698,9 @@ export default function ArchivePage() {
                 onDeleteRequest={setDeleteConfirm}
                 onDeleteConfirm={handleDelete}
                 onDeleteCancel={() => setDeleteConfirm(null)}
+                onCemeteryEdit={handleCemeteryEdit}
+                viewedIds={viewedIds}
+                onView={handleView}
               />
             )}
             {viewMode === "tile" && (
@@ -682,6 +711,8 @@ export default function ArchivePage() {
                 onDeleteRequest={setDeleteConfirm}
                 onDeleteConfirm={handleDelete}
                 onDeleteCancel={() => setDeleteConfirm(null)}
+                viewedIds={viewedIds}
+                onView={handleView}
               />
             )}
             {viewMode === "cover" && (
@@ -692,6 +723,8 @@ export default function ArchivePage() {
                 onDeleteRequest={setDeleteConfirm}
                 onDeleteConfirm={handleDelete}
                 onDeleteCancel={() => setDeleteConfirm(null)}
+                viewedIds={viewedIds}
+                onView={handleView}
               />
             )}
           </>
@@ -907,6 +940,8 @@ function GraveTileGrid({
   onDeleteRequest,
   onDeleteConfirm,
   onDeleteCancel,
+  viewedIds,
+  onView,
 }: {
   graves: GraveRecord[];
   enriching: boolean;
@@ -914,6 +949,8 @@ function GraveTileGrid({
   onDeleteRequest: (id: string) => void;
   onDeleteConfirm: (id: string) => void;
   onDeleteCancel: () => void;
+  viewedIds: Set<string>;
+  onView: (id: string) => void;
 }) {
   if (graves.length === 0) {
     return (
@@ -929,10 +966,11 @@ function GraveTileGrid({
         const hasCemetery = Boolean(grave.location?.cemetery);
         const hasGps = Boolean(grave.location?.lat && grave.location?.lng);
         const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" — ");
+        const isNew = Date.now() - grave.timestamp < RECENT_DAYS && !viewedIds.has(grave.id);
 
         return (
           <div key={grave.id} className="relative">
-            <Link href={`/result/${grave.id}`} className="block">
+            <Link href={`/result/${grave.id}`} className="block" onClick={() => onView(grave.id)}>
               <div
                 className="rounded-2xl overflow-hidden bg-stone-800 relative"
                 style={{ aspectRatio: "3/4" }}
@@ -980,6 +1018,12 @@ function GraveTileGrid({
               </div>
             </Link>
 
+            {isNew && (
+              <div className="absolute top-2 left-2 z-10 pointer-events-none">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
+              </div>
+            )}
+
             {/* Delete button — top-right corner */}
             <div className="absolute top-2 right-2 z-10">
               {deleteConfirm === grave.id ? (
@@ -1024,6 +1068,8 @@ function GraveCoverFlow({
   onDeleteRequest,
   onDeleteConfirm,
   onDeleteCancel,
+  viewedIds,
+  onView,
 }: {
   graves: GraveRecord[];
   enriching: boolean;
@@ -1031,6 +1077,8 @@ function GraveCoverFlow({
   onDeleteRequest: (id: string) => void;
   onDeleteConfirm: (id: string) => void;
   onDeleteCancel: () => void;
+  viewedIds: Set<string>;
+  onView: (id: string) => void;
 }) {
   if (graves.length === 0) {
     return (
@@ -1058,6 +1106,7 @@ function GraveCoverFlow({
         const locationLine = [grave.location?.cemetery, grave.location?.city, grave.location?.state]
           .filter(Boolean)
           .join(", ");
+        const isNew = Date.now() - grave.timestamp < RECENT_DAYS && !viewedIds.has(grave.id);
 
         return (
           <div
@@ -1069,7 +1118,7 @@ function GraveCoverFlow({
               scrollSnapAlign: "center",
             }}
           >
-            <Link href={`/result/${grave.id}`} className="block">
+            <Link href={`/result/${grave.id}`} className="block" onClick={() => onView(grave.id)}>
               <div
                 className="rounded-3xl overflow-hidden bg-stone-800 relative"
                 style={{ height: "64vh", minHeight: "340px", maxHeight: "520px" }}
@@ -1120,6 +1169,12 @@ function GraveCoverFlow({
                 </div>
               </div>
             </Link>
+
+            {isNew && (
+              <div className="absolute top-3 left-3 z-10 pointer-events-none">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
+              </div>
+            )}
 
             {/* Delete — top-right */}
             <div className="absolute top-3 right-3 z-10">
@@ -1189,6 +1244,9 @@ function GraveList({
   onDeleteRequest,
   onDeleteConfirm,
   onDeleteCancel,
+  onCemeteryEdit,
+  viewedIds,
+  onView,
 }: {
   graves: GraveRecord[];
   enriching: boolean;
@@ -1196,7 +1254,12 @@ function GraveList({
   onDeleteRequest: (id: string) => void;
   onDeleteConfirm: (id: string) => void;
   onDeleteCancel: () => void;
+  onCemeteryEdit?: (id: string, name: string) => Promise<void>;
+  viewedIds: Set<string>;
+  onView: (id: string) => void;
 }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
   if (graves.length === 0) {
     return (
       <div className="flex items-center justify-center flex-1 mt-16">
@@ -1210,28 +1273,67 @@ function GraveList({
       {graves.map((grave) => {
         const hasCemetery = Boolean(grave.location?.cemetery);
         const hasGps = Boolean(grave.location?.lat && grave.location?.lng);
+        const isNew = Date.now() - grave.timestamp < RECENT_DAYS && !viewedIds.has(grave.id);
 
         return (
           <div key={grave.id} className="flex items-center gap-3 px-5 py-4">
-            <Link href={`/result/${grave.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+            <Link href={`/result/${grave.id}`} className="flex items-center gap-3 flex-1 min-w-0" onClick={() => onView(grave.id)}>
               <div className="w-14 h-14 rounded-xl overflow-hidden bg-stone-800 shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={grave.photoDataUrl} alt={grave.extracted.name} className="w-full h-full object-cover" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-serif text-stone-100 font-medium truncate">
-                  {grave.extracted.name || "Unknown"}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-serif text-stone-100 font-medium truncate">
+                    {grave.extracted.name || "Unknown"}
+                  </p>
+                  {isNew && (
+                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
+                  )}
+                </div>
                 <p className="text-stone-500 text-xs mt-0.5">
                   {[grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" — ") || "Dates unknown"}
                 </p>
-                {hasCemetery || grave.location?.city ? (
-                  <p className="text-stone-600 text-xs truncate">
-                    {[grave.location.cemetery, grave.location.city, grave.location.state].filter(Boolean).join(", ")}
-                  </p>
-                ) : enriching && hasGps ? (
-                  <span className="text-stone-600 text-xs">Looking up cemetery…</span>
-                ) : null}
+                {editingId === grave.id ? (
+                  <div className="flex items-center gap-1.5 mt-1" onClick={(e) => e.preventDefault()}>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const name = editValue.trim();
+                          if (name && onCemeteryEdit) onCemeteryEdit(grave.id, name).then(() => setEditingId(null));
+                        }
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      placeholder="Cemetery name"
+                      className="flex-1 min-w-0 bg-stone-700 text-stone-200 text-xs rounded px-2 py-1 border border-stone-600 focus:outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        const name = editValue.trim();
+                        if (name && onCemeteryEdit) onCemeteryEdit(grave.id, name).then(() => setEditingId(null));
+                      }}
+                      className="text-[10px] font-semibold px-2 py-1 rounded"
+                      style={{ background: "#c9a84c", color: "#1a1917" }}
+                    >
+                      Save
+                    </button>
+                    <button onClick={() => setEditingId(null)} className="text-stone-500 text-xs">✕</button>
+                  </div>
+                ) : (
+                  <>
+                    {hasCemetery || grave.location?.city ? (
+                      <p className="text-stone-600 text-xs truncate mt-0.5">
+                        {[grave.location.cemetery, grave.location.city, grave.location.state].filter(Boolean).join(", ")}
+                      </p>
+                    ) : enriching && hasGps ? (
+                      <span className="text-stone-600 text-xs mt-0.5">Looking up cemetery…</span>
+                    ) : null}
+                  </>
+                )}
                 {grave.tags && grave.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {grave.tags.map((tag) => (
@@ -1244,7 +1346,7 @@ function GraveList({
               </div>
             </Link>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               {deleteConfirm === grave.id ? (
                 <div className="flex gap-2">
                   <button onClick={() => onDeleteConfirm(grave.id)} className="text-xs text-red-400 px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20">
@@ -1253,12 +1355,26 @@ function GraveList({
                   <button onClick={onDeleteCancel} className="text-xs text-stone-400">Cancel</button>
                 </div>
               ) : (
-                <button onClick={() => onDeleteRequest(grave.id)} className="w-8 h-8 flex items-center justify-center text-stone-600 active:text-red-400 rounded-lg">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                  </svg>
-                </button>
+                <>
+                  {onCemeteryEdit && editingId !== grave.id && (
+                    <button
+                      onClick={() => { setEditValue(grave.location?.cemetery ?? ""); setEditingId(grave.id); }}
+                      className="w-10 h-10 flex items-center justify-center text-stone-600 active:text-stone-300 rounded-lg"
+                      aria-label="Edit cemetery"
+                    >
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </button>
+                  )}
+                  <button onClick={() => onDeleteRequest(grave.id)} className="w-10 h-10 flex items-center justify-center text-stone-600 active:text-red-400 rounded-lg">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                    </svg>
+                  </button>
+                </>
               )}
             </div>
           </div>

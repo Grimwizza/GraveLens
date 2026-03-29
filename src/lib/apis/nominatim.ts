@@ -1,5 +1,52 @@
 import type { GeoLocation } from "@/types";
 
+// ── USGS GNIS cemetery lookup ─────────────────────────────────────────────
+// Queries the GNIS (Geographic Names Information System) for cemetery features
+// within ~1 km of the GPS point. Covers rural/historical US cemeteries that
+// are frequently absent from OpenStreetMap.
+
+interface GnisFeature {
+  feature_name?: string;
+  feature_class?: string;
+  prim_lat_dec?: number;
+  prim_long_dec?: number;
+}
+
+async function queryCemeteryGnis(lat: number, lng: number): Promise<string | null> {
+  // Approx ±0.009° ≈ 1 km bounding box
+  const d = 0.009;
+  const url =
+    `https://geonames.usgs.gov/api/geonames` +
+    `?bbox=${lng - d},${lat - d},${lng + d},${lat + d}` +
+    `&featureCode=CMTY&maxResults=10`;
+
+  try {
+    const res = await fetch(url, {
+      headers: { "Accept": "application/json" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const features: GnisFeature[] = data?.features ?? data?.GnisFeatures ?? [];
+    if (features.length === 0) return null;
+
+    // Pick the closest feature to the query point
+    let best: GnisFeature | null = null;
+    let bestDist = Infinity;
+    for (const f of features) {
+      if (!f.feature_name || f.feature_class !== "Cemetery") continue;
+      if (f.prim_lat_dec == null || f.prim_long_dec == null) { best ??= f; continue; }
+      const dLat = f.prim_lat_dec - lat;
+      const dLng = f.prim_long_dec - lng;
+      const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+      if (dist < bestDist) { bestDist = dist; best = f; }
+    }
+    return best?.feature_name ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Overpass (OSM) cemetery lookup ────────────────────────────────────────
 // Queries for cemetery/grave_yard polygons within 500 m of the GPS point.
 // Far more reliable than Nominatim reverse geocode for cemetery names because
@@ -95,22 +142,26 @@ export async function reverseGeocode(
   lat: number,
   lng: number
 ): Promise<GeoLocation> {
-  // Run Nominatim (address) and Overpass (cemetery polygon) in parallel
-  const [nominatimSettled, overpassSettled] = await Promise.allSettled([
+  // Run Nominatim, Overpass, and GNIS in parallel
+  const [nominatimSettled, overpassSettled, gnisSettled] = await Promise.allSettled([
     fetchNominatim(lat, lng),
     queryCemeteryOverpass(lat, lng),
+    queryCemeteryGnis(lat, lng),
   ]);
 
   const nominatim =
     nominatimSettled.status === "fulfilled" ? nominatimSettled.value : null;
   const overpass =
     overpassSettled.status === "fulfilled" ? overpassSettled.value : null;
+  const gnisName =
+    gnisSettled.status === "fulfilled" ? gnisSettled.value : null;
 
   const addr = nominatim?.address ?? {};
 
-  // Overpass polygon name takes priority; fall back to Nominatim address tags
+  // Priority: Overpass polygon (spatially precise) → GNIS (authoritative US) → Nominatim tags
   const cemetery =
     overpass?.name ??
+    gnisName ??
     addr.cemetery ??
     addr.leisure ??
     addr.amenity ??

@@ -146,7 +146,7 @@ export default function BottomNav() {
 
       {/* Nav bar */}
       <div className="glass border-t border-stone-700/50 pb-safe shadow-[0_-8px_24px_rgba(0,0,0,0.4)]">
-        <div className="flex items-center h-[72px] max-w-lg mx-auto">
+        <div className="flex items-center h-[72px] max-w-lg mx-auto px-3">
           {/* Left tabs */}
           <div className="flex-1 flex items-center justify-around">
             {leftTabs.map((tab) => {

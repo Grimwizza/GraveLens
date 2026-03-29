@@ -36,13 +36,15 @@ export default function ResultPage({ id }: { id: string }) {
   const [saved, setSaved] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
-  const [savePromptDismissed, setSavePromptDismissed] = useState(false);
   const [achievementToasts, setAchievementToasts] = useState<Achievement[]>([]);
   const [narrative, setNarrative] = useState<LifeNarrative | null>(null);
   const [narrativeLoading, setNarrativeLoading] = useState(false);
   const [culturalContext, setCulturalContext] = useState<CulturalContext | null>(null);
   const [culturalLoading, setCulturalLoading] = useState(false);
   const [expandingCategory, setExpandingCategory] = useState<string | null>(null);
+  const [locationOverride, setLocationOverride] = useState<GeoLocation | null>(null);
+  const [nearbyPrompt, setNearbyPrompt] = useState<{ name: string; records: GraveRecord[] } | null>(null);
+  const [photoFullscreen, setPhotoFullscreen] = useState(false);
 
   useEffect(() => {
     getPendingResult(id).then(async (raw) => {
@@ -65,7 +67,6 @@ export default function ResultPage({ id }: { id: string }) {
         setCulturalContext(archived.research?.culturalContext ?? null);
         setTags(archived.tags ?? []);
         setSaved(true);
-        setSavePromptDismissed(true);
         return;
       }
 
@@ -87,7 +88,30 @@ export default function ResultPage({ id }: { id: string }) {
       };
       saveGrave(autoRecord).catch(() => {});
       setSaved(true);
-      setSavePromptDismissed(true);
+
+      // Cloud sync — non-fatal if offline or not logged in
+      (async () => {
+        try {
+          const supabase = createClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const photoUrl = await uploadPhoto(supabase, user.id, autoRecord.id, autoRecord.photoDataUrl);
+            await upsertGrave(supabase, user.id, autoRecord, photoUrl);
+            await saveGrave({ ...autoRecord, photoDataUrl: photoUrl, syncedAt: Date.now() });
+          }
+        } catch { /* offline or not logged in — local save stands */ }
+
+        // Check for newly unlocked achievements
+        try {
+          const allGraves = await getAllGraves();
+          const stats = loadStats();
+          const newUnlocks = checkAndUnlock(allGraves, stats);
+          if (newUnlocks.length > 0) {
+            setAchievementToasts(newUnlocks);
+            setTimeout(() => setAchievementToasts([]), 5000);
+          }
+        } catch { /* non-fatal */ }
+      })();
 
       if (!data.extracted?.name) return;
       setResearchLoading(true);
@@ -135,47 +159,6 @@ export default function ResultPage({ id }: { id: string }) {
         .finally(() => setResearchLoading(false));
     });
   }, [id, router]);
-
-  const handleSave = useCallback(async () => {
-    if (!pending) return;
-    const record: GraveRecord = {
-      id: pending.id,
-      timestamp: pending.timestamp,
-      photoDataUrl: pending.photoDataUrl,
-      location: pending.location ?? { lat: 0, lng: 0 },
-      extracted: pending.extracted,
-      research: research ?? {},
-      tags,
-    };
-
-    // Always save locally first — cloud sync is best-effort
-    await saveGrave(record);
-    setSaved(true);
-    setSavePromptDismissed(true);
-
-    // Cloud sync — non-fatal if offline or not logged in
-    try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const photoUrl = await uploadPhoto(supabase, user.id, record.id, record.photoDataUrl);
-        await upsertGrave(supabase, user.id, record, photoUrl);
-        // Update local copy with CDN URL so it loads from cloud going forward
-        await saveGrave({ ...record, photoDataUrl: photoUrl, syncedAt: Date.now() });
-      }
-    } catch (err) {
-      console.warn("[Sync] Cloud save failed — local save succeeded:", err);
-    }
-
-    // Check for newly unlocked achievements
-    const allGraves = await getAllGraves();
-    const stats = loadStats();
-    const newUnlocks = checkAndUnlock(allGraves, stats);
-    if (newUnlocks.length > 0) {
-      setAchievementToasts(newUnlocks);
-      setTimeout(() => setAchievementToasts([]), 5000);
-    }
-  }, [pending, research, tags]);
 
   // When already saved, persist tag changes immediately
   const handleTagsChange = useCallback(async (next: string[]) => {
@@ -322,6 +305,50 @@ export default function ResultPage({ id }: { id: string }) {
     }
   }, [pending, research, narrativeLoading]);
 
+  const currentLocation = locationOverride ?? pending?.location ?? null;
+
+  const handleCemeteryEdit = useCallback(async (name: string) => {
+    if (!pending) return;
+    const newLocation: GeoLocation = { ...(currentLocation ?? { lat: 0, lng: 0 }), cemetery: name };
+    setLocationOverride(newLocation);
+
+    const updated: GraveRecord = {
+      id: pending.id,
+      timestamp: pending.timestamp,
+      photoDataUrl: pending.photoDataUrl,
+      location: newLocation,
+      extracted: pending.extracted,
+      research: research ?? {},
+      tags,
+    };
+    await saveGrave(updated);
+
+    if (newLocation.lat !== 0 && newLocation.lng !== 0) {
+      try {
+        const all = await getAllGraves();
+        const PROXIMITY_M = 750;
+        const nearby = all.filter((g) => {
+          if (g.id === pending.id) return false;
+          if (!g.location?.lat || !g.location?.lng) return false;
+          const dLat = g.location.lat - newLocation.lat;
+          const dLng = g.location.lng - newLocation.lng;
+          const dist = Math.sqrt(dLat * dLat + dLng * dLng) * 111_000;
+          return dist < PROXIMITY_M;
+        });
+        if (nearby.length > 0) setNearbyPrompt({ name, records: nearby });
+      } catch { /* non-fatal */ }
+    }
+  }, [pending, currentLocation, research, tags]);
+
+  const handleNearbyYes = useCallback(async () => {
+    if (!nearbyPrompt) return;
+    for (const g of nearbyPrompt.records) {
+      const updated = { ...g, location: { ...g.location, cemetery: nearbyPrompt.name } };
+      await saveGrave(updated);
+    }
+    setNearbyPrompt(null);
+  }, [nearbyPrompt]);
+
   if (!pending) {
     return (
       <div className="flex items-center justify-center min-h-full bg-stone-900">
@@ -330,7 +357,8 @@ export default function ResultPage({ id }: { id: string }) {
     );
   }
 
-  const { extracted, location, photoDataUrl } = pending;
+  const { extracted, photoDataUrl } = pending;
+  const location = currentLocation;
 
   const graveRecord: GraveRecord = {
     id: pending.id,
@@ -380,7 +408,10 @@ export default function ResultPage({ id }: { id: string }) {
 
       <main className="scroll-container max-w-lg mx-auto w-full pb-32">
         {/* Hero photo */}
-        <div className="relative w-full aspect-[4/3] bg-stone-800 overflow-hidden">
+        <div
+          className="relative w-full aspect-[4/3] bg-stone-800 overflow-hidden cursor-pointer"
+          onClick={() => setPhotoFullscreen(true)}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={photoDataUrl}
@@ -388,6 +419,12 @@ export default function ResultPage({ id }: { id: string }) {
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-stone-900 via-transparent to-transparent" />
+          {/* Expand hint */}
+          <div className="absolute bottom-3 right-3 w-7 h-7 rounded-full flex items-center justify-center bg-stone-900/60">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#b0aba6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+            </svg>
+          </div>
 
           {/* Confidence badge */}
           {extracted.confidence && (
@@ -428,7 +465,7 @@ export default function ResultPage({ id }: { id: string }) {
           <div className="h-px bg-gradient-to-r from-transparent via-stone-700 to-transparent my-1" />
 
           {/* Cemetery & Location */}
-          {location && <CemeteryCard location={location} research={research} />}
+          {location && <CemeteryCard location={location} research={research} onSave={handleCemeteryEdit} />}
 
           {/* Military context */}
           {(research?.militaryContext || researchLoading) && (
@@ -540,40 +577,14 @@ export default function ResultPage({ id }: { id: string }) {
           ) : null}
         </div>
 
-        {/* Save prompt */}
-        {!savePromptDismissed && (
-          <div className="mx-5 mt-4 p-4 rounded-2xl border border-gold-500/30 bg-gold-500/5 animate-fade-up">
-            <p className="text-stone-300 text-sm mb-3">
-              Save this marker to your personal archive?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleSave}
-                className="flex-1 h-11 rounded-xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.97]"
-                style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
-              >
-                {saved ? "Saved ✓" : "Save to Archive"}
-              </button>
-              <button
-                onClick={() => setSavePromptDismissed(true)}
-                className="h-11 px-4 rounded-xl text-stone-400 text-sm border border-stone-700"
-              >
-                Skip
-              </button>
-            </div>
-          </div>
-        )}
-
-        {saved && savePromptDismissed && (
-          <div className="mx-5 mt-4">
-            <Link
-              href="/archive"
-              className="flex items-center justify-center gap-2 h-11 rounded-xl border border-stone-700 text-stone-300 text-sm w-full"
-            >
-              View in Archive →
-            </Link>
-          </div>
-        )}
+        <div className="mx-5 mt-4">
+          <Link
+            href="/archive"
+            className="flex items-center justify-center gap-2 h-11 rounded-xl border border-stone-700 text-stone-300 text-sm w-full"
+          >
+            View in Archive →
+          </Link>
+        </div>
       </main>
 
       {/* Share sheet fallback */}
@@ -622,6 +633,107 @@ export default function ResultPage({ id }: { id: string }) {
       )}
 
       <BottomNav />
+
+      {/* Fullscreen photo viewer */}
+      {photoFullscreen && (
+        <div
+          className="fixed inset-0 z-[60] flex flex-col bg-stone-950"
+          style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          {/* Tap image to close */}
+          <div className="flex-1 flex items-center justify-center overflow-hidden" onClick={() => setPhotoFullscreen(false)}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photoDataUrl}
+              alt="Grave marker"
+              className="max-w-full max-h-full object-contain"
+              style={{ touchAction: "pinch-zoom" }}
+            />
+          </div>
+
+          {/* Action bar */}
+          <div className="shrink-0 flex items-center justify-between px-6 py-4 border-t border-stone-800 bg-stone-950">
+            <button
+              onClick={() => setPhotoFullscreen(false)}
+              className="flex items-center gap-2 text-stone-400 active:text-stone-200"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6 6 18M6 6l12 12"/>
+              </svg>
+              <span className="text-sm">Close</span>
+            </button>
+
+            <div className="flex items-center gap-4">
+              {/* Download */}
+              <a
+                href={photoDataUrl}
+                download={`${extracted.name || "grave-marker"}.jpg`}
+                className="flex items-center gap-1.5 text-stone-300 active:text-stone-100"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span className="text-sm">Save</span>
+              </a>
+
+              {/* Share */}
+              <button
+                onClick={(e) => { e.stopPropagation(); handleShare(); }}
+                className="flex items-center gap-1.5 text-stone-300 active:text-stone-100"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                  <polyline points="16 6 12 2 8 6"/>
+                  <line x1="12" y1="2" x2="12" y2="15"/>
+                </svg>
+                <span className="text-sm">Share</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Nearby-records bulk-update prompt */}
+      {nearbyPrompt && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 pb-safe">
+          <div className="absolute inset-0 bg-stone-950/70 backdrop-blur-sm" onClick={() => setNearbyPrompt(null)} />
+          <div
+            className="relative w-full max-w-sm rounded-2xl p-5 flex flex-col gap-4"
+            style={{ background: "rgb(30 28 26)", border: "1px solid rgb(60 56 50)" }}
+          >
+            <div className="flex flex-col gap-1">
+              <p className="text-stone-100 font-semibold text-base">Update nearby records?</p>
+              <p className="text-stone-400 text-sm leading-relaxed">
+                {nearbyPrompt.records.length} other{" "}
+                {nearbyPrompt.records.length === 1 ? "record" : "records"} in this area{" "}
+                {nearbyPrompt.records.every((g) => !g.location?.cemetery)
+                  ? "also have no cemetery listed"
+                  : "are in the same area"}
+                . Set them all to{" "}
+                <span className="text-stone-200 font-medium">&ldquo;{nearbyPrompt.name}&rdquo;</span>?
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setNearbyPrompt(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-stone-300 bg-stone-800 active:bg-stone-700"
+              >
+                No, just this one
+              </button>
+              <button
+                onClick={handleNearbyYes}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+                style={{ background: "#c9a84c", color: "#1a1917" }}
+              >
+                Yes, update all
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -691,28 +803,86 @@ function PrimaryCard({ extracted }: { extracted: ExtractedGraveData }) {
 function CemeteryCard({
   location,
   research,
+  onSave,
 }: {
   location: GeoLocation;
   research: ResearchData | null;
+  onSave?: (name: string) => Promise<void>;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(location.cemetery ?? "");
+  const [saving, setSaving] = useState(false);
   const cemeteryUrl = research?.cemetery?.wikipediaUrl;
+
+  const handleSave = async () => {
+    const name = editValue.trim();
+    if (!name || !onSave) return;
+    setSaving(true);
+    await onSave(name);
+    setSaving(false);
+    setEditing(false);
+  };
 
   return (
     <div className="py-5 animate-fade-up" style={{ animationDelay: "0.05s" }}>
       <SectionHeader icon="📍" title="Location" />
       <div className="flex flex-col gap-1 mt-3">
-        {location.cemetery && (
+        {editing ? (
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setEditing(false); }}
+              placeholder="Cemetery name"
+              className="flex-1 bg-stone-800 text-stone-200 text-sm rounded-lg px-3 py-1.5 border border-stone-600 focus:outline-none focus:border-stone-400"
+            />
+            <button
+              onClick={handleSave}
+              disabled={saving || !editValue.trim()}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-40"
+              style={{ background: "#c9a84c", color: "#1a1917" }}
+            >
+              {saving ? "…" : "Save"}
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="px-2 py-1.5 rounded-lg text-sm text-stone-400 active:text-stone-200"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
           <div className="flex items-start justify-between gap-2">
-            <p className="text-stone-200 font-medium">{location.cemetery}</p>
-            {cemeteryUrl && (
-              <a
-                href={cemeteryUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gold-500 text-xs shrink-0 mt-0.5 underline"
+            <div className="flex flex-col gap-0.5">
+              {location.cemetery ? (
+                <p className="text-stone-200 font-medium">{location.cemetery}</p>
+              ) : (
+                <p className="text-stone-500 text-sm italic">No cemetery on record</p>
+              )}
+              {cemeteryUrl && (
+                <a
+                  href={cemeteryUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gold-500 text-xs underline"
+                >
+                  Wikipedia →
+                </a>
+              )}
+            </div>
+            {onSave && (
+              <button
+                onClick={() => { setEditValue(location.cemetery ?? ""); setEditing(true); }}
+                className="text-stone-500 active:text-stone-300 shrink-0 mt-0.5"
+                aria-label="Edit cemetery"
               >
-                Wikipedia →
-              </a>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
             )}
           </div>
         )}

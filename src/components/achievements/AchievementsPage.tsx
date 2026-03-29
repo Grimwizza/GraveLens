@@ -382,7 +382,7 @@ export default function AchievementsPage() {
         className="bg-stone-900/95 backdrop-blur-sm sticky top-0 z-30 border-b border-stone-800"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
       >
-        <div className="max-w-lg mx-auto flex items-center justify-between px-5 py-3">
+        <div className="flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="8" r="4" />
