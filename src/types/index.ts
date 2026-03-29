@@ -141,6 +141,17 @@ export interface WikidataEvent {
   wikidataId?: string;
 }
 
+export interface NotableFigure {
+  id: string;
+  label: string;
+  lat: number;
+  lng: number;
+  occupationId?: string;
+  occupationLabel?: string;
+  wikipediaUrl?: string;
+  category: "political" | "military" | "artist" | "musician" | "actor" | "other";
+}
+
 export interface LocalHistoryContext {
   cityArticle?: WikipediaArticle;
   countyArticle?: WikipediaArticle;

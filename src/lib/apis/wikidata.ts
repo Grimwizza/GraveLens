@@ -3,7 +3,7 @@
 // point-in-time (P585) date falling within birth–death years.
 // Excludes NRHP heritage sites (covered separately by nrhp.ts).
 
-import type { WikidataEvent } from "@/types";
+import type { WikidataEvent, NotableFigure } from "@/types";
 
 const SPARQL_ENDPOINT = "https://query.wikidata.org/sparql";
 
@@ -75,6 +75,114 @@ LIMIT 20`.trim();
       })
       .filter((e): e is WikidataEvent => e !== null);
   } catch {
+    return [];
+  }
+}
+
+// ── Notable figures in viewport ──────────────────────────────────────────────
+
+const OCCUPATION_MAP: Record<string, NotableFigure["category"]> = {
+  // Political
+  Q82955: "political",  // Politician
+  Q48352: "political",  // Head of state
+  Q193391: "political", // Diplomat
+  Q116: "political",    // Monarch
+  Q30461: "political",  // President
+  // Military
+  Q189290: "military",  // Military officer
+  Q210706: "military",  // General
+  Q11533: "military",   // Soldier
+  Q211140: "military",  // Strategist
+  // Artist
+  Q48350: "artist",     // Artist
+  Q102818: "artist",    // Painter
+  Q128161: "artist",    // Sculptor
+  // Musician
+  Q639669: "musician",  // Musician
+  Q36834: "musician",   // Composer
+  Q177220: "musician",  // Singer
+  // Actor
+  Q33999: "actor",      // Actor
+  Q214917: "actor",     // Playwright
+  Q252625: "actor",     // Film director
+};
+
+export async function getNotableFiguresInBounds(
+  south: number,
+  west: number,
+  north: number,
+  east: number
+): Promise<NotableFigure[]> {
+  const query = `
+SELECT DISTINCT ?item ?itemLabel ?coords ?occupation ?occupationLabel ?wikipedia WHERE {
+  SERVICE wikibase:box {
+    ?item wdt:P625 ?coords .
+    bd:serviceParam wikibase:cornerSouthWest "Point(${west} ${south})"^^geo:wktLiteral .
+    bd:serviceParam wikibase:cornerNorthEast "Point(${east} ${north})"^^geo:wktLiteral .
+  }
+  ?item wdt:P119 ?burialPlace .
+  ?item wikibase:sitelinks ?sitelinks .
+  FILTER(?sitelinks >= 2) 
+
+  OPTIONAL { ?item wdt:P106 ?occupation . }
+  OPTIONAL {
+    ?wikipedia schema:about ?item ;
+               schema:isPartOf <https://en.wikipedia.org/> .
+  }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+}
+ORDER BY DESC(?sitelinks)
+LIMIT 100`.trim();
+
+  try {
+    const res = await fetch(
+      `${SPARQL_ENDPOINT}?query=${encodeURIComponent(query)}&format=json`,
+      {
+        headers: {
+          Accept: "application/sparql-results+json",
+          "User-Agent": "GraveLens/1.0 (genealogy research app)",
+        },
+        signal: AbortSignal.timeout(12000),
+      }
+    );
+
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const bindings: Array<Record<string, { value: string }>> =
+      data?.results?.bindings ?? [];
+
+    return bindings
+      .map((b) => {
+        const id = b.item?.value?.split("/").pop() ?? "";
+        const label = b.itemLabel?.value ?? "";
+        const coordsRaw = b.coords?.value ?? ""; // e.g. "Point(-73.9 40.7)"
+        const wikipediaUrl = b.wikipedia?.value;
+
+        // Parse coords
+        const match = coordsRaw.match(/Point\(([-\d.]+) ([-\d.]+)\)/);
+        if (!match) return null;
+        const lng = parseFloat(match[1]);
+        const lat = parseFloat(match[2]);
+
+        const occupationId = b.occupation?.value?.split("/").pop() ?? "";
+        const occupationLabel = b.occupationLabel?.value;
+        const category = occupationId ? (OCCUPATION_MAP[occupationId] ?? "other") : "other";
+
+        return {
+          id,
+          label,
+          lat,
+          lng,
+          occupationId,
+          occupationLabel,
+          wikipediaUrl,
+          category,
+        } as NotableFigure;
+      })
+      .filter((n): n is NotableFigure => n !== null);
+  } catch (err) {
+    console.warn("Wikidata notable figures fetch failed:", err);
     return [];
   }
 }

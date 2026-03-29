@@ -197,7 +197,7 @@ export default function CapturePage() {
       setProgress(100);
       router.push(`/result/${id}`);
     } catch (err) {
-      console.error(err);
+      console.error("CapturePage: Analysis failed:", err instanceof Error ? err.message : err);
       setPhase("previewing");
     }
   }, [selectedFile, previewUrl, router]);
@@ -245,7 +245,7 @@ export default function CapturePage() {
       setPhase("queued");
       setTimeout(() => handleReset(), 1400);
     } catch (err) {
-      console.error(err);
+      console.error("CapturePage: Queue capture failed:", err instanceof Error ? err.message : err);
       setPhase("previewing");
     }
   }, [selectedFile, previewUrl, handleReset]);
@@ -593,7 +593,7 @@ function resizeForStorage(dataUrl: string): Promise<string> {
       ctx.drawImage(img, 0, 0, w, h);
       resolve(canvas.toDataURL("image/jpeg", 0.80));
     };
-    img.onerror = reject;
+    img.onerror = () => reject(new Error("Failed to load image for storage resizing"));
     img.src = dataUrl;
   });
 }
@@ -660,7 +660,7 @@ function preprocessAndResize(
       const resized = canvas.toDataURL("image/jpeg", quality);
       resolve({ base64: resized.split(",")[1], mimeType: "image/jpeg" });
     };
-    img.onerror = reject;
+    img.onerror = () => reject(new Error("Failed to load image for Claude preprocessing"));
     img.src = dataUrl;
   });
 }
