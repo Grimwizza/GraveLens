@@ -17,16 +17,38 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "GraveLens",
+  title: "GraveLens — Bring the story behind every stone into focus",
   description:
-    "Bring the story behind every stone into focus. Photograph any headstone to uncover and preserve their legacy.",
-  // manifest.ts handles /manifest.webmanifest — no static reference needed
+    "Photograph any headstone to travel through history and reveal a lifetime of memories. Discover the unique stories and legacies within every stone.",
+  openGraph: {
+    title: "GraveLens — Bring the story behind every stone into focus",
+    description: "Photograph any headstone to travel through history and reveal a lifetime of memories.",
+    url: "https://www.gravelens.com",
+    siteName: "GraveLens",
+    images: [
+      {
+        url: "/opengraph-image.png",
+        width: 1200,
+        height: 630,
+        alt: "GraveLens Lifestyle Mockup",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "GraveLens — Bring the story behind every stone into focus",
+    description: "Photograph any headstone to travel through history and reveal a lifetime of memories.",
+    images: ["/opengraph-image.png"],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "GraveLens",
   },
 };
+
 
 export const viewport: Viewport = {
   width: "device-width",
