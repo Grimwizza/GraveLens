@@ -9,11 +9,24 @@ const CLIENT_BUILD_TIME = process.env.NEXT_PUBLIC_BUILD_TIME ?? "dev";
 // server when the user rapidly switches in and out of the app.
 const POLL_THROTTLE_MS = 60_000;
 
+// How long (ms) to show the "Updated to latest version" confirmation toast
+const TOAST_DURATION_MS = 3500;
+
+// sessionStorage key: set after an auto-reload so the toast shows on the
+// fresh page load instead of the old one.
+const RELOADED_KEY = "gl_just_updated";
+
 export default function ServiceWorkerRegister() {
-  const [updateReady, setUpdateReady] = useState(false);
-  const [reloading, setReloading] = useState(false);
+  const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
+    // ── Show "Updated" toast if we just auto-reloaded ───────────────────────
+    if (sessionStorage.getItem(RELOADED_KEY)) {
+      sessionStorage.removeItem(RELOADED_KEY);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), TOAST_DURATION_MS);
+    }
+
     // ── 1. Register service worker ──────────────────────────────────────────
     if (!("serviceWorker" in navigator)) return;
 
@@ -22,13 +35,12 @@ export default function ServiceWorkerRegister() {
       .catch((err) => console.error("SW registration failed:", err));
 
     // ── 2. SW-based update notification ────────────────────────────────────
-    // controllerchange fires when a waiting SW takes control (e.g. after a
-    // new sw.js has been deployed and the user navigates or reloads).
-    const onControllerChange = () => setUpdateReady(true);
-    navigator.serviceWorker.addEventListener(
-      "controllerchange",
-      onControllerChange
-    );
+    // When a new SW takes control, reload immediately.
+    const onControllerChange = () => {
+      sessionStorage.setItem(RELOADED_KEY, "1");
+      window.location.reload();
+    };
+    navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
 
     // ── 3. Build-version polling on visibility ──────────────────────────────
     // Catches deploys where sw.js itself didn't change but Next.js JS bundles
@@ -47,7 +59,8 @@ export default function ServiceWorkerRegister() {
         if (!res.ok) return;
         const { buildTime } = await res.json();
         if (buildTime && buildTime !== CLIENT_BUILD_TIME) {
-          setUpdateReady(true);
+          sessionStorage.setItem(RELOADED_KEY, "1");
+          window.location.reload();
         }
       } catch {
         // Network unavailable — silently ignore
@@ -64,63 +77,47 @@ export default function ServiceWorkerRegister() {
     const initialCheck = setTimeout(checkVersion, 3000);
 
     return () => {
-      navigator.serviceWorker.removeEventListener(
-        "controllerchange",
-        onControllerChange
-      );
+      navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
       document.removeEventListener("visibilitychange", onVisibility);
       clearTimeout(initialCheck);
     };
   }, []);
 
-  const handleReload = () => {
-    setReloading(true);
-    window.location.reload();
-  };
-
-  if (!updateReady) return null;
+  if (!showToast) return null;
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-between gap-3 px-4 py-3 animate-fade-up"
+      className="fixed z-[100] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl animate-fade-up"
       style={{
-        paddingTop: "max(0.75rem, env(safe-area-inset-top))",
+        bottom: "calc(5.5rem + env(safe-area-inset-bottom, 0px))",
+        left: "50%",
+        transform: "translateX(-50%)",
+        whiteSpace: "nowrap",
         background: "linear-gradient(135deg, #2a2515, #1e1c18)",
-        borderBottom: "1px solid rgba(201,168,76,0.35)",
-        boxShadow: "0 2px 16px rgba(0,0,0,0.4)",
+        border: "1px solid rgba(201,168,76,0.4)",
+        boxShadow: "0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(201,168,76,0.1)",
       }}
     >
-      <div className="flex items-center gap-2.5 min-w-0">
+      <div
+        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+        style={{ background: "rgba(201,168,76,0.15)" }}
+      >
         <svg
-          width="16"
-          height="16"
+          width="14"
+          height="14"
           viewBox="0 0 24 24"
           fill="none"
           stroke="#c9a84c"
-          strokeWidth="2"
+          strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="shrink-0"
         >
-          <polyline points="23 4 23 10 17 10" />
-          <polyline points="1 20 1 14 7 14" />
-          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          <polyline points="20 6 9 17 4 12" />
         </svg>
-        <p className="text-sm font-medium text-stone-200 truncate">
-          A new version of GraveLens is available.
-        </p>
       </div>
-      <button
-        onClick={handleReload}
-        disabled={reloading}
-        className="shrink-0 text-sm font-semibold px-4 py-1.5 rounded-lg transition-all active:scale-95 disabled:opacity-60"
-        style={{
-          background: "linear-gradient(135deg, #c9a84c, #d4b76a)",
-          color: "#1a1510",
-        }}
-      >
-        {reloading ? "Reloading…" : "Reload"}
-      </button>
+      <p className="text-sm font-medium" style={{ color: "#e8d9a0" }}>
+        GraveLens updated to the latest version
+      </p>
     </div>
   );
 }
