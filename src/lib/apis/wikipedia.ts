@@ -233,6 +233,65 @@ export async function getHistoricalContext(
   return context;
 }
 
+// ── Geosearch: notable places near a coordinate ───────────────────────────────
+
+export interface WikipediaPlace {
+  pageid: number;
+  title: string;
+  lat: number;
+  lng: number;
+  description?: string;
+  url: string;
+}
+
+export async function getWikipediaPlacesNear(
+  lat: number,
+  lng: number,
+  radiusMeters: number,
+  limit = 15
+): Promise<WikipediaPlace[]> {
+  const params = new URLSearchParams({
+    action: "query",
+    generator: "geosearch",
+    ggscoord: `${lat}|${lng}`,
+    ggsradius: String(Math.min(radiusMeters, 10000)),
+    ggslimit: String(limit),
+    prop: "coordinates|description",
+    format: "json",
+    origin: "*",
+  });
+
+  try {
+    const res = await fetch(`https://en.wikipedia.org/w/api.php?${params}`, {
+      headers: { "User-Agent": "GraveLens/1.0 (genealogy research app)" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const pages: Record<string, any> = data?.query?.pages ?? {};
+
+    return Object.values(pages)
+      .map((page) => {
+        const coords = page.coordinates?.[0];
+        if (!coords) return null;
+        return {
+          pageid: page.pageid as number,
+          title: page.title as string,
+          lat: coords.lat as number,
+          lng: coords.lon as number,
+          description: page.description as string | undefined,
+          url: `https://en.wikipedia.org/wiki/${encodeURIComponent(
+            (page.title as string).replace(/ /g, "_")
+          )}`,
+        } as WikipediaPlace;
+      })
+      .filter((p): p is WikipediaPlace => p !== null);
+  } catch {
+    return [];
+  }
+}
+
 export async function searchCemeteryWikipedia(
   cemeteryName: string
 ): Promise<string | undefined> {

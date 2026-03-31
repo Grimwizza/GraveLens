@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { recordActiveDay } from "@/lib/achievements";
 import { getQueueCount } from "@/lib/storage";
 import { startQueueProcessor, QUEUE_CHANGED_EVENT } from "@/lib/queue";
+import { setPendingCaptureFile } from "@/lib/pendingCapture";
 
 const leftTabs = [
   {
@@ -94,6 +95,7 @@ export default function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [queueCount, setQueueCount] = useState(0);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     recordActiveDay();
@@ -118,10 +120,17 @@ export default function BottomNav() {
       // Capture page is already mounted — dispatch event directly
       window.dispatchEvent(new Event("gravelens:open-camera"));
     } else {
-      // Navigate to capture page and flag to auto-open camera on mount
-      sessionStorage.setItem("openCamera", "1");
-      router.push("/");
+      // Open the camera picker immediately from here
+      cameraInputRef.current?.click();
     }
+  };
+
+  const handleFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setPendingCaptureFile(file);
+    router.push("/");
   };
 
   return (
@@ -211,6 +220,16 @@ export default function BottomNav() {
           </div>
         </div>
       </div>
+
+      {/* Hidden camera input — used when FAB is tapped from non-capture pages */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFileChosen}
+      />
     </nav>
   );
 }

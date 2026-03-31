@@ -9,10 +9,11 @@ import { fileToDataUrl, extractExifLocation, correctOrientation, generateId } fr
 import { savePendingResult, addToQueue } from "@/lib/storage";
 import { QUEUE_CHANGED_EVENT } from "@/lib/queue";
 import { reverseGeocode } from "@/lib/apis/nominatim";
+import { takePendingCaptureFile } from "@/lib/pendingCapture";
 import type { ExtractedGraveData, GeoLocation } from "@/types";
 import ProfileBadge from "@/components/auth/ProfileBadge";
 
-type Phase = "idle" | "previewing" | "processing" | "queued";
+type Phase = "idle" | "processing" | "queued";
 
 
 export default function CapturePage() {
@@ -40,10 +41,10 @@ export default function CapturePage() {
     window.addEventListener("online",  onOnline);
     window.addEventListener("offline", onOffline);
 
-    // BottomNav camera FAB navigated here from another page
-    if (sessionStorage.getItem("openCamera") === "1") {
-      sessionStorage.removeItem("openCamera");
-      setTimeout(() => cameraInputRef.current?.click(), 150);
+    // BottomNav camera FAB chose a file from another page — process it immediately
+    const pending = takePendingCaptureFile();
+    if (pending) {
+      handleFileChosen(pending);
     }
 
     return () => {
@@ -101,7 +102,9 @@ export default function CapturePage() {
     const dataUrl = await correctOrientation(file, raw);
     setPreviewUrl(dataUrl);
     setSelectedFile(file);
-    setPhase("previewing");
+    setPhase("processing");
+    setProgress(10);
+    setProgressLabel("Reading image…");
   }, []);
 
   const handleAnalyze = useCallback(async () => {
@@ -198,9 +201,21 @@ export default function CapturePage() {
       router.push(`/result/${id}`);
     } catch (err) {
       console.error("CapturePage: Analysis failed:", err instanceof Error ? err.message : err);
-      setPhase("previewing");
+      setPhase("idle");
     }
   }, [selectedFile, previewUrl, router]);
+
+  // Auto-analyze as soon as a file is chosen
+  useEffect(() => {
+    if (phase === "processing" && selectedFile && previewUrl) {
+      if (isOffline) {
+        handleQueueCapture();
+      } else {
+        handleAnalyze();
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, selectedFile, previewUrl]);
 
   const handleReset = useCallback(() => {
     setPhase("idle");
@@ -246,7 +261,7 @@ export default function CapturePage() {
       setTimeout(() => handleReset(), 1400);
     } catch (err) {
       console.error("CapturePage: Queue capture failed:", err instanceof Error ? err.message : err);
-      setPhase("previewing");
+      setPhase("idle");
     }
   }, [selectedFile, previewUrl, handleReset]);
 
@@ -266,7 +281,7 @@ export default function CapturePage() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center px-5 overflow-y-auto no-scrollbar" style={{ scrollbarWidth: "none" }}>
+      <main className="flex-1 flex flex-col items-center px-5 overflow-y-auto no-scrollbar pb-28" style={{ scrollbarWidth: "none" }}>
         {phase === "idle" && (
           <IdleState
             onUpload={() => fileInputRef.current?.click()}
@@ -274,15 +289,6 @@ export default function CapturePage() {
         )}
         {phase !== "idle" && (
           <div className="flex-1 flex flex-col items-center justify-center w-full">
-            {phase === "previewing" && previewUrl && (
-              <PreviewState
-                previewUrl={previewUrl}
-                onAnalyze={isOffline ? handleQueueCapture : handleAnalyze}
-                analyzeLabel={isOffline ? "Save to Queue" : "Analyze Marker"}
-                onRetake={handleReset}
-              />
-            )}
-
             {phase === "processing" && previewUrl && (
               <ProcessingState
                 previewUrl={previewUrl}
@@ -509,57 +515,6 @@ function ProcessingState({
       <p className="text-stone-500 text-xs text-center">
         Searching historical records & public archives…
       </p>
-    </div>
-  );
-}
-
-function PreviewState({
-  previewUrl,
-  onAnalyze,
-  analyzeLabel = "Analyze Marker",
-  onRetake,
-}: {
-  previewUrl: string;
-  onAnalyze: () => void;
-  analyzeLabel?: string;
-  onRetake: () => void;
-}) {
-  return (
-    <div className="flex flex-col w-full max-w-sm gap-4 animate-fade-in pt-4">
-      <div className="relative rounded-2xl overflow-hidden bg-stone-800 aspect-[3/4] w-full shadow-2xl">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={previewUrl}
-          alt="Selected grave marker"
-          className="w-full h-full object-cover"
-        />
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <path d="M5 15 L5 5 L15 5" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
-          <path d="M85 5 L95 5 L95 15" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
-          <path d="M5 85 L5 95 L15 95" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
-          <path d="M85 95 L95 95 L95 85" stroke="#c9a84c" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" opacity="0.9" />
-        </svg>
-      </div>
-
-      <div className="flex flex-col gap-3 w-full">
-        <button
-          onClick={onAnalyze}
-          className="flex items-center justify-center gap-3 w-full h-14 rounded-2xl text-stone-900 font-semibold text-base transition-all active:scale-[0.97]"
-          style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <circle cx="11" cy="11" r="8"/>
-            <path d="m21 21-4.35-4.35"/>
-          </svg>
-          {analyzeLabel}
-        </button>
-        <button
-          onClick={onRetake}
-          className="w-full h-12 rounded-2xl text-stone-400 font-medium text-sm transition-all active:scale-[0.97]"
-        >
-          Use a different photo
-        </button>
-      </div>
     </div>
   );
 }

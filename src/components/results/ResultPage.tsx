@@ -45,6 +45,8 @@ export default function ResultPage({ id }: { id: string }) {
   const [locationOverride, setLocationOverride] = useState<GeoLocation | null>(null);
   const [nearbyPrompt, setNearbyPrompt] = useState<{ name: string; records: GraveRecord[] } | null>(null);
   const [photoFullscreen, setPhotoFullscreen] = useState(false);
+  const [extractedOverride, setExtractedOverride] = useState<Partial<ExtractedGraveData> | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     getPendingResult(id).then(async (raw) => {
@@ -349,6 +351,65 @@ export default function ResultPage({ id }: { id: string }) {
     setNearbyPrompt(null);
   }, [nearbyPrompt]);
 
+  const handleExtractedEdit = useCallback(async (patch: Partial<ExtractedGraveData>) => {
+    if (!pending) return;
+    const next = { ...pending.extracted, ...(extractedOverride ?? {}), ...patch };
+    setExtractedOverride(next);
+    const existing = await getGrave(pending.id);
+    if (!existing) return;
+    await saveGrave({ ...existing, extracted: next });
+  }, [pending, extractedOverride]);
+
+  const handleRefreshData = useCallback(async () => {
+    if (!pending || refreshing) return;
+    setRefreshing(true);
+    const current = { ...pending.extracted, ...(extractedOverride ?? {}) };
+    try {
+      setResearchLoading(true);
+      const res = await fetch("/api/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: current.name,
+          firstName: current.firstName,
+          lastName: current.lastName,
+          birthYear: current.birthYear,
+          deathYear: current.deathYear,
+          lat: currentLocation?.lat,
+          lng: currentLocation?.lng,
+          city: currentLocation?.city,
+          county: currentLocation?.county,
+          state: currentLocation?.state,
+          cemetery: currentLocation?.cemetery,
+          inscription: current.inscription ?? "",
+          symbols: current.symbols ?? [],
+        }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const researchData: ResearchData = {
+          newspapers: d.newspapers ?? [],
+          naraRecords: d.naraRecords ?? [],
+          landRecords: d.landRecords ?? [],
+          historical: d.historical ?? {},
+          militaryContext: d.militaryContext ?? undefined,
+          localHistory: d.localHistory ?? undefined,
+          cemetery: currentLocation?.cemetery
+            ? { name: currentLocation.cemetery, wikipediaUrl: d.cemeteryWikiUrl, location: currentLocation ?? undefined }
+            : undefined,
+        };
+        setResearch(researchData);
+        setNarrative(null);
+        setCulturalContext(null);
+        const existing = await getGrave(pending.id);
+        if (existing) await saveGrave({ ...existing, extracted: current, research: researchData });
+      }
+    } catch { /* non-fatal */ } finally {
+      setResearchLoading(false);
+      setRefreshing(false);
+    }
+  }, [pending, extractedOverride, currentLocation, refreshing]);
+
   if (!pending) {
     return (
       <div className="flex items-center justify-center min-h-full bg-stone-900">
@@ -357,7 +418,8 @@ export default function ResultPage({ id }: { id: string }) {
     );
   }
 
-  const { extracted, photoDataUrl } = pending;
+  const extracted: ExtractedGraveData = { ...pending.extracted, ...(extractedOverride ?? {}) };
+  const { photoDataUrl } = pending;
   const location = currentLocation;
 
   const graveRecord: GraveRecord = {
@@ -393,8 +455,23 @@ export default function ResultPage({ id }: { id: string }) {
 
         <div className="flex items-center gap-3">
           <button
+            onClick={handleRefreshData}
+            disabled={refreshing || researchLoading}
+            aria-label="Refresh data"
+            className="text-stone-400 active:text-stone-200 disabled:opacity-40"
+          >
+            <svg
+              width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              className={refreshing || researchLoading ? "animate-spin" : ""}
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </button>
+          <button
             onClick={handleShare}
-            className="flex items-center gap-1.5 text-gold-500 active:text-gold-400"
+            className="text-stone-400 active:text-stone-200"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
@@ -459,7 +536,7 @@ export default function ResultPage({ id }: { id: string }) {
 
         <div className="flex flex-col gap-0 px-5">
           {/* Primary info card */}
-          <PrimaryCard extracted={extracted} />
+          <PrimaryCard extracted={extracted} onSave={handleExtractedEdit} />
 
           {/* Divider */}
           <div className="h-px bg-gradient-to-r from-transparent via-stone-700 to-transparent my-1" />
@@ -513,14 +590,13 @@ export default function ResultPage({ id }: { id: string }) {
           />
 
           {/* Inscription + epitaph */}
-          {extracted.inscription && (
-            <InscriptionCard
-              inscription={extracted.inscription}
-              epitaph={extracted.epitaph}
-              epitaphSource={narrative?.epitaphSource}
-              epitaphMeaning={narrative?.epitaphMeaning}
-            />
-          )}
+          <InscriptionCard
+            inscription={extracted.inscription}
+            epitaph={extracted.epitaph}
+            epitaphSource={narrative?.epitaphSource}
+            epitaphMeaning={narrative?.epitaphMeaning}
+            onSave={(inscription) => handleExtractedEdit({ inscription })}
+          />
 
           {/* Symbols with database meanings */}
           {extracted.symbols && extracted.symbols.length > 0 && (
@@ -740,59 +816,134 @@ export default function ResultPage({ id }: { id: string }) {
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-function PrimaryCard({ extracted }: { extracted: ExtractedGraveData }) {
+function PrimaryCard({
+  extracted,
+  onSave,
+}: {
+  extracted: ExtractedGraveData;
+  onSave?: (patch: Partial<ExtractedGraveData>) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(extracted.name ?? "");
+  const [birthDate, setBirthDate] = useState(extracted.birthDate ?? "");
+  const [deathDate, setDeathDate] = useState(extracted.deathDate ?? "");
+
+  // Keep fields in sync if parent updates extracted (e.g. after refresh)
+  useEffect(() => {
+    if (!editing) {
+      setName(extracted.name ?? "");
+      setBirthDate(extracted.birthDate ?? "");
+      setDeathDate(extracted.deathDate ?? "");
+    }
+  }, [extracted, editing]);
+
+  const handleSave = () => {
+    onSave?.({ name, birthDate, deathDate });
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="py-6 animate-fade-up flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] uppercase tracking-widest text-stone-500 font-bold">Name</label>
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="bg-stone-800 text-stone-100 text-lg font-serif rounded-lg px-3 py-2 border border-stone-700 focus:outline-none focus:border-stone-500"
+          />
+        </div>
+        <div className="flex gap-3">
+          <div className="flex flex-col gap-1 flex-1">
+            <label className="text-[10px] uppercase tracking-widest text-stone-500 font-bold">Birth Date</label>
+            <input
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+              placeholder="e.g. Mar 4, 1842"
+              className="bg-stone-800 text-stone-200 text-sm rounded-lg px-3 py-2 border border-stone-700 focus:outline-none focus:border-stone-500"
+            />
+          </div>
+          <div className="flex flex-col gap-1 flex-1">
+            <label className="text-[10px] uppercase tracking-widest text-stone-500 font-bold">Death Date</label>
+            <input
+              value={deathDate}
+              onChange={(e) => setDeathDate(e.target.value)}
+              placeholder="e.g. Jan 12, 1901"
+              className="bg-stone-800 text-stone-200 text-sm rounded-lg px-3 py-2 border border-stone-700 focus:outline-none focus:border-stone-500"
+            />
+          </div>
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={handleSave}
+            className="flex-1 h-9 rounded-lg text-stone-900 text-sm font-semibold"
+            style={{ background: "#c9a84c" }}
+          >
+            Save
+          </button>
+          <button
+            onClick={() => setEditing(false)}
+            className="flex-1 h-9 rounded-lg text-stone-400 text-sm border border-stone-700"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="py-6 animate-fade-up">
-      {extracted.name && (
-        <h1 className="font-serif text-3xl font-bold text-stone-50 leading-tight mb-3">
-          {extracted.name}
-        </h1>
-      )}
+      <div className="flex items-start justify-between gap-2">
+        {extracted.name ? (
+          <h1 className="font-serif text-3xl font-bold text-stone-50 leading-tight mb-3">
+            {extracted.name}
+          </h1>
+        ) : (
+          <h1 className="font-serif text-3xl font-bold text-stone-500 leading-tight mb-3 italic">
+            Unknown
+          </h1>
+        )}
+        {onSave && (
+          <button
+            onClick={() => setEditing(true)}
+            className="mt-1 shrink-0 text-stone-500 active:text-stone-200"
+            aria-label="Edit details"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+          </button>
+        )}
+      </div>
 
       <div className="flex flex-wrap gap-x-6 gap-y-2">
         {(extracted.birthDate || extracted.deathDate) && (
           <div>
-            <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">
-              Dates
-            </p>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">Dates</p>
             <p className="text-stone-200 font-medium">
-              {[extracted.birthDate, extracted.deathDate]
-                .filter(Boolean)
-                .join(" — ")}
+              {[extracted.birthDate, extracted.deathDate].filter(Boolean).join(" — ")}
             </p>
           </div>
         )}
-
         {extracted.ageAtDeath && (
           <div>
-            <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">
-              Age
-            </p>
-            <p className="text-stone-200 font-medium">
-              {extracted.ageAtDeath} years
-            </p>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">Age</p>
+            <p className="text-stone-200 font-medium">{extracted.ageAtDeath} years</p>
           </div>
         )}
-
         {extracted.markerType && extracted.markerType !== "headstone" && (
           <div>
-            <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">
-              Marker
-            </p>
-            <p className="text-stone-200 font-medium capitalize">
-              {extracted.markerType}
-            </p>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">Marker</p>
+            <p className="text-stone-200 font-medium capitalize">{extracted.markerType}</p>
           </div>
         )}
-
         {extracted.material && extracted.material !== "unknown" && (
           <div>
-            <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">
-              Material
-            </p>
-            <p className="text-stone-200 font-medium capitalize">
-              {extracted.material}
-            </p>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">Material</p>
+            <p className="text-stone-200 font-medium capitalize">{extracted.material}</p>
           </div>
         )}
       </div>
@@ -1059,49 +1210,104 @@ function InscriptionCard({
   epitaph,
   epitaphSource,
   epitaphMeaning,
+  onSave,
 }: {
   inscription: string;
   epitaph: string;
   epitaphSource?: string;
   epitaphMeaning?: string;
+  onSave?: (inscription: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const shouldTruncate = inscription.length > 200;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(inscription ?? "");
+  const shouldTruncate = !editing && inscription.length > 200;
+
+  useEffect(() => {
+    if (!editing) setDraft(inscription ?? "");
+  }, [inscription, editing]);
+
+  const handleSave = () => {
+    onSave?.(draft);
+    setEditing(false);
+  };
 
   return (
     <div className="py-5 animate-fade-up" style={{ animationDelay: "0.15s" }}>
-      <SectionHeader icon="✦" title="Inscription" />
-      {epitaph && (
+      <div className="flex items-center justify-between mb-1">
+        <SectionHeader icon="✦" title="Inscription" />
+        {onSave && !editing && (
+          <button
+            onClick={() => setEditing(true)}
+            className="text-stone-500 active:text-stone-200"
+            aria-label="Edit inscription"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {epitaph && !editing && (
         <div className="mt-3 mb-3">
-          <p className="font-serif text-stone-300 italic text-base leading-relaxed border-l-2 border-gold-500/50 pl-3">
+          <p className="font-serif text-stone-300 italic text-base leading-relaxed border-l-2 border-stone-600 pl-3">
             &ldquo;{epitaph}&rdquo;
           </p>
           {(epitaphSource || epitaphMeaning) && (
             <div className="mt-2 pl-3 space-y-1">
-              {epitaphSource && (
-                <p className="text-gold-500/80 text-xs font-medium">{epitaphSource}</p>
-              )}
-              {epitaphMeaning && (
-                <p className="text-stone-400 text-xs leading-relaxed">{epitaphMeaning}</p>
-              )}
+              {epitaphSource && <p className="text-stone-500 text-xs font-medium">{epitaphSource}</p>}
+              {epitaphMeaning && <p className="text-stone-400 text-xs leading-relaxed">{epitaphMeaning}</p>}
             </div>
           )}
         </div>
       )}
-      <div
-        className={`mt-2 font-mono text-stone-400 text-sm leading-relaxed whitespace-pre-wrap ${
-          !expanded && shouldTruncate ? "line-clamp-6" : ""
-        }`}
-      >
-        {inscription}
-      </div>
-      {shouldTruncate && (
-        <button
-          onClick={() => setExpanded((e) => !e)}
-          className="text-gold-500 text-xs mt-2"
-        >
-          {expanded ? "Show less" : "Show full inscription"}
-        </button>
+
+      {editing ? (
+        <div className="flex flex-col gap-2 mt-2">
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={6}
+            className="w-full bg-stone-800 text-stone-200 text-sm font-mono rounded-lg px-3 py-2 border border-stone-700 focus:outline-none focus:border-stone-500 resize-none leading-relaxed"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              className="flex-1 h-9 rounded-lg text-stone-900 text-sm font-semibold"
+              style={{ background: "#c9a84c" }}
+            >
+              Save
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="flex-1 h-9 rounded-lg text-stone-400 text-sm border border-stone-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {inscription ? (
+            <div
+              className={`mt-2 font-mono text-stone-400 text-sm leading-relaxed whitespace-pre-wrap ${
+                !expanded && shouldTruncate ? "line-clamp-6" : ""
+              }`}
+            >
+              {inscription}
+            </div>
+          ) : (
+            <p className="mt-2 text-stone-600 text-sm italic">No inscription recorded.</p>
+          )}
+          {shouldTruncate && (
+            <button onClick={() => setExpanded((e) => !e)} className="text-stone-500 text-xs mt-2">
+              {expanded ? "Show less" : "Show full inscription"}
+            </button>
+          )}
+        </>
       )}
     </div>
   );
