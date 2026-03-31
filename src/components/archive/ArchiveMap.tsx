@@ -1,10 +1,9 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { GraveRecord, NotableFigure } from "@/types";
 import { getNotableFiguresInBounds } from "@/lib/apis/wikidata";
-import { getWikipediaPlacesNear, type WikipediaPlace } from "@/lib/apis/wikipedia";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -44,10 +43,6 @@ function wikidataMinSitelinks(zoom: number): number {
   if (zoom >= 10) return 15;
   if (zoom >= 8)  return 40;
   return 75;
-}
-
-function wikipediaRadius(zoom: number): number {
-  return zoom >= 13 ? 5000 : 10000;
 }
 
 // ── Overpass: cemeteries ──────────────────────────────────────────────────────
@@ -227,7 +222,6 @@ export default function ArchiveMap({
 
   // Auto-discovery state
   const [autoFigures, setAutoFigures] = useState<NotableFigure[]>([]);
-  const [autoWikiPlaces, setAutoWikiPlaces] = useState<WikipediaPlace[]>([]);
   const [autoHeritagePlaces, setAutoHeritagePlaces] = useState<HeritagePlace[]>([]);
 
   // Manual search state
@@ -319,7 +313,6 @@ export default function ArchiveMap({
           // Nothing useful to show at very wide national zoom
           if (z < 6) {
             setAutoFigures([]);
-            setAutoWikiPlaces([]);
             setAutoHeritagePlaces([]);
             return;
           }
@@ -327,7 +320,6 @@ export default function ArchiveMap({
           const b = map.getBounds();
           const sw = b.getSouthWest();
           const ne = b.getNorthEast();
-          const c = map.getCenter();
           const minLinks = wikidataMinSitelinks(z);
 
           const tasks: Promise<void>[] = [];
@@ -338,17 +330,6 @@ export default function ArchiveMap({
               .then((figs) => { if (!cancelled) setAutoFigures(figs); })
               .catch(() => {})
           );
-
-          // Wikipedia geosearch — local & regional (zoom ≥ 10)
-          if (z >= 10) {
-            tasks.push(
-              getWikipediaPlacesNear(c.lat, c.lng, wikipediaRadius(z))
-                .then((places) => { if (!cancelled) setAutoWikiPlaces(places); })
-                .catch(() => {})
-            );
-          } else {
-            setAutoWikiPlaces([]);
-          }
 
           // Overpass heritage — skip at very wide bounds (zoom < 8) to avoid timeouts
           if (z >= 8) {
@@ -455,20 +436,6 @@ export default function ArchiveMap({
           L.marker([n.lat, n.lng], { icon }).addTo(layer).bindPopup(html);
         });
 
-        // ── Auto: Wikipedia places ──────────────────────────────────────────
-        const wikiIcon = L.divIcon({
-          html: `<div style="width:30px;height:30px;background:#3366cc;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;color:white;box-shadow:0 2px 8px rgba(0,0,0,0.4);">W</div>`,
-          className: "", iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -15],
-        });
-        autoWikiPlaces.forEach((p: WikipediaPlace) => {
-          const html = `<div style="font-family:system-ui;min-width:180px;padding:14px;background:#1a1917;border-radius:10px;">
-            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${p.title}</p>
-            ${p.description ? `<p style="font-size:11px;color:#b0aba6;margin-top:3px;">${p.description}</p>` : ""}
-            <a href="${p.url}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#3366cc;color:#fff;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;font-size:13px;">Wikipedia →</a>
-          </div>`;
-          L.marker([p.lat, p.lng], { icon: wikiIcon }).addTo(layer).bindPopup(html);
-        });
-
         // ── Auto: Overpass heritage sites ───────────────────────────────────
         autoHeritagePlaces.forEach((h: HeritagePlace) => {
           const icon = makeCircleIcon(heritageIcon(h.type), "#2e2b28", "#3a3733");
@@ -526,7 +493,7 @@ export default function ArchiveMap({
         });
       }
     });
-  }, [autoFigures, autoWikiPlaces, autoHeritagePlaces, manualFigures, manualCemeteries, manualRelatives, hasManualResults]);
+  }, [autoFigures, autoHeritagePlaces, manualFigures, manualCemeteries, manualRelatives, hasManualResults]);
 
   // ── Manual search trigger ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -596,7 +563,6 @@ export default function ArchiveMap({
     setManualCemeteries(null);
     setManualRelatives(null);
     setAutoFigures([]);
-    setAutoWikiPlaces([]);
     setAutoHeritagePlaces([]);
     onClearFind();
   };
@@ -616,9 +582,107 @@ export default function ArchiveMap({
     }
   };
 
+  // ── Legend entries — derived from active state ────────────────────────────
+  const legendItems = useMemo(() => {
+    const items: { icon: React.ReactNode; label: string }[] = [];
+
+    const activeFigures = hasManualResults ? manualFigures ?? [] : autoFigures;
+    const activeHeritage = hasManualResults ? [] : autoHeritagePlaces;
+
+    const validGraves = graves.filter((g) => g.location?.lat && g.location?.lng);
+    if (validGraves.length > 0) {
+      items.push({
+        icon: (
+          <svg width="14" height="18" viewBox="0 0 28 36" fill="none">
+            <rect x="2" y="14" width="24" height="18" rx="2" fill="#c9a84c"/>
+            <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#c9a84c"/>
+            <line x1="14" y1="6" x2="14" y2="12" stroke="#1a1917" strokeWidth="2" strokeLinecap="round"/>
+            <line x1="10" y1="9" x2="18" y2="9" stroke="#1a1917" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        ),
+        label: "Your graves",
+      });
+    }
+
+    if (userMarkerRef.current) {
+      items.push({
+        icon: <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#4a90e2", border: "2px solid #fff", boxShadow: "0 0 0 3px rgba(74,144,226,0.3)" }} />,
+        label: "Your location",
+      });
+    }
+
+    // Figure categories present
+    const figCategories = new Set(activeFigures.map((f) => f.category));
+    const figCategoryMap: Record<string, string> = {
+      political: "🏛️  Political figures",
+      military:  "⚔️  Military figures",
+      artist:    "🎨  Artists",
+      musician:  "🎵  Musicians",
+      actor:     "🎭  Actors",
+      other:     "📍  Notable buried figures",
+    };
+    for (const cat of ["political", "military", "artist", "musician", "actor", "other"]) {
+      if (figCategories.has(cat as any)) {
+        items.push({ icon: <span style={{ fontSize: 14 }}>{figCategoryMap[cat].split("  ")[0]}</span>, label: figCategoryMap[cat].split("  ")[1] });
+      }
+    }
+
+    // Heritage types present
+    const heritageTypes = new Set(activeHeritage.map((h) => h.type.toLowerCase()));
+    const heritageLabels: Record<string, string> = {
+      battlefield: "⚔️  Battlefield",
+      monument:    "🗿  Monument",
+      memorial:    "🕊️  Memorial",
+      fort:        "🏰  Fort / Castle",
+      castle:      "🏰  Fort / Castle",
+      ruins:       "🏺  Ruins",
+      heritage:    "🏛️  Heritage site",
+    };
+    const shownHeritage = new Set<string>();
+    for (const type of heritageTypes) {
+      const label = heritageLabels[type];
+      if (label && !shownHeritage.has(label)) {
+        shownHeritage.add(label);
+        items.push({ icon: <span style={{ fontSize: 14 }}>{label.split("  ")[0]}</span>, label: label.split("  ")[1] });
+      }
+    }
+
+    if (manualCemeteries && manualCemeteries.length > 0) {
+      items.push({
+        icon: (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 21h12"/><path d="M7 21v-8a5 5 0 0 1 10 0v8"/><path d="M12 7v4"/><path d="M10 9h4"/>
+          </svg>
+        ),
+        label: "Cemeteries",
+      });
+    }
+
+    if (manualRelatives && manualRelatives.length > 0) {
+      items.push({ icon: <span style={{ fontSize: 13 }}>👤</span>, label: "Tagged relatives" });
+    }
+
+    return items;
+  }, [graves, autoFigures, autoHeritagePlaces, manualFigures, manualCemeteries, manualRelatives, hasManualResults]);
+
   return (
     <div className="relative flex-1 flex flex-col overflow-hidden h-screen">
       <div ref={mapRef} className="w-full h-full relative z-0" />
+
+      {/* Legend */}
+      {legendItems.length > 0 && (
+        <div
+          className="absolute bottom-28 left-4 z-[1000] rounded-xl px-3 py-2 flex flex-col gap-1.5"
+          style={{ background: "rgba(26,25,23,0.88)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(8px)" }}
+        >
+          {legendItems.map((item, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="w-5 flex items-center justify-center shrink-0">{item.icon}</div>
+              <span className="text-stone-300 text-[11px] font-medium">{item.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* My Location button */}
       <button
