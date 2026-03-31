@@ -229,6 +229,7 @@ export default function ArchiveMap({
   const userMarkerRef = useRef<any>(null);
   const watchIdRef = useRef<number | null>(null);
   const hasManualResultsRef = useRef(false);
+  const [mapReady, setMapReady] = useState(false);
 
   // Auto-discovery state
   const [autoFigures, setAutoFigures] = useState<NotableFigure[]>([]);
@@ -285,6 +286,7 @@ export default function ArchiveMap({
 
       graveLayerRef.current = L.layerGroup().addTo(map);
       overlayLayerRef.current = L.layerGroup().addTo(map);
+      setMapReady(true); // ← signals layer effects to run
 
       // User location dot
       const userIcon = L.divIcon({
@@ -409,7 +411,7 @@ export default function ArchiveMap({
       const bounds = L.latLngBounds(validGraves.map((g) => [g.location.lat, g.location.lng] as [number, number]));
       map.fitBounds(bounds, { padding: [40, 40] });
     }
-  }, [graves]);
+  }, [graves, mapReady]);
 
   // ── Overlay layer: auto + manual results ──────────────────────────────────────
   useEffect(() => {
@@ -532,7 +534,7 @@ export default function ArchiveMap({
         L.marker([g.location.lat, g.location.lng], { icon }).addTo(layer).bindPopup(html);
       });
     }
-  }, [autoFigures, autoHeritagePlaces, manualFigures, manualCemeteries, manualRelatives, hasManualResults]);
+  }, [autoFigures, autoHeritagePlaces, manualFigures, manualCemeteries, manualRelatives, hasManualResults, mapReady]);
 
   // ── Manual search trigger ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -708,11 +710,16 @@ export default function ArchiveMap({
     <div className="relative flex-1 flex flex-col overflow-hidden h-screen">
       <div ref={mapRef} className="w-full h-full relative z-0" />
 
-      {/* Legend */}
+      {/* Legend — floats above bottom nav */}
       {legendItems.length > 0 && (
         <div
-          className="absolute bottom-28 left-4 z-[1000] rounded-xl px-3 py-2 flex flex-col gap-1.5"
-          style={{ background: "rgba(26,25,23,0.88)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(8px)" }}
+          className="absolute left-4 z-[1000] rounded-xl px-3 py-2 flex flex-col gap-1.5"
+          style={{
+            bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))",
+            background: "rgba(26,25,23,0.88)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            backdropFilter: "blur(8px)",
+          }}
         >
           {legendItems.map((item, i) => (
             <div key={i} className="flex items-center gap-2">
@@ -723,13 +730,17 @@ export default function ArchiveMap({
         </div>
       )}
 
-      {/* My Location button */}
+      {/* My Location button — floats above bottom nav */}
       <button
         onClick={handleMyLocation}
         disabled={locating}
         aria-label="My location"
-        className="absolute bottom-28 right-4 z-[1000] w-11 h-11 rounded-full flex items-center justify-center shadow-xl transition-all active:scale-95 disabled:opacity-60"
-        style={{ background: "#1a1917", border: "2px solid #2e2b28" }}
+        className="absolute right-4 z-[1000] w-11 h-11 rounded-full flex items-center justify-center shadow-xl transition-all active:scale-95 disabled:opacity-60"
+        style={{
+          bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))",
+          background: "#1a1917",
+          border: "2px solid #2e2b28",
+        }}
       >
         {locating ? (
           <div className="w-4 h-4 border-2 border-stone-500 border-t-transparent rounded-full animate-spin" />
