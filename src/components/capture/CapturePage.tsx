@@ -141,7 +141,9 @@ export default function CapturePage() {
 
       if (analysisNonceRef.current !== nonce) return; // newer photo was taken
 
-      const geocodePromise = exifLoc ? reverseGeocode(exifLoc.lat, exifLoc.lng) : Promise.resolve(null);
+      // EXIF GPS is stripped by most mobile browsers — fall back to device location
+      const gpsLoc = exifLoc ?? await getDeviceLocation();
+      const geocodePromise = gpsLoc ? reverseGeocode(gpsLoc.lat, gpsLoc.lng) : Promise.resolve(null);
 
       // ── Claude analysis ─────────────────────────────────────────────────
       setProgress(40);
@@ -254,12 +256,14 @@ export default function CapturePage() {
 
     try {
       const exifLoc = await extractExifLocation(selectedFile);
+      // EXIF GPS is stripped by most mobile browsers — fall back to device location
+      const gpsLoc = exifLoc ?? await getDeviceLocation();
       let location: GeoLocation | undefined;
 
-      if (exifLoc) {
+      if (gpsLoc) {
         setProgress(40);
-        const geocoded = await reverseGeocode(exifLoc.lat, exifLoc.lng).catch(() => null);
-        location = (geocoded ?? exifLoc) as GeoLocation;
+        const geocoded = await reverseGeocode(gpsLoc.lat, gpsLoc.lng).catch(() => null);
+        location = (geocoded ?? gpsLoc) as GeoLocation;
       }
 
       setProgress(70);
@@ -544,6 +548,22 @@ function ProcessingState({
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Get the device's current GPS position via the Geolocation API.
+ * Used as a fallback when the photo has no EXIF GPS data (common on PWA/mobile).
+ * Resolves to null on error or denial rather than rejecting.
+ */
+function getDeviceLocation(): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { timeout: 6000, maximumAge: 30000, enableHighAccuracy: true }
+    );
+  });
+}
 
 /**
  * Compress a photo for long-term storage in IndexedDB.
