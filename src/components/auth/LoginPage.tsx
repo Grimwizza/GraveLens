@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import BrandLogo from "@/components/ui/BrandLogo";
 import { createClient } from "@/lib/supabase/browser";
-import { syncLocalToCloud, hasEverSynced } from "@/lib/cloudSync";
+import { syncLocalToCloud, hasEverSynced, pullExplorerPoints } from "@/lib/cloudSync";
 
 type Mode = "signin" | "signup" | "verify";
 
@@ -302,6 +302,12 @@ async function runPostLoginSync(
   supabase: ReturnType<typeof createClient>,
   userId: string
 ) {
+  // Always pull Explorer points on sign-in so achievements are current on any device
+  pullExplorerPoints(supabase, userId).catch((err) =>
+    console.warn("[Sync] Explorer points pull failed:", err)
+  );
+
+  // Grave migration only runs once (it's a bulk operation)
   if (hasEverSynced()) return;
   syncLocalToCloud(supabase, userId).catch((err) =>
     console.warn("[Sync] Post-login migration failed:", err)

@@ -12,6 +12,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GraveRecord } from "@/types";
 import { getAllGraves, saveGrave } from "@/lib/storage";
+import {
+  loadUnlocks,
+  loadStats,
+  updateStats,
+  type UnlockRecord,
+  type AppStats,
+} from "@/lib/achievements";
 
 const BUCKET = "grave-photos";
 const SYNC_KEY = "gl_synced_at";
@@ -190,4 +197,126 @@ export function hasEverSynced(): boolean {
   } catch {
     return false;
   }
+}
+
+// ── Explorer points (achievements + stats) sync ───────────────────────────────
+
+/**
+ * Push local achievement unlocks and app stats to the cloud, merging with any
+ * existing cloud data so progress is never lost on either device.
+ *
+ * Merge rules:
+ *   unlocks  — union by id; keep earliest unlockedAt timestamp
+ *   stats    — take max of sharesCount / cemeteryNamesAdded; union daysActive
+ */
+export async function pushExplorerPoints(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<void> {
+  const localUnlocks = loadUnlocks();
+  const localStats = loadStats();
+
+  // Fetch existing cloud row (may not exist yet)
+  const { data: existing } = await supabase
+    .from("user_profiles")
+    .select("achievement_unlocks, app_stats")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const cloudUnlocks: UnlockRecord[] = existing?.achievement_unlocks ?? [];
+  const cloudStats: AppStats = existing?.app_stats ?? {
+    sharesCount: 0,
+    cemeteryNamesAdded: 0,
+    daysActive: [],
+  };
+
+  // Merge unlocks — union, keeping earliest timestamp per id
+  const mergedUnlocksMap = new Map<string, UnlockRecord>();
+  for (const u of [...cloudUnlocks, ...localUnlocks]) {
+    const existing = mergedUnlocksMap.get(u.id);
+    if (!existing || u.unlockedAt < existing.unlockedAt) {
+      mergedUnlocksMap.set(u.id, u);
+    }
+  }
+  const mergedUnlocks = Array.from(mergedUnlocksMap.values());
+
+  // Merge stats
+  const mergedStats: AppStats = {
+    sharesCount: Math.max(localStats.sharesCount, cloudStats.sharesCount),
+    cemeteryNamesAdded: Math.max(
+      localStats.cemeteryNamesAdded,
+      cloudStats.cemeteryNamesAdded
+    ),
+    daysActive: Array.from(
+      new Set([...localStats.daysActive, ...cloudStats.daysActive])
+    ).sort(),
+  };
+
+  const { error } = await supabase.from("user_profiles").upsert({
+    user_id: userId,
+    achievement_unlocks: mergedUnlocks,
+    app_stats: mergedStats,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) throw error;
+}
+
+/**
+ * Pull achievement unlocks and stats from the cloud and merge into local
+ * storage, so a new device immediately inherits all Explorer progress.
+ *
+ * Uses the same merge rules as pushExplorerPoints so the operation is safe
+ * to call concurrently on multiple devices.
+ */
+export async function pullExplorerPoints(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select("achievement_unlocks, app_stats")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error || !data) return;
+
+  const cloudUnlocks: UnlockRecord[] = data.achievement_unlocks ?? [];
+  const cloudStats: AppStats = data.app_stats ?? {
+    sharesCount: 0,
+    cemeteryNamesAdded: 0,
+    daysActive: [],
+  };
+
+  // Merge with what's already local
+  const localUnlocks = loadUnlocks();
+  const localStats = loadStats();
+
+  const mergedUnlocksMap = new Map<string, UnlockRecord>();
+  for (const u of [...localUnlocks, ...cloudUnlocks]) {
+    const existing = mergedUnlocksMap.get(u.id);
+    if (!existing || u.unlockedAt < existing.unlockedAt) {
+      mergedUnlocksMap.set(u.id, u);
+    }
+  }
+
+  const mergedStats: AppStats = {
+    sharesCount: Math.max(localStats.sharesCount, cloudStats.sharesCount),
+    cemeteryNamesAdded: Math.max(
+      localStats.cemeteryNamesAdded,
+      cloudStats.cemeteryNamesAdded
+    ),
+    daysActive: Array.from(
+      new Set([...localStats.daysActive, ...cloudStats.daysActive])
+    ).sort(),
+  };
+
+  // Write merged data back to localStorage
+  try {
+    localStorage.setItem(
+      "gl_achievement_unlocks",
+      JSON.stringify(Array.from(mergedUnlocksMap.values()))
+    );
+    updateStats(mergedStats);
+  } catch { /* ignore */ }
 }

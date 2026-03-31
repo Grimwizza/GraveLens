@@ -7,7 +7,7 @@ import BottomNav from "@/components/layout/BottomNav";
 import { saveGrave, getGrave, getAllGraves, getPendingResult, deletePendingResult } from "@/lib/storage";
 import { checkAndUnlock, loadStats, type Achievement } from "@/lib/achievements";
 import { createClient } from "@/lib/supabase/browser";
-import { uploadPhoto, upsertGrave } from "@/lib/cloudSync";
+import { uploadPhoto, upsertGrave, pushExplorerPoints } from "@/lib/cloudSync";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import { interpretSymbols } from "@/lib/apis/symbols";
 import ProfileBadge from "@/components/auth/ProfileBadge";
@@ -103,7 +103,7 @@ export default function ResultPage({ id }: { id: string }) {
           }
         } catch { /* offline or not logged in — local save stands */ }
 
-        // Check for newly unlocked achievements
+        // Check for newly unlocked achievements and push to cloud
         try {
           const allGraves = await getAllGraves();
           const stats = loadStats();
@@ -111,6 +111,12 @@ export default function ResultPage({ id }: { id: string }) {
           if (newUnlocks.length > 0) {
             setAchievementToasts(newUnlocks);
             setTimeout(() => setAchievementToasts([]), 5000);
+          }
+          // Push current Explorer state to cloud (new unlocks or not)
+          const supabase = createClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            pushExplorerPoints(supabase, user.id).catch(() => {});
           }
         } catch { /* non-fatal */ }
       })();

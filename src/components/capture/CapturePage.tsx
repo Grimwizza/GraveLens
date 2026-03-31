@@ -27,6 +27,10 @@ export default function CapturePage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
+  // Prevents stale analyses from saving and cancels in-flight fetches
+  const analysisNonceRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
 
   // Offline detection
   const [isOffline, setIsOffline] = useState(() =>
@@ -98,6 +102,11 @@ export default function CapturePage() {
   }, []);
 
   const handleFileChosen = useCallback(async (file: File) => {
+    // Invalidate any in-flight analysis for the previous photo
+    analysisNonceRef.current += 1;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+
     const raw = await fileToDataUrl(file);
     const dataUrl = await correctOrientation(file, raw);
     setPreviewUrl(dataUrl);
@@ -110,27 +119,27 @@ export default function CapturePage() {
   const handleAnalyze = useCallback(async () => {
     if (!selectedFile || !previewUrl) return;
 
+    // Snapshot the nonce at the start — if it changes, a newer photo was taken
+    const nonce = analysisNonceRef.current;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setPhase("processing");
     setProgress(10);
     setProgressLabel("Reading image…");
 
     try {
       // ── Parallel phase ──────────────────────────────────────────────────
-      // All three independent operations start simultaneously:
-      //   • EXIF extraction  (instant — reads file metadata)
-      //   • Claude analysis  (3–8s — the critical path)
-      //   • Image resize     (instant — canvas op, runs in parallel)
-      // Geocoding starts immediately after EXIF resolves, overlapping Claude.
       setProgress(20);
       setProgressLabel("Analyzing marker…");
 
-      // Pre-process + resize for Claude while EXIF runs
       const [preprocessed, exifLoc] = await Promise.all([
         preprocessAndResize(previewUrl),
         extractExifLocation(selectedFile),
       ]);
 
-      // Kick off geocoding immediately — it overlaps the Claude call
+      if (analysisNonceRef.current !== nonce) return; // newer photo was taken
+
       const geocodePromise = exifLoc ? reverseGeocode(exifLoc.lat, exifLoc.lng) : Promise.resolve(null);
 
       // ── Claude analysis ─────────────────────────────────────────────────
@@ -142,15 +151,34 @@ export default function CapturePage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ imageBase64: preprocessed.base64, mimeType: preprocessed.mimeType }),
+          signal: controller.signal,
         });
 
         if (claudeRes.ok) {
           const { extracted: claudeExtracted, _model } = await claudeRes.json();
           if (claudeExtracted) {
             extracted = claudeExtracted;
-            // If Sonnet was used as fallback, surface it in the label
             if (_model && _model.includes("sonnet")) {
               setProgressLabel("Enhanced analysis complete…");
+            }
+          }
+        } else if (claudeRes.status === 429) {
+          // Rate limited — tell the user rather than silently degrading to OCR
+          setProgressLabel("Too many scans in a row — retrying…");
+          await new Promise((r) => setTimeout(r, 3000));
+          if (analysisNonceRef.current !== nonce) return;
+          // One retry after the backoff
+          const retryRes = await fetch("/api/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageBase64: preprocessed.base64, mimeType: preprocessed.mimeType }),
+            signal: controller.signal,
+          });
+          if (retryRes.ok) {
+            const { extracted: claudeExtracted, _model } = await retryRes.json();
+            if (claudeExtracted) {
+              extracted = claudeExtracted;
+              if (_model && _model.includes("sonnet")) setProgressLabel("Enhanced analysis complete…");
             }
           }
         } else {
@@ -158,12 +186,13 @@ export default function CapturePage() {
           console.warn("Claude API returned", claudeRes.status, errorData.details ?? "");
         }
       } catch (claudeErr) {
+        if (claudeErr instanceof Error && claudeErr.name === "AbortError") return; // photo changed
         console.warn("Claude request failed:", claudeErr);
       }
 
+      if (analysisNonceRef.current !== nonce) return; // newer photo was taken
+
       // ── Tesseract fallback (only if Claude completely failed) ───────────
-      // Dynamically imported so the ~10 MB WASM is never downloaded on the
-      // happy path. Only loads when the network is unavailable or Claude errors.
       if (!extracted) {
         setProgressLabel("Reading inscription locally…");
         try {
@@ -176,6 +205,8 @@ export default function CapturePage() {
           extracted.confidence = "low";
         }
       }
+
+      if (analysisNonceRef.current !== nonce) return; // newer photo was taken
 
       // ── Await geocode result (likely already done) ──────────────────────
       setProgress(80);
@@ -200,6 +231,7 @@ export default function CapturePage() {
       setProgress(100);
       router.push(`/result/${id}`);
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       console.error("CapturePage: Analysis failed:", err instanceof Error ? err.message : err);
       setPhase("idle");
     }

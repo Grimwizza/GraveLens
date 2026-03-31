@@ -213,6 +213,7 @@ export default function ArchiveMap({
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const leafletRef = useRef<any>(null);
   const graveLayerRef = useRef<any>(null);
   const overlayLayerRef = useRef<any>(null);
   const autoFetchTimerRef = useRef<any>(null);
@@ -244,6 +245,7 @@ export default function ArchiveMap({
 
     (async () => {
       const L = (await import("leaflet")).default ?? await import("leaflet");
+      leafletRef.current = L;
       if (cancelled || !mapRef.current) return;
 
       delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -366,133 +368,128 @@ export default function ArchiveMap({
   useEffect(() => {
     const map = mapInstanceRef.current;
     const layer = graveLayerRef.current;
-    if (!map || !layer) return;
+    const L = leafletRef.current;
+    if (!map || !layer || !L) return;
 
-    import("leaflet").then((mod) => {
-      const L = (mod as any).default ?? mod;
-      layer.clearLayers();
+    layer.clearLayers();
 
-      const validGraves = graves.filter((g) => g.location?.lat && g.location?.lng);
-      const graveIcon = L.divIcon({
-        html: GRAVE_ICON_HTML,
-        className: "",
-        iconSize: [28, 36],
-        iconAnchor: [14, 36],
-        popupAnchor: [0, -38],
-      });
-
-      validGraves.forEach((grave) => {
-        const name = grave.extracted.name || "Unknown";
-        const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" – ");
-        const popup = `
-          <div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
-            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0 0 2px;">${name}</p>
-            ${dates ? `<p style="font-size:11px;color:#c9a84c;margin:0 0 6px;">${dates}</p>` : ""}
-            <img src="${grave.photoDataUrl}" style="width:100%;height:80px;object-fit:cover;border-radius:6px;" />
-          </div>`;
-        L.marker([grave.location.lat, grave.location.lng], { icon: graveIcon })
-          .addTo(layer)
-          .bindPopup(popup);
-      });
-
-      if (validGraves.length > 1 && map.getZoom() <= 5) {
-        const bounds = L.latLngBounds(validGraves.map((g) => [g.location.lat, g.location.lng] as [number, number]));
-        map.fitBounds(bounds, { padding: [40, 40] });
-      }
+    const validGraves = graves.filter((g) => g.location?.lat && g.location?.lng);
+    const graveIcon = L.divIcon({
+      html: GRAVE_ICON_HTML,
+      className: "",
+      iconSize: [28, 36],
+      iconAnchor: [14, 36],
+      popupAnchor: [0, -38],
     });
+
+    validGraves.forEach((grave) => {
+      const name = grave.extracted.name || "Unknown";
+      const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" – ");
+      const popup = `
+        <div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
+          <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0 0 2px;">${name}</p>
+          ${dates ? `<p style="font-size:11px;color:#c9a84c;margin:0 0 6px;">${dates}</p>` : ""}
+          <img src="${grave.photoDataUrl}" style="width:100%;height:80px;object-fit:cover;border-radius:6px;" />
+        </div>`;
+      L.marker([grave.location.lat, grave.location.lng], { icon: graveIcon })
+        .addTo(layer)
+        .bindPopup(popup);
+    });
+
+    if (validGraves.length > 1 && map.getZoom() <= 5) {
+      const bounds = L.latLngBounds(validGraves.map((g) => [g.location.lat, g.location.lng] as [number, number]));
+      map.fitBounds(bounds, { padding: [40, 40] });
+    }
   }, [graves]);
 
   // ── Overlay layer: auto + manual results ──────────────────────────────────────
   useEffect(() => {
     const map = mapInstanceRef.current;
     const layer = overlayLayerRef.current;
-    if (!map || !layer) return;
+    const L = leafletRef.current;
+    if (!map || !layer || !L) return;
 
     layer.clearLayers();
 
-    import("leaflet").then((mod) => {
-      const L = (mod as any).default ?? mod;
+    const figureIconMap: Record<string, string> = {
+      political: "🏛️", military: "⚔️", artist: "🎨",
+      musician: "🎵", actor: "🎭", other: "📍",
+    };
 
-      const figureIconMap: Record<string, string> = {
-        political: "🏛️", military: "⚔️", artist: "🎨",
-        musician: "🎵", actor: "🎭", other: "📍",
-      };
+    const makeCircleIcon = (emoji: string, bg = "#1a1917", border = "#2e2b28") =>
+      L.divIcon({
+        html: `<div style="width:32px;height:32px;background:${bg};border-radius:50%;border:2px solid ${border};display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 8px rgba(0,0,0,0.4);">${emoji}</div>`,
+        className: "", iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -16],
+      });
 
-      const makeCircleIcon = (emoji: string, bg = "#1a1917", border = "#2e2b28") =>
-        L.divIcon({
-          html: `<div style="width:32px;height:32px;background:${bg};border-radius:50%;border:2px solid ${border};display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 8px rgba(0,0,0,0.4);">${emoji}</div>`,
-          className: "", iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -16],
+    if (!hasManualResults) {
+      // ── Auto: Wikidata buried figures ─────────────────────────────────────
+      autoFigures.forEach((n: NotableFigure) => {
+        const icon = makeCircleIcon(figureIconMap[n.category] ?? "📍");
+        const html = `<div style="font-family:system-ui;min-width:180px;padding:14px;background:#1a1917;border-radius:10px;">
+          <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${n.label}</p>
+          <p style="font-size:11px;color:#c9a84c;margin-top:2px;">${n.occupationLabel || n.category}</p>
+          ${n.wikipediaUrl ? `<a href="${n.wikipediaUrl}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;">Wikipedia →</a>` : ""}
+        </div>`;
+        L.marker([n.lat, n.lng], { icon }).addTo(layer).bindPopup(html);
+      });
+
+      // ── Auto: Overpass heritage sites ─────────────────────────────────────
+      autoHeritagePlaces.forEach((h: HeritagePlace) => {
+        const icon = makeCircleIcon(heritageIcon(h.type), "#2e2b28", "#3a3733");
+        const html = `<div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
+          <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${h.name}</p>
+          <p style="font-size:11px;color:#c9a84c;margin-top:2px;text-transform:capitalize;">${h.type}</p>
+          ${h.wikipedia ? `<a href="${h.wikipedia}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;font-size:13px;">Wikipedia →</a>` : ""}
+        </div>`;
+        L.marker([h.lat, h.lng], { icon }).addTo(layer).bindPopup(html);
+      });
+    }
+
+    // ── Manual search results ───────────────────────────────────────────────
+    if (manualFigures) {
+      manualFigures.forEach((n: NotableFigure) => {
+        const icon = makeCircleIcon(figureIconMap[n.category] ?? "📍");
+        const html = `<div style="font-family:system-ui;min-width:180px;padding:14px;background:#1a1917;border-radius:10px;">
+          <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${n.label}</p>
+          <p style="font-size:11px;color:#c9a84c;margin-top:2px;">${n.occupationLabel || n.category}</p>
+          ${n.wikipediaUrl ? `<a href="${n.wikipediaUrl}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;">Wikipedia →</a>` : ""}
+        </div>`;
+        L.marker([n.lat, n.lng], { icon }).addTo(layer).bindPopup(html);
+      });
+    }
+
+    if (manualCemeteries) {
+      manualCemeteries.forEach((c) => {
+        const icon = L.divIcon({
+          html: `<div style="width:34px;height:34px;background:linear-gradient(135deg,#4a4845,#2e2c2a);border-radius:6px;border:2px solid #1a1917;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,0.5);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 21h12"/><path d="M7 21v-8a5 5 0 0 1 10 0v8"/><path d="M12 7v4"/><path d="M10 9h4"/>
+            </svg>
+          </div>`,
+          className: "", iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -38],
         });
+        const popup = `<div style="padding:10px;font-family:system-ui;background:#1a1917;border-radius:8px;min-width:140px;">
+          <b style="color:#f5f2ed;">${c.name}</b>
+          ${c.wikipedia ? `<br/><a href="${c.wikipedia}" target="_blank" style="color:#c9a84c;font-size:12px;">Wikipedia →</a>` : ""}
+        </div>`;
+        L.marker([c.lat, c.lng], { icon }).addTo(layer).bindPopup(popup);
+      });
+    }
 
-      if (!hasManualResults) {
-        // ── Auto: Wikidata buried figures ───────────────────────────────────
-        autoFigures.forEach((n: NotableFigure) => {
-          const icon = makeCircleIcon(figureIconMap[n.category] ?? "📍");
-          const html = `<div style="font-family:system-ui;min-width:180px;padding:14px;background:#1a1917;border-radius:10px;">
-            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${n.label}</p>
-            <p style="font-size:11px;color:#c9a84c;margin-top:2px;">${n.occupationLabel || n.category}</p>
-            ${n.wikipediaUrl ? `<a href="${n.wikipediaUrl}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;">Wikipedia →</a>` : ""}
-          </div>`;
-          L.marker([n.lat, n.lng], { icon }).addTo(layer).bindPopup(html);
-        });
-
-        // ── Auto: Overpass heritage sites ───────────────────────────────────
-        autoHeritagePlaces.forEach((h: HeritagePlace) => {
-          const icon = makeCircleIcon(heritageIcon(h.type), "#2e2b28", "#3a3733");
-          const html = `<div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
-            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${h.name}</p>
-            <p style="font-size:11px;color:#c9a84c;margin-top:2px;text-transform:capitalize;">${h.type}</p>
-            ${h.wikipedia ? `<a href="${h.wikipedia}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;font-size:13px;">Wikipedia →</a>` : ""}
-          </div>`;
-          L.marker([h.lat, h.lng], { icon }).addTo(layer).bindPopup(html);
-        });
-      }
-
-      // ── Manual search results ─────────────────────────────────────────────
-      if (manualFigures) {
-        manualFigures.forEach((n: NotableFigure) => {
-          const icon = makeCircleIcon(figureIconMap[n.category] ?? "📍");
-          const html = `<div style="font-family:system-ui;min-width:180px;padding:14px;background:#1a1917;border-radius:10px;">
-            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${n.label}</p>
-            <p style="font-size:11px;color:#c9a84c;margin-top:2px;">${n.occupationLabel || n.category}</p>
-            ${n.wikipediaUrl ? `<a href="${n.wikipediaUrl}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;">Wikipedia →</a>` : ""}
-          </div>`;
-          L.marker([n.lat, n.lng], { icon }).addTo(layer).bindPopup(html);
-        });
-      }
-
-      if (manualCemeteries) {
-        manualCemeteries.forEach((c) => {
-          const icon = L.divIcon({
-            html: `<div style="width:34px;height:34px;background:linear-gradient(135deg,#4a4845,#2e2c2a);border-radius:6px;border:2px solid #1a1917;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,0.5);">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 21h12"/><path d="M7 21v-8a5 5 0 0 1 10 0v8"/><path d="M12 7v4"/><path d="M10 9h4"/>
-              </svg>
-            </div>`,
-            className: "", iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -38],
-          });
-          const popup = `<div style="padding:10px;font-family:system-ui;background:#1a1917;border-radius:8px;min-width:140px;">
-            <b style="color:#f5f2ed;">${c.name}</b>
-            ${c.wikipedia ? `<br/><a href="${c.wikipedia}" target="_blank" style="color:#c9a84c;font-size:12px;">Wikipedia →</a>` : ""}
-          </div>`;
-          L.marker([c.lat, c.lng], { icon }).addTo(layer).bindPopup(popup);
-        });
-      }
-
-      if (manualRelatives) {
-        manualRelatives.forEach((g) => {
-          const icon = makeCircleIcon("👤", "linear-gradient(135deg,#7c5cbf,#5b3fa0)", "#1a1917");
-          const name = g.extracted.name || "Unknown";
-          const cemetery = g.location?.cemetery || "";
-          const html = `<div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
-            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0 0 4px;">${name}</p>
-            ${cemetery ? `<p style="font-size:11px;color:#c9a84c;margin:0;">${cemetery}</p>` : ""}
-            <img src="${g.photoDataUrl}" style="width:100%;height:72px;object-fit:cover;border-radius:6px;margin-top:6px;" />
-          </div>`;
-          L.marker([g.location.lat, g.location.lng], { icon }).addTo(layer).bindPopup(html);
-        });
-      }
-    });
+    if (manualRelatives) {
+      manualRelatives.forEach((g) => {
+        const icon = makeCircleIcon("👤", "linear-gradient(135deg,#7c5cbf,#5b3fa0)", "#1a1917");
+        const name = g.extracted.name || "Unknown";
+        const cemetery = g.location?.cemetery || "";
+        const html = `<div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
+          <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0 0 4px;">${name}</p>
+          ${cemetery ? `<p style="font-size:11px;color:#c9a84c;margin:0;">${cemetery}</p>` : ""}
+          <img src="${g.photoDataUrl}" style="width:100%;height:72px;object-fit:cover;border-radius:6px;margin-top:6px;" />
+        </div>`;
+        L.marker([g.location.lat, g.location.lng], { icon }).addTo(layer).bindPopup(html);
+      });
+    }
   }, [autoFigures, autoHeritagePlaces, manualFigures, manualCemeteries, manualRelatives, hasManualResults]);
 
   // ── Manual search trigger ─────────────────────────────────────────────────────

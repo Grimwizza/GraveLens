@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/browser";
-import { syncLocalToCloud } from "@/lib/cloudSync";
+import { syncLocalToCloud, pushExplorerPoints, pullExplorerPoints } from "@/lib/cloudSync";
 
 export default function ProfileBadge() {
   const { user, loading } = useAuth();
@@ -39,7 +39,10 @@ export default function ProfileBadge() {
     setSyncResult(null);
     try {
       const supabase = createClient();
-      const { synced, failed } = await syncLocalToCloud(supabase, user.id);
+      const [{ synced, failed }] = await Promise.all([
+        syncLocalToCloud(supabase, user.id),
+        pushExplorerPoints(supabase, user.id).catch(() => {}),
+      ]);
       setSyncResult(
         synced === 0 && failed === 0
           ? "Everything is already synced."
