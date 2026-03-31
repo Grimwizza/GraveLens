@@ -14,6 +14,15 @@ const SYSTEM_PROMPT = `You are an expert at reading grave markers and historical
 Analyze the photograph and extract all visible information with high accuracy.
 Return ONLY valid JSON — no markdown, no explanation, no code fences.`;
 
+const RESCAN_SYSTEM_PROMPT = `You are a forensic historian and expert paleographer specializing in cemetery records and historical headstones.
+A previous AI analysis of this grave marker produced questionable results. Your task is to provide the most accurate possible reading.
+Be especially careful with:
+- Names: use only real human names, never OCR artifacts or symbol strings
+- Dates: verify each date component (day 1-31, month 1-12, year 1500-present)
+- Math consistency: if birth and death years are given, ageAtDeath must match
+If text is genuinely illegible, return empty string or null — never guess nonsense.
+Return ONLY valid JSON — no markdown, no explanation, no code fences.`;
+
 const USER_PROMPT = `Analyze this grave marker photograph and extract all information. Return JSON with exactly these fields:
 
 {
@@ -40,16 +49,25 @@ Rules:
 - Calculate ageAtDeath if birth and death years are both present.
 - If text is partially obscured, include what is legible with [?] for uncertain characters.`;
 
+function buildRescanPrompt(issues: string[]): string {
+  const issueList = issues.length > 0
+    ? `\n\nThe previous scan had these specific problems that you must fix:\n${issues.map((i) => `- ${i}`).join("\n")}`
+    : "";
+  return USER_PROMPT + issueList + `\n\nIMPORTANT: Return null/empty-string for any field you cannot confidently read. Do not invent or guess data.`;
+}
+
 async function callClaude(
   client: Anthropic,
   model: string,
   imageBase64: string,
-  mimeType: string
+  mimeType: string,
+  systemPrompt: string = SYSTEM_PROMPT,
+  userPrompt: string = USER_PROMPT
 ) {
   const message = await client.messages.create({
     model,
     max_tokens: MAX_TOKENS,
-    system: SYSTEM_PROMPT,
+    system: systemPrompt,
     messages: [
       {
         role: "user",
@@ -62,7 +80,7 @@ async function callClaude(
               data: imageBase64,
             },
           },
-          { type: "text", text: USER_PROMPT },
+          { type: "text", text: userPrompt },
         ],
       },
     ],
@@ -89,7 +107,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { imageBase64, mimeType } = await req.json();
+    const { imageBase64, mimeType, rescan, issues } = await req.json();
     if (!imageBase64) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
@@ -97,6 +115,24 @@ export async function POST(req: NextRequest) {
     const validMime = ["image/jpeg", "image/png", "image/webp", "image/gif"];
     const finalMime = validMime.includes(mimeType) ? mimeType : "image/jpeg";
     const client = new Anthropic({ apiKey });
+
+    // ── Rescan mode: always uses Sonnet with sharpened forensic prompt ────────
+    if (rescan) {
+      console.log("[Analyze] Rescan mode — using Sonnet with forensic prompt");
+      const issueMessages: string[] = Array.isArray(issues) ? issues : [];
+      const extracted = await callClaude(
+        client,
+        MODEL_SONNET,
+        imageBase64,
+        finalMime,
+        RESCAN_SYSTEM_PROMPT,
+        buildRescanPrompt(issueMessages)
+      );
+      extracted.source = "claude";
+      extracted.analysisModel = MODEL_SONNET;
+      extracted.isRescan = true;
+      return NextResponse.json({ extracted, _model: MODEL_SONNET });
+    }
 
     // ── Tier 1: Haiku ────────────────────────────────────────────────────────
     let extracted: Record<string, unknown> | null = null;
