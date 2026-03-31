@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import BrandLogo from "@/components/ui/BrandLogo";
 import { createClient } from "@/lib/supabase/browser";
 import { syncLocalToCloud, hasEverSynced, pullExplorerPoints } from "@/lib/cloudSync";
 
-type Mode = "signin" | "signup" | "verify";
+type Mode = "signin" | "signup" | "confirm";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,12 +17,11 @@ export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [otpCode, setOtpCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resent, setResent] = useState(false);
   const [error, setError] = useState(
     authError === "auth_failed" ? "Sign-in failed. Please try again." : ""
   );
-  const otpInputRef = useRef<HTMLInputElement>(null);
 
   // Redirect away if already signed in
   useEffect(() => {
@@ -31,13 +30,6 @@ export default function LoginPage() {
       if (data.user) router.replace(next);
     });
   }, [next, router]);
-
-  // Focus OTP input when verify screen appears
-  useEffect(() => {
-    if (mode === "verify") {
-      setTimeout(() => otpInputRef.current?.focus(), 100);
-    }
-  }, [mode]);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,8 +67,8 @@ export default function LoginPage() {
           await runPostLoginSync(supabase, data.session.user.id);
           router.replace(next);
         } else {
-          // Email confirmation is enabled — show OTP entry screen
-          setMode("verify");
+          // Email confirmation is enabled — tell user to check their email
+          setMode("confirm");
         }
       }
     } finally {
@@ -84,44 +76,22 @@ export default function LoginPage() {
     }
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const token = otpCode.trim();
-    if (token.length !== 8) { setError("Enter the 8-character code from your email."); return; }
-
-    setLoading(true);
-    setError("");
-    const supabase = createClient();
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email,
-        token,
-        type: "signup",
-      });
-      if (error) { setError(error.message); return; }
-      if (data.user) await runPostLoginSync(supabase, data.user.id);
-      router.replace(next);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleResend = async () => {
+    setResent(false);
     setError("");
     const supabase = createClient();
-    await supabase.auth.signUp({
+    await supabase.auth.resend({
+      type: "signup",
       email,
-      password,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${next}`,
       },
     });
-    setOtpCode("");
-    otpInputRef.current?.focus();
+    setResent(true);
   };
 
-  // ── Verify screen ─────────────────────────────────────────────────────────
-  if (mode === "verify") {
+  // ── Confirm email screen ───────────────────────────────────────────────────
+  if (mode === "confirm") {
     return (
       <div
         className="flex flex-col h-full bg-stone-900"
@@ -132,7 +102,7 @@ export default function LoginPage() {
       >
         <div className="px-5 mb-6">
           <button
-            onClick={() => { setMode("signup"); setOtpCode(""); setError(""); }}
+            onClick={() => { setMode("signup"); setError(""); setResent(false); }}
             className="flex items-center gap-1.5 text-stone-500 active:text-stone-300 text-sm"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -143,7 +113,6 @@ export default function LoginPage() {
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center px-6 max-w-sm mx-auto w-full">
-          {/* Email icon */}
           <div className="w-16 h-16 rounded-2xl bg-stone-800 border border-stone-700 flex items-center justify-center mb-6">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="4" width="20" height="16" rx="2" />
@@ -155,51 +124,36 @@ export default function LoginPage() {
             Check your email
           </h1>
           <p className="text-stone-400 text-sm text-center mb-8 leading-relaxed">
-            We sent an 8-character code to{" "}
+            We sent a confirmation link to{" "}
             <span className="text-stone-200">{email}</span>.
-            Enter it below to verify your account.
+            Click the link in that email to activate your account.
           </p>
 
-          {error && (
-            <div className="w-full mb-4 px-4 py-3 rounded-xl text-sm text-red-300 bg-red-900/20 border border-red-800/40">
-              {error}
+          {resent && (
+            <div className="w-full mb-4 px-4 py-3 rounded-xl text-sm text-stone-300 bg-stone-800 border border-stone-700">
+              Confirmation email resent.
             </div>
           )}
 
-          <form onSubmit={handleVerifyOtp} className="w-full flex flex-col gap-3">
-            <input
-              ref={otpInputRef}
-              type="text"
-              inputMode="text"
-              autoCapitalize="none"
-              autoCorrect="off"
-              maxLength={8}
-              value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value.replace(/\W/g, ""))}
-              placeholder="00000000"
-              className="w-full h-14 rounded-xl bg-stone-800 border border-stone-700 px-4 text-center text-stone-100 text-2xl tracking-[0.5em] font-mono placeholder-stone-600 focus:outline-none focus:border-stone-500"
-            />
+          <div className="w-full flex flex-col gap-3">
             <button
-              type="submit"
-              disabled={loading || otpCode.length !== 8}
-              className="w-full h-12 rounded-xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.97] disabled:opacity-60"
+              onClick={() => { setMode("signin"); setError(""); setResent(false); }}
+              className="w-full h-12 rounded-xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.97]"
               style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
             >
-              {loading ? "Verifying…" : "Verify Email"}
+              Back to Sign In
             </button>
-          </form>
-
-          <div className="mt-6 text-center space-y-2">
-            <p className="text-stone-600 text-xs">
-              Can't find it? Check your <span className="text-stone-400">spam or junk</span> folder.
-            </p>
-            <p className="text-stone-600 text-sm">
-              Didn't receive it?{" "}
-              <button onClick={handleResend} className="text-stone-400 underline">
-                Resend code
-              </button>
-            </p>
+            <button
+              onClick={handleResend}
+              className="w-full h-10 rounded-xl border border-stone-700 text-stone-400 text-sm transition-all active:scale-[0.97]"
+            >
+              Resend confirmation email
+            </button>
           </div>
+
+          <p className="text-stone-600 text-xs text-center mt-6">
+            Can't find it? Check your <span className="text-stone-400">spam or junk</span> folder.
+          </p>
         </div>
       </div>
     );
