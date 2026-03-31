@@ -17,6 +17,14 @@ import type { QueuedCapture, ExtractedGraveData, ResearchData, GraveRecord } fro
 
 const MAX_RETRIES = 3;
 
+class RateLimitError extends Error {
+  retryAfterMs: number;
+  constructor(retryAfterMs = 10000) {
+    super("rate_limited");
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
 // Custom event name used to notify UI of queue changes
 export const QUEUE_CHANGED_EVENT = "gravelens:queue-changed";
 
@@ -87,11 +95,18 @@ async function processItem(item: QueuedCapture): Promise<void> {
         mimeType: preprocessed.mimeType,
       }),
     });
+    if (claudeRes.status === 429) {
+      // Respect Retry-After header if present, otherwise back off 15 s
+      const retryAfter = claudeRes.headers.get("retry-after");
+      const ms = retryAfter ? parseInt(retryAfter) * 1000 : 15000;
+      throw new RateLimitError(ms);
+    }
     if (claudeRes.ok) {
       const json = await claudeRes.json();
       if (json.extracted) extracted = json.extracted;
     }
-  } catch {
+  } catch (err) {
+    if (err instanceof RateLimitError) throw err;
     // Network or API failure — will retry
     throw new Error("Claude analysis failed");
   }
@@ -174,7 +189,17 @@ export async function processQueue(): Promise<void> {
     for (const item of pending) {
       try {
         await processItem(item);
-      } catch {
+        // Small gap between items so we don't immediately re-trigger rate limits
+        await new Promise((r) => setTimeout(r, 1500));
+      } catch (err) {
+        if (err instanceof RateLimitError) {
+          // Don't count rate limiting as a failure — just pause and stop this pass
+          console.log(`[Queue] Rate limited — backing off ${err.retryAfterMs}ms`);
+          await new Promise((r) => setTimeout(r, err.retryAfterMs));
+          // Re-trigger a fresh pass after the backoff
+          setTimeout(() => processQueue(), 100);
+          return;
+        }
         const updated: QueuedCapture = {
           ...item,
           retries: item.retries + 1,

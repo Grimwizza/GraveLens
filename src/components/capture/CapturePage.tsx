@@ -26,6 +26,7 @@ export default function CapturePage() {
   const [progressLabel, setProgressLabel] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [queueReason, setQueueReason] = useState<"offline" | "rate_limited" | null>(null);
 
   // Prevents stale analyses from saving and cancels in-flight fetches
   const analysisNonceRef = useRef(0);
@@ -163,24 +164,9 @@ export default function CapturePage() {
             }
           }
         } else if (claudeRes.status === 429) {
-          // Rate limited — tell the user rather than silently degrading to OCR
-          setProgressLabel("Too many scans in a row — retrying…");
-          await new Promise((r) => setTimeout(r, 3000));
-          if (analysisNonceRef.current !== nonce) return;
-          // One retry after the backoff
-          const retryRes = await fetch("/api/analyze", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ imageBase64: preprocessed.base64, mimeType: preprocessed.mimeType }),
-            signal: controller.signal,
-          });
-          if (retryRes.ok) {
-            const { extracted: claudeExtracted, _model } = await retryRes.json();
-            if (claudeExtracted) {
-              extracted = claudeExtracted;
-              if (_model && _model.includes("sonnet")) setProgressLabel("Enhanced analysis complete…");
-            }
-          }
+          // Rate limited — queue this image and let the user keep scanning
+          await handleQueueCapture("rate_limited");
+          return;
         } else {
           const errorData = await claudeRes.json().catch(() => ({}));
           console.warn("Claude API returned", claudeRes.status, errorData.details ?? "");
@@ -254,15 +240,17 @@ export default function CapturePage() {
     setPreviewUrl(null);
     setSelectedFile(null);
     setProgress(0);
+    setQueueReason(null);
   }, []);
 
 
-  const handleQueueCapture = useCallback(async () => {
+  const handleQueueCapture = useCallback(async (reason?: "offline" | "rate_limited") => {
     if (!selectedFile || !previewUrl) return;
 
+    setQueueReason(reason ?? "offline");
     setPhase("processing");
     setProgress(20);
-    setProgressLabel("Saving to queue…");
+    setProgressLabel(reason === "rate_limited" ? "Busy — adding to queue…" : "Saving to queue…");
 
     try {
       const exifLoc = await extractExifLocation(selectedFile);
@@ -329,7 +317,7 @@ export default function CapturePage() {
               />
             )}
             {phase === "queued" && (
-              <QueuedConfirmation />
+              <QueuedConfirmation reason={queueReason} />
             )}
           </div>
         )}
@@ -476,7 +464,7 @@ function IdleState({
 
 // ── Queued confirmation ─────────────────────────────────────────────────────
 
-function QueuedConfirmation() {
+function QueuedConfirmation({ reason }: { reason: "offline" | "rate_limited" | null }) {
   return (
     <div className="flex flex-col items-center gap-4 animate-fade-in text-center px-4">
       <div className="w-16 h-16 rounded-2xl bg-stone-800 border border-stone-700 flex items-center justify-center">
@@ -487,7 +475,11 @@ function QueuedConfirmation() {
       </div>
       <div>
         <p className="text-stone-100 font-semibold text-base">Saved to queue</p>
-        <p className="text-stone-500 text-sm mt-1">Will analyze automatically when back online.</p>
+        <p className="text-stone-500 text-sm mt-1">
+          {reason === "rate_limited"
+            ? "Keep scanning — this will process automatically in a moment."
+            : "Will analyze automatically when back online."}
+        </p>
       </div>
     </div>
   );
