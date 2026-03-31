@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BottomNav from "@/components/layout/BottomNav";
-import { saveGrave, getGrave, getAllGraves, getPendingResult, deletePendingResult } from "@/lib/storage";
+import { saveGrave, getGrave, getAllGraves, getPendingResult, deletePendingResult, recordCemeteryVisit } from "@/lib/storage";
+import { enrichCemetery, cemeteryId } from "@/lib/apis/cemetery";
 import { checkAndUnlock, loadStats, type Achievement } from "@/lib/achievements";
 import { createClient } from "@/lib/supabase/browser";
 import { uploadPhoto, upsertGrave, pushExplorerPoints } from "@/lib/cloudSync";
@@ -90,6 +91,28 @@ export default function ResultPage({ id }: { id: string }) {
       };
       saveGrave(autoRecord).catch(() => {});
       setSaved(true);
+
+      // Auto-create / update a CemeteryRecord when a grave is saved at a named cemetery
+      if (data.location?.cemetery && data.location?.lat && data.location?.lng) {
+        const { cemetery, lat, lng } = data.location;
+        (async () => {
+          try {
+            // Kick off enrichment in the background — non-blocking
+            const enriched = await enrichCemetery(cemetery, lat, lng);
+            await recordCemeteryVisit(enriched);
+          } catch {
+            // Enrichment failed: record a minimal visit so we always track it
+            try {
+              await recordCemeteryVisit({
+                id: cemeteryId(cemetery, lat, lng),
+                name: cemetery,
+                lat,
+                lng,
+              });
+            } catch { /* truly non-fatal */ }
+          }
+        })();
+      }
 
       // Cloud sync — non-fatal if offline or not logged in
       (async () => {

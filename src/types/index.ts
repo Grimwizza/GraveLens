@@ -198,6 +198,38 @@ export interface GraveRecord {
   syncedAt?: number; // Unix ms — set after a successful cloud sync
 }
 
+/**
+ * One record per unique cemetery the user has visited.
+ * Created/updated automatically when a grave scan is saved at a new cemetery.
+ */
+export interface CemeteryRecord {
+  /** Stable key: OSM element ID (e.g. "way/123456") or SHA-1 of name+lat+lng */
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  /** Raw OSM element id used for de-duplication */
+  osmId?: string;
+  /** OSM opening_hours string, e.g. "Mo-Su 08:00-20:00" */
+  openingHours?: string;
+  phone?: string;
+  website?: string;
+  wikipediaUrl?: string;
+  /** Estimated or documented founding year/era ("1842", "circa 1880s") */
+  established?: string;
+  denomination?: string;
+  /** Short Wikipedia / AI-derived description of the cemetery */
+  description?: string;
+  /** Bullet-style notable features ("Victorian cast-iron fence", "War memorial section") */
+  notableFeatures?: string[];
+  /** Historical events tied to this site */
+  historicalEvents?: string[];
+  // ── Visit tracking ────────────────────────────────────────────────────────
+  visitCount: number;
+  firstVisited: number; // Unix ms
+  lastVisited: number;  // Unix ms
+}
+
 export interface AnalysisResult {
   extracted: ExtractedGraveData;
   location: GeoLocation | null;

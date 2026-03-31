@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GraveRecord, NotableFigure } from "@/types";
 import { getNotableFiguresInBounds } from "@/lib/apis/wikidata";
+import { formatOpeningHours } from "@/lib/apis/cemetery";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -11,6 +12,10 @@ interface CemeteryFeature {
   lat: number;
   lng: number;
   name: string;
+  osmId?: string;
+  openingHours?: string;
+  phone?: string;
+  website?: string;
   wikipedia?: string;
 }
 
@@ -78,6 +83,10 @@ out center tags;
     for (const el of data.elements ?? []) {
       const name = el.tags?.name;
       if (!name) continue;
+      const osmId = `${el.type}/${el.id}`;
+      const openingHours = el.tags?.opening_hours;
+      const phone = el.tags?.phone ?? el.tags?.["contact:phone"];
+      const website = el.tags?.website ?? el.tags?.["contact:website"] ?? el.tags?.url;
       const lat = el.lat ?? el.center?.lat;
       const lng = el.lon ?? el.center?.lon;
       if (!lat || !lng) continue;
@@ -85,7 +94,7 @@ out center tags;
       const wikipedia = wikiRaw
         ? `https://en.wikipedia.org/wiki/${encodeURIComponent(wikiRaw.replace(/^en:/, "").replace(/ /g, "_"))}`
         : undefined;
-      results.push({ lat, lng, name, wikipedia });
+      results.push({ lat, lng, name, osmId, openingHours, phone, website, wikipedia });
     }
     const seen = new Set<string>();
     return results.filter((c) => { if (seen.has(c.name)) return false; seen.add(c.name); return true; });
@@ -469,13 +478,46 @@ export default function ArchiveMap({
           </div>`,
           className: "", iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -38],
         });
-        const popup = `<div style="padding:10px;font-family:system-ui;background:#1a1917;border-radius:8px;min-width:140px;">
-          <b style="color:#f5f2ed;">${c.name}</b>
-          ${c.wikipedia ? `<br/><a href="${c.wikipedia}" target="_blank" style="color:#c9a84c;font-size:12px;">Wikipedia →</a>` : ""}
-        </div>`;
-        L.marker([c.lat, c.lng], { icon }).addTo(layer).bindPopup(popup);
+
+        const hoursLine = c.openingHours
+          ? `<div style="display:flex;align-items:flex-start;gap:6px;margin-top:6px;">
+               <span style="font-size:13px;flex-shrink:0;">🕐</span>
+               <span style="font-size:11px;color:#a09585;line-height:1.4;">${formatOpeningHours(c.openingHours)}</span>
+             </div>`
+          : "";
+
+        const phoneLine = c.phone
+          ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+               <span style="font-size:13px;">📞</span>
+               <a href="tel:${c.phone}" style="font-size:11px;color:#c9a84c;text-decoration:none;">${c.phone}</a>
+             </div>`
+          : "";
+
+        const appleUrl = `https://maps.apple.com/?q=${encodeURIComponent(c.name)}&ll=${c.lat},${c.lng}`;
+        const googleUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.name)}&center=${c.lat},${c.lng}`;
+
+        const popup = `
+          <div style="font-family:system-ui;min-width:220px;max-width:260px;padding:14px;background:#1a1917;border-radius:10px;">
+            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0 0 2px;">${c.name}</p>
+            <p style="font-size:10px;color:#6a6560;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px;">Cemetery</p>
+            ${hoursLine}
+            ${phoneLine}
+            <div style="display:flex;gap:6px;margin-top:10px;">
+              <a href="${appleUrl}" target="_blank"
+                 style="flex:1;padding:7px 4px;background:#2e2b28;color:#f5f2ed;text-align:center;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
+                🍎 Apple Maps
+              </a>
+              <a href="${googleUrl}" target="_blank"
+                 style="flex:1;padding:7px 4px;background:#2e2b28;color:#f5f2ed;text-align:center;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
+                🗺 Google Maps
+              </a>
+            </div>
+            ${c.wikipedia ? `<a href="${c.wikipedia}" target="_blank" style="display:block;margin-top:6px;padding:6px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">Wikipedia →</a>` : ""}
+          </div>`;
+        L.marker([c.lat, c.lng], { icon }).addTo(layer).bindPopup(popup, { maxWidth: 280 });
       });
     }
+
 
     if (manualRelatives) {
       manualRelatives.forEach((g) => {

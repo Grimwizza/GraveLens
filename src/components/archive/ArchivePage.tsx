@@ -3,17 +3,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import BottomNav from "@/components/layout/BottomNav";
 import ProfileBadge from "@/components/auth/ProfileBadge";
-import { getAllGraves, deleteGrave, saveGrave } from "@/lib/storage";
+import { getAllGraves, deleteGrave, saveGrave, getAllCemeteries, deleteCemetery } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/browser";
 import { fetchAllFromCloud, deleteFromCloud } from "@/lib/cloudSync";
-import type { GraveRecord } from "@/types";
+import type { GraveRecord, CemeteryRecord } from "@/types";
 import Link from "next/link";
 import ThematicIllustration from "@/components/ui/ThematicIllustration";
 import { reverseGeocode } from "@/lib/apis/nominatim";
+import { formatOpeningHours } from "@/lib/apis/cemetery";
 
 type SortField = "birthYear" | "deathYear";
 type SortDir = "asc" | "desc";
 type ViewMode = "list" | "tile" | "cover";
+type ArchiveTab = "markers" | "places";
+
 
 // ── Viewed-item tracking (dismisses "Recently Added" badge) ───────────────
 const VIEWED_KEY = "gl_viewed_ids";
@@ -69,9 +72,11 @@ function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
 // ── Component ──────────────────────────────────────────────────────────────
 export default function ArchivePage() {
   const [graves, setGraves] = useState<GraveRecord[]>([]);
+  const [cemeteries, setCemeteries] = useState<CemeteryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [enriching, setEnriching] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [archiveTab, setArchiveTab] = useState<ArchiveTab>("markers");
 
   // ── Assignment flow state ─────────────────────────────────────────────
   // Queue of grave IDs that still need a cemetery name after auto-enrichment
@@ -158,6 +163,12 @@ export default function ArchivePage() {
 
     return () => clearTimeout(timer);
   }, []);
+
+  // ── Load cemeteries from IDB ──────────────────────────────────────────────
+  useEffect(() => {
+    getAllCemeteries().then(setCemeteries).catch(() => {});
+  }, []);
+
 
   // ── Cemetery enrichment ──────────────────────────────────────────────────
   // 1. Check learned cemeteries (instant, no network)
@@ -455,10 +466,15 @@ export default function ArchivePage() {
               <path d="M3 12h18M3 18h18M7 12v6M12 12v6M17 12v6" />
             </svg>
             <span className="font-serif text-stone-100 text-xl font-semibold">Archive</span>
-            {graves.length > 0 && (
+            {archiveTab === "markers" && graves.length > 0 && (
               <span className="text-sm text-stone-500 ml-1">
                 ({filteredGraves.length}{filteredGraves.length !== graves.length && `/${graves.length}`}{" "}
                 {graves.length === 1 ? "marker" : "markers"})
+              </span>
+            )}
+            {archiveTab === "places" && cemeteries.length > 0 && (
+              <span className="text-sm text-stone-500 ml-1">
+                ({cemeteries.length} {cemeteries.length === 1 ? "place" : "places"})
               </span>
             )}
           </div>
@@ -573,6 +589,44 @@ export default function ArchivePage() {
             <ProfileBadge />
           </div>
         </div>
+
+        {/* Markers / Places tab bar */}
+        <div className="flex border-b border-stone-800">
+          {(["markers", "places"] as ArchiveTab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setArchiveTab(tab)}
+              className="flex-1 py-2.5 text-sm font-medium capitalize transition-colors relative"
+              style={{
+                color: archiveTab === tab ? "#c9a84c" : "#6a6560",
+                borderBottom: archiveTab === tab ? "2px solid #c9a84c" : "2px solid transparent",
+              }}
+            >
+              {tab === "markers" ? (
+                <span className="flex items-center justify-center gap-1.5">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                    <circle cx="12" cy="9" r="2.5"/>
+                  </svg>
+                  Markers
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-1.5">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 21h12"/><path d="M7 21v-8a5 5 0 0 1 10 0v8"/><path d="M12 7v4"/><path d="M10 9h4"/>
+                  </svg>
+                  Places
+                  {cemeteries.length > 0 && (
+                    <span className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold" style={{ background: archiveTab === "places" ? "rgba(201,168,76,0.2)" : "rgba(255,255,255,0.06)", color: archiveTab === "places" ? "#c9a84c" : "#6a6560" }}>
+                      {cemeteries.length}
+                    </span>
+                  )}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
         {/* Search panel */}
         {searchOpen && (
           <div className="px-4 pb-3 border-t border-stone-800 pt-3">
@@ -728,6 +782,17 @@ export default function ArchivePage() {
               />
             )}
           </>
+        )}
+
+        {/* ── Places tab ── */}
+        {!loading && archiveTab === "places" && (
+          <CemeterySection
+            cemeteries={cemeteries}
+            onDelete={async (id) => {
+              await deleteCemetery(id);
+              setCemeteries((prev) => prev.filter((c) => c.id !== id));
+            }}
+          />
         )}
       </main>
 
@@ -1377,6 +1442,159 @@ function GraveList({
                 </>
               )}
             </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Cemetery / Places section ────────────────────────────────────────────────
+
+function CemeterySection({
+  cemeteries,
+  onDelete,
+}: {
+  cemeteries: CemeteryRecord[];
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  if (cemeteries.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 px-8 py-20 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-stone-800 border border-stone-700 flex items-center justify-center">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#6a6560" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 21h12"/><path d="M7 21v-8a5 5 0 0 1 10 0v8"/><path d="M12 7v4"/><path d="M10 9h4"/>
+          </svg>
+        </div>
+        <div>
+          <p className="text-stone-300 font-semibold text-base">No places yet</p>
+          <p className="text-stone-500 text-sm mt-1 leading-relaxed">
+            Cemetery records are created automatically when you scan a grave marker at a new location.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col divide-y divide-stone-800">
+      {cemeteries.map((c) => {
+        const appleUrl = `https://maps.apple.com/?q=${encodeURIComponent(c.name)}&ll=${c.lat},${c.lng}`;
+        const googleUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.name)}&center=${c.lat},${c.lng}`;
+        const firstDate = new Date(c.firstVisited).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        const lastDate = new Date(c.lastVisited).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+        return (
+          <div key={c.id} className="px-5 py-5 flex flex-col gap-3">
+            {/* Name + badge row */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="font-serif text-stone-100 text-base font-semibold leading-snug">{c.name}</p>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                  {c.established && (
+                    <span className="text-[11px] text-stone-500">Est. {c.established}</span>
+                  )}
+                  {c.denomination && (
+                    <span className="text-[11px] text-stone-500 capitalize">{c.denomination}</span>
+                  )}
+                </div>
+              </div>
+              <div className="shrink-0 flex items-center gap-2">
+                {/* Visit badge */}
+                <div className="flex flex-col items-center px-2 py-1 rounded-lg bg-stone-800 border border-stone-700 min-w-[44px]">
+                  <span className="text-xs font-bold" style={{ color: "#c9a84c" }}>{c.visitCount}</span>
+                  <span className="text-[9px] text-stone-500 uppercase tracking-wide">{c.visitCount === 1 ? "visit" : "visits"}</span>
+                </div>
+                {/* Delete */}
+                {deleteId === c.id ? (
+                  <div className="flex gap-1">
+                    <button onClick={() => onDelete(c.id).then(() => setDeleteId(null))} className="text-xs text-red-400 px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20">Delete</button>
+                    <button onClick={() => setDeleteId(null)} className="text-xs text-stone-500">Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setDeleteId(c.id)} className="w-8 h-8 flex items-center justify-center text-stone-700 active:text-red-400 rounded-lg">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Hours & phone */}
+            {(c.openingHours || c.phone) && (
+              <div className="flex flex-col gap-1">
+                {c.openingHours && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-stone-500 text-xs mt-0.5 shrink-0">🕐</span>
+                    <span className="text-stone-400 text-xs leading-relaxed">{formatOpeningHours(c.openingHours)}</span>
+                  </div>
+                )}
+                {c.phone && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-stone-500 text-xs shrink-0">📞</span>
+                    <a href={`tel:${c.phone}`} className="text-gold-400 text-xs">{c.phone}</a>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Description */}
+            {c.description && (
+              <p className="text-stone-400 text-[13px] leading-relaxed">{c.description}</p>
+            )}
+
+            {/* Notable features */}
+            {c.notableFeatures && c.notableFeatures.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <p className="text-[10px] uppercase tracking-widest text-stone-600 font-semibold">Notable Features</p>
+                {c.notableFeatures.map((f, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className="text-stone-600 text-xs mt-0.5 shrink-0">•</span>
+                    <span className="text-stone-400 text-xs leading-relaxed">{f}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Historical events */}
+            {c.historicalEvents && c.historicalEvents.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <p className="text-[10px] uppercase tracking-widest text-stone-600 font-semibold">Historical Events</p>
+                {c.historicalEvents.map((e, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className="text-[10px] mt-0.5 shrink-0">📜</span>
+                    <span className="text-stone-400 text-xs leading-relaxed">{e}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Navigation buttons */}
+            <div className="flex gap-2 mt-1">
+              <a href={appleUrl} target="_blank" rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors">
+                🍎 Apple Maps
+              </a>
+              <a href={googleUrl} target="_blank" rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors">
+                🗺 Google Maps
+              </a>
+              {c.wikipediaUrl && (
+                <a href={c.wikipediaUrl} target="_blank" rel="noopener noreferrer"
+                  className="px-3 py-2 rounded-xl text-xs font-semibold border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors"
+                  style={{ color: "#c9a84c" }}>
+                  Wiki
+                </a>
+              )}
+            </div>
+
+            {/* Visit metadata */}
+            <p className="text-[10px] text-stone-700">
+              First visited {firstDate}{c.visitCount > 1 ? ` · Last visited ${lastDate}` : ""}
+            </p>
           </div>
         );
       })}

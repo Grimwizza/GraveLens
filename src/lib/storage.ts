@@ -1,11 +1,12 @@
 import { openDB, type IDBPDatabase } from "idb";
-import type { GraveRecord, QueuedCapture } from "@/types";
+import type { GraveRecord, QueuedCapture, CemeteryRecord } from "@/types";
 
 const DB_NAME = "gravelens";
-const DB_VERSION = 4;
+const DB_VERSION = 5;          // ← bumped from 4 to add cemetery store
 const STORE_NAME = "graves";
 const PENDING_STORE = "pending";
 const QUEUE_STORE = "queue";
+const CEMETERY_STORE = "cemeteries";
 
 async function getDB(): Promise<IDBPDatabase> {
   return openDB(DB_NAME, DB_VERSION, {
@@ -20,6 +21,9 @@ async function getDB(): Promise<IDBPDatabase> {
       }
       if (!db.objectStoreNames.contains(QUEUE_STORE)) {
         db.createObjectStore(QUEUE_STORE, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(CEMETERY_STORE)) {
+        db.createObjectStore(CEMETERY_STORE, { keyPath: "id" });
       }
     },
   });
@@ -63,8 +67,6 @@ export async function getGraveCount(): Promise<number> {
 }
 
 // ── In-flight analysis results (replaces sessionStorage) ──────────────────
-// Photos can be 5–15 MB as base64, which exceeds sessionStorage quota.
-// IndexedDB has no practical size limit.
 
 export async function savePendingResult(
   id: string,
@@ -113,4 +115,60 @@ export async function removeFromQueue(id: string): Promise<void> {
 export async function getQueueCount(): Promise<number> {
   const db = await getDB();
   return db.count(QUEUE_STORE);
+}
+
+// ── Cemetery archive ───────────────────────────────────────────────────────
+
+export async function saveCemetery(record: CemeteryRecord): Promise<void> {
+  const db = await getDB();
+  await db.put(CEMETERY_STORE, record);
+}
+
+export async function getCemetery(id: string): Promise<CemeteryRecord | undefined> {
+  const db = await getDB();
+  return db.get(CEMETERY_STORE, id);
+}
+
+export async function getAllCemeteries(): Promise<CemeteryRecord[]> {
+  const db = await getDB();
+  const records = await db.getAll(CEMETERY_STORE);
+  return records.sort((a, b) => b.lastVisited - a.lastVisited);
+}
+
+export async function deleteCemetery(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete(CEMETERY_STORE, id);
+}
+
+/**
+ * Upserts a cemetery visit.  If the cemetery already exists in the archive
+ * the visitCount and lastVisited are incremented; otherwise a new record is
+ * created with the supplied data.
+ */
+export async function recordCemeteryVisit(
+  partial: Omit<CemeteryRecord, "visitCount" | "firstVisited" | "lastVisited"> & { id: string }
+): Promise<CemeteryRecord> {
+  const db = await getDB();
+  const existing: CemeteryRecord | undefined = await db.get(CEMETERY_STORE, partial.id);
+  const now = Date.now();
+
+  const record: CemeteryRecord = existing
+    ? {
+        ...existing,
+        // Merge enriched data if it arrives after the first visit
+        ...Object.fromEntries(
+          Object.entries(partial).filter(([, v]) => v !== undefined && v !== null)
+        ),
+        visitCount: existing.visitCount + 1,
+        lastVisited: now,
+      }
+    : {
+        ...partial,
+        visitCount: 1,
+        firstVisited: now,
+        lastVisited: now,
+      };
+
+  await db.put(CEMETERY_STORE, record);
+  return record;
 }
