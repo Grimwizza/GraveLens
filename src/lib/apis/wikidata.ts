@@ -111,7 +111,8 @@ export async function getNotableFiguresInBounds(
   south: number,
   west: number,
   north: number,
-  east: number
+  east: number,
+  minSitelinks = 2
 ): Promise<NotableFigure[]> {
   const query = `
 SELECT DISTINCT ?item ?itemLabel ?coords ?occupation ?occupationLabel ?wikipedia WHERE {
@@ -122,7 +123,7 @@ SELECT DISTINCT ?item ?itemLabel ?coords ?occupation ?occupationLabel ?wikipedia
   }
   ?item wdt:P119 ?burialPlace .
   ?item wikibase:sitelinks ?sitelinks .
-  FILTER(?sitelinks >= 2) 
+  FILTER(?sitelinks >= ${minSitelinks})
 
   OPTIONAL { ?item wdt:P106 ?occupation . }
   OPTIONAL {

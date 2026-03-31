@@ -4,6 +4,9 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState } from "react";
 import type { GraveRecord, NotableFigure } from "@/types";
 import { getNotableFiguresInBounds } from "@/lib/apis/wikidata";
+import { getWikipediaPlacesNear, type WikipediaPlace } from "@/lib/apis/wikipedia";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface CemeteryFeature {
   lat: number;
@@ -12,10 +15,18 @@ interface CemeteryFeature {
   wikipedia?: string;
 }
 
+interface HeritagePlace {
+  lat: number;
+  lng: number;
+  name: string;
+  type: string;
+  wikipedia?: string;
+}
+
 export type SearchType = "all" | "cemeteries" | "political" | "military" | "artist" | "musician" | "actor" | "relatives" | "other";
 const RELATIVE_TAGS = ["family", "relative", "ancestor", "kin", "grandparent", "parent", "mother", "father"];
 
-// ── Gravestone icon HTML ──────────────────────────────────────────────────────
+// ── Icon SVGs ─────────────────────────────────────────────────────────────────
 
 const GRAVE_ICON_HTML = `
 <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6))">
@@ -26,7 +37,20 @@ const GRAVE_ICON_HTML = `
   <rect x="10" y="20" width="8" height="9" rx="1" fill="#1a1917" opacity="0.3"/>
 </svg>`.trim();
 
-// ── Overpass cemetery query ───────────────────────────────────────────────────
+// ── Zoom-tier helpers ─────────────────────────────────────────────────────────
+
+function wikidataMinSitelinks(zoom: number): number {
+  if (zoom >= 13) return 2;
+  if (zoom >= 10) return 15;
+  if (zoom >= 8)  return 40;
+  return 75;
+}
+
+function wikipediaRadius(zoom: number): number {
+  return zoom >= 13 ? 5000 : 10000;
+}
+
+// ── Overpass: cemeteries ──────────────────────────────────────────────────────
 
 async function fetchCemeteriesInBounds(
   south: number,
@@ -56,7 +80,6 @@ out center tags;
 
     const data = await res.json();
     const results: CemeteryFeature[] = [];
-
     for (const el of data.elements ?? []) {
       const name = el.tags?.name;
       if (!name) continue;
@@ -69,19 +92,83 @@ out center tags;
         : undefined;
       results.push({ lat, lng, name, wikipedia });
     }
-
     const seen = new Set<string>();
-    return results.filter((c) => {
-      if (seen.has(c.name)) return false;
-      seen.add(c.name);
-      return true;
-    });
+    return results.filter((c) => { if (seen.has(c.name)) return false; seen.add(c.name); return true; });
   } catch {
     return [];
   }
 }
 
-// ── Get user geolocation ──────────────────────────────────────────────────────
+// ── Overpass: heritage/historic sites (zoom-tiered) ──────────────────────────
+
+async function fetchHeritageInBounds(
+  south: number,
+  west: number,
+  north: number,
+  east: number,
+  zoom: number
+): Promise<HeritagePlace[]> {
+  const bb = `(${south},${west},${north},${east})`;
+
+  let filters: string;
+  if (zoom >= 13) {
+    // Local: all historic tags
+    filters = `
+      node["historic"]${bb};
+      way["historic"]${bb};
+      node["memorial"]${bb};`;
+  } else if (zoom >= 10) {
+    // Regional: named significant sites only
+    filters = `
+      node["historic"~"battlefield|monument|memorial|fort|castle|ruins"]${bb};
+      way["historic"~"battlefield|monument|memorial|fort|castle|ruins"]${bb};
+      node["heritage"]${bb};
+      way["heritage"]${bb};`;
+  } else {
+    // State: nationally significant only
+    filters = `
+      node["historic"="battlefield"]${bb};
+      way["historic"="battlefield"]${bb};
+      node["heritage"="1"]${bb};
+      way["heritage"="1"]${bb};`;
+  }
+
+  const query = `[out:json][timeout:12];\n(\n${filters}\n);\nout center tags;`.trim();
+
+  try {
+    const res = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const results: HeritagePlace[] = [];
+    const seen = new Set<string>();
+
+    for (const el of data.elements ?? []) {
+      const name = el.tags?.name;
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      const lat = el.lat ?? el.center?.lat;
+      const lng = el.lon ?? el.center?.lon;
+      if (!lat || !lng) continue;
+      const type = el.tags?.historic ?? el.tags?.memorial ?? "heritage";
+      const wikiRaw: string | undefined = el.tags?.wikipedia;
+      const wikipedia = wikiRaw
+        ? `https://en.wikipedia.org/wiki/${encodeURIComponent(wikiRaw.replace(/^en:/, "").replace(/ /g, "_"))}`
+        : undefined;
+      results.push({ lat, lng, name, type, wikipedia });
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+// ── Geolocation helper ────────────────────────────────────────────────────────
 
 function getUserLocation(): Promise<[number, number] | null> {
   return new Promise((resolve) => {
@@ -92,6 +179,22 @@ function getUserLocation(): Promise<[number, number] | null> {
       { timeout: 6000, maximumAge: 60000 }
     );
   });
+}
+
+// ── Heritage icon emoji map ───────────────────────────────────────────────────
+
+const HERITAGE_ICONS: Record<string, string> = {
+  battlefield: "⚔️",
+  monument: "🗿",
+  memorial: "🕊️",
+  fort: "🏰",
+  castle: "🏰",
+  ruins: "🏺",
+  heritage: "🏛️",
+};
+
+function heritageIcon(type: string): string {
+  return HERITAGE_ICONS[type.toLowerCase()] ?? "🏛️";
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -120,43 +223,38 @@ export default function ArchiveMap({
   const autoFetchTimerRef = useRef<any>(null);
   const userMarkerRef = useRef<any>(null);
   const watchIdRef = useRef<number | null>(null);
-  // Ref so the auto-discovery closure always sees current value
   const hasManualResultsRef = useRef(false);
 
-  const [notableFigures, setNotableFigures] = useState<NotableFigure[]>([]);
+  // Auto-discovery state
+  const [autoFigures, setAutoFigures] = useState<NotableFigure[]>([]);
+  const [autoWikiPlaces, setAutoWikiPlaces] = useState<WikipediaPlace[]>([]);
+  const [autoHeritagePlaces, setAutoHeritagePlaces] = useState<HeritagePlace[]>([]);
+
+  // Manual search state
   const [isSearching, setIsSearching] = useState(false);
   const [manualFigures, setManualFigures] = useState<NotableFigure[] | null>(null);
   const [manualCemeteries, setManualCemeteries] = useState<CemeteryFeature[] | null>(null);
   const [manualRelatives, setManualRelatives] = useState<GraveRecord[] | null>(null);
+
   const [locating, setLocating] = useState(false);
 
   const hasManualResults = !!(manualFigures || manualCemeteries || manualRelatives);
 
-  // Keep ref in sync so closures see the latest value
-  useEffect(() => {
-    hasManualResultsRef.current = hasManualResults;
-  }, [hasManualResults]);
+  useEffect(() => { hasManualResultsRef.current = hasManualResults; }, [hasManualResults]);
+  useEffect(() => { onSearchStateChange(isSearching, hasManualResults); }, [isSearching, hasManualResults, onSearchStateChange]);
 
-  // Sync state to parent
-  useEffect(() => {
-    onSearchStateChange(isSearching, hasManualResults);
-  }, [isSearching, hasManualResults, onSearchStateChange]);
-
-  // ── Map initialisation (runs once) ──────────────────────────────────────────
+  // ── Map initialisation (runs once) ───────────────────────────────────────────
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
     let cancelled = false;
 
     (async () => {
       const L = (await import("leaflet")).default ?? await import("leaflet");
-
       if (cancelled || !mapRef.current) return;
 
-      // Suppress default icon path resolution
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({ iconUrl: "", shadowUrl: "" });
 
-      // Determine initial center: user GPS → first grave → US center
       const validGraves = graves.filter((g) => g.location?.lat && g.location?.lng);
       let center: [number, number] = [39.8283, -98.5795];
       let zoom = 5;
@@ -180,13 +278,10 @@ export default function ArchiveMap({
         maxZoom: 19,
       }).addTo(map);
 
-      // Grave layer (managed separately so it can update without reiniting the map)
       graveLayerRef.current = L.layerGroup().addTo(map);
-
-      // Overlay layer (notable figures / search results)
       overlayLayerRef.current = L.layerGroup().addTo(map);
 
-      // User location dot — place immediately if we got a position, then watch
+      // User location dot
       const userIcon = L.divIcon({
         html: `<div style="width:18px;height:18px;border-radius:50%;background:#4a90e2;border:3px solid #fff;box-shadow:0 0 0 4px rgba(74,144,226,0.25),0 2px 8px rgba(0,0,0,0.4);"></div>`,
         className: "",
@@ -212,33 +307,73 @@ export default function ArchiveMap({
         );
       }
 
-      // Auto-discovery on move
-      const fetchFigures = async () => {
+      // ── Auto-discovery on move (zoom-tiered) ────────────────────────────────
+      const runAutoDiscovery = () => {
         if (hasManualResultsRef.current) return;
         if (autoFetchTimerRef.current) clearTimeout(autoFetchTimerRef.current);
         autoFetchTimerRef.current = setTimeout(async () => {
           if (cancelled || hasManualResultsRef.current) return;
-          if (map.getZoom() < 13) { setNotableFigures([]); return; }
+
+          const z = map.getZoom();
+
+          // Nothing useful to show at very wide national zoom
+          if (z < 6) {
+            setAutoFigures([]);
+            setAutoWikiPlaces([]);
+            setAutoHeritagePlaces([]);
+            return;
+          }
+
           const b = map.getBounds();
           const sw = b.getSouthWest();
           const ne = b.getNorthEast();
-          const figures = await getNotableFiguresInBounds(sw.lat, sw.lng, ne.lat, ne.lng);
-          if (!cancelled && !hasManualResultsRef.current) setNotableFigures(figures);
+          const c = map.getCenter();
+          const minLinks = wikidataMinSitelinks(z);
+
+          const tasks: Promise<void>[] = [];
+
+          // Wikidata notable buried figures (all zoom levels ≥ 6)
+          tasks.push(
+            getNotableFiguresInBounds(sw.lat, sw.lng, ne.lat, ne.lng, minLinks)
+              .then((figs) => { if (!cancelled) setAutoFigures(figs); })
+              .catch(() => {})
+          );
+
+          // Wikipedia geosearch — local & regional (zoom ≥ 10)
+          if (z >= 10) {
+            tasks.push(
+              getWikipediaPlacesNear(c.lat, c.lng, wikipediaRadius(z))
+                .then((places) => { if (!cancelled) setAutoWikiPlaces(places); })
+                .catch(() => {})
+            );
+          } else {
+            setAutoWikiPlaces([]);
+          }
+
+          // Overpass heritage — skip at very wide bounds (zoom < 8) to avoid timeouts
+          if (z >= 8) {
+            tasks.push(
+              fetchHeritageInBounds(sw.lat, sw.lng, ne.lat, ne.lng, z)
+                .then((places) => { if (!cancelled) setAutoHeritagePlaces(places); })
+                .catch(() => {})
+            );
+          } else {
+            setAutoHeritagePlaces([]);
+          }
+
+          await Promise.all(tasks);
         }, 600);
       };
 
-      map.on("moveend", fetchFigures);
-      fetchFigures();
+      map.on("moveend", runAutoDiscovery);
+      runAutoDiscovery();
     })();
 
     return () => {
       cancelled = true;
       if (autoFetchTimerRef.current) clearTimeout(autoFetchTimerRef.current);
       if (watchIdRef.current !== null) navigator.geolocation?.clearWatch(watchIdRef.current);
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
+      if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; }
       graveLayerRef.current = null;
       overlayLayerRef.current = null;
       userMarkerRef.current = null;
@@ -246,7 +381,7 @@ export default function ArchiveMap({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Grave marker layer — re-renders whenever graves prop changes ─────────────
+  // ── Grave marker layer ────────────────────────────────────────────────────────
   useEffect(() => {
     const map = mapInstanceRef.current;
     const layer = graveLayerRef.current;
@@ -257,7 +392,6 @@ export default function ArchiveMap({
       layer.clearLayers();
 
       const validGraves = graves.filter((g) => g.location?.lat && g.location?.lng);
-
       const graveIcon = L.divIcon({
         html: GRAVE_ICON_HTML,
         className: "",
@@ -269,7 +403,7 @@ export default function ArchiveMap({
       validGraves.forEach((grave) => {
         const name = grave.extracted.name || "Unknown";
         const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" – ");
-        const popupHtml = `
+        const popup = `
           <div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
             <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0 0 2px;">${name}</p>
             ${dates ? `<p style="font-size:11px;color:#c9a84c;margin:0 0 6px;">${dates}</p>` : ""}
@@ -277,10 +411,9 @@ export default function ArchiveMap({
           </div>`;
         L.marker([grave.location.lat, grave.location.lng], { icon: graveIcon })
           .addTo(layer)
-          .bindPopup(popupHtml, { className: "dark-popup" });
+          .bindPopup(popup);
       });
 
-      // Fit to all grave bounds when first loaded with multiple graves
       if (validGraves.length > 1 && map.getZoom() <= 5) {
         const bounds = L.latLngBounds(validGraves.map((g) => [g.location.lat, g.location.lng] as [number, number]));
         map.fitBounds(bounds, { padding: [40, 40] });
@@ -288,37 +421,78 @@ export default function ArchiveMap({
     });
   }, [graves]);
 
-  // ── Overlay layer — notable figures, cemeteries, relatives ──────────────────
+  // ── Overlay layer: auto + manual results ──────────────────────────────────────
   useEffect(() => {
     const map = mapInstanceRef.current;
     const layer = overlayLayerRef.current;
     if (!map || !layer) return;
 
-    // Synchronously clear before the async import so stale markers never linger
     layer.clearLayers();
 
     import("leaflet").then((mod) => {
       const L = (mod as any).default ?? mod;
 
-      const activeFigures = manualFigures ?? notableFigures;
-      const iconMap: Record<string, string> = {
+      const figureIconMap: Record<string, string> = {
         political: "🏛️", military: "⚔️", artist: "🎨",
         musician: "🎵", actor: "🎭", other: "📍",
       };
 
-      activeFigures.forEach((n: NotableFigure) => {
-        const catIcon = iconMap[n.category] ?? "📍";
-        const icon = L.divIcon({
-          html: `<div style="width:32px;height:32px;background:#1a1917;border-radius:50%;border:2px solid #2e2b28;display:flex;align-items:center;justify-content:center;font-size:18px;">${catIcon}</div>`,
+      const makeCircleIcon = (emoji: string, bg = "#1a1917", border = "#2e2b28") =>
+        L.divIcon({
+          html: `<div style="width:32px;height:32px;background:${bg};border-radius:50%;border:2px solid ${border};display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 8px rgba(0,0,0,0.4);">${emoji}</div>`,
           className: "", iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -16],
         });
-        const html = `<div style="font-family:system-ui;min-width:180px;padding:14px;background:#1a1917;border-radius:10px;">
-          <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${n.label}</p>
-          <p style="font-size:11px;color:#c9a84c;margin-top:2px;">${n.occupationLabel || n.category}</p>
-          ${n.wikipediaUrl ? `<a href="${n.wikipediaUrl}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;">Wikipedia →</a>` : ""}
-        </div>`;
-        L.marker([n.lat, n.lng], { icon }).addTo(layer).bindPopup(html);
-      });
+
+      if (!hasManualResults) {
+        // ── Auto: Wikidata buried figures ───────────────────────────────────
+        autoFigures.forEach((n: NotableFigure) => {
+          const icon = makeCircleIcon(figureIconMap[n.category] ?? "📍");
+          const html = `<div style="font-family:system-ui;min-width:180px;padding:14px;background:#1a1917;border-radius:10px;">
+            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${n.label}</p>
+            <p style="font-size:11px;color:#c9a84c;margin-top:2px;">${n.occupationLabel || n.category}</p>
+            ${n.wikipediaUrl ? `<a href="${n.wikipediaUrl}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;">Wikipedia →</a>` : ""}
+          </div>`;
+          L.marker([n.lat, n.lng], { icon }).addTo(layer).bindPopup(html);
+        });
+
+        // ── Auto: Wikipedia places ──────────────────────────────────────────
+        const wikiIcon = L.divIcon({
+          html: `<div style="width:30px;height:30px;background:#3366cc;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;color:white;box-shadow:0 2px 8px rgba(0,0,0,0.4);">W</div>`,
+          className: "", iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -15],
+        });
+        autoWikiPlaces.forEach((p: WikipediaPlace) => {
+          const html = `<div style="font-family:system-ui;min-width:180px;padding:14px;background:#1a1917;border-radius:10px;">
+            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${p.title}</p>
+            ${p.description ? `<p style="font-size:11px;color:#b0aba6;margin-top:3px;">${p.description}</p>` : ""}
+            <a href="${p.url}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#3366cc;color:#fff;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;font-size:13px;">Wikipedia →</a>
+          </div>`;
+          L.marker([p.lat, p.lng], { icon: wikiIcon }).addTo(layer).bindPopup(html);
+        });
+
+        // ── Auto: Overpass heritage sites ───────────────────────────────────
+        autoHeritagePlaces.forEach((h: HeritagePlace) => {
+          const icon = makeCircleIcon(heritageIcon(h.type), "#2e2b28", "#3a3733");
+          const html = `<div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
+            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${h.name}</p>
+            <p style="font-size:11px;color:#c9a84c;margin-top:2px;text-transform:capitalize;">${h.type}</p>
+            ${h.wikipedia ? `<a href="${h.wikipedia}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;font-size:13px;">Wikipedia →</a>` : ""}
+          </div>`;
+          L.marker([h.lat, h.lng], { icon }).addTo(layer).bindPopup(html);
+        });
+      }
+
+      // ── Manual search results ─────────────────────────────────────────────
+      if (manualFigures) {
+        manualFigures.forEach((n: NotableFigure) => {
+          const icon = makeCircleIcon(figureIconMap[n.category] ?? "📍");
+          const html = `<div style="font-family:system-ui;min-width:180px;padding:14px;background:#1a1917;border-radius:10px;">
+            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${n.label}</p>
+            <p style="font-size:11px;color:#c9a84c;margin-top:2px;">${n.occupationLabel || n.category}</p>
+            ${n.wikipediaUrl ? `<a href="${n.wikipediaUrl}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;">Wikipedia →</a>` : ""}
+          </div>`;
+          L.marker([n.lat, n.lng], { icon }).addTo(layer).bindPopup(html);
+        });
+      }
 
       if (manualCemeteries) {
         manualCemeteries.forEach((c) => {
@@ -340,10 +514,7 @@ export default function ArchiveMap({
 
       if (manualRelatives) {
         manualRelatives.forEach((g) => {
-          const relIcon = L.divIcon({
-            html: `<div style="width:30px;height:30px;background:linear-gradient(135deg,#7c5cbf,#5b3fa0);border-radius:50%;border:2px solid #1a1917;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.5);">👤</div>`,
-            className: "", iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -15],
-          });
+          const icon = makeCircleIcon("👤", "linear-gradient(135deg,#7c5cbf,#5b3fa0)", "#1a1917");
           const name = g.extracted.name || "Unknown";
           const cemetery = g.location?.cemetery || "";
           const html = `<div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
@@ -351,13 +522,13 @@ export default function ArchiveMap({
             ${cemetery ? `<p style="font-size:11px;color:#c9a84c;margin:0;">${cemetery}</p>` : ""}
             <img src="${g.photoDataUrl}" style="width:100%;height:72px;object-fit:cover;border-radius:6px;margin-top:6px;" />
           </div>`;
-          L.marker([g.location.lat, g.location.lng], { icon: relIcon }).addTo(layer).bindPopup(html);
+          L.marker([g.location.lat, g.location.lng], { icon }).addTo(layer).bindPopup(html);
         });
       }
     });
-  }, [notableFigures, manualFigures, manualCemeteries, manualRelatives]);
+  }, [autoFigures, autoWikiPlaces, autoHeritagePlaces, manualFigures, manualCemeteries, manualRelatives, hasManualResults]);
 
-  // ── Handle Find / Clear triggered from parent ─────────────────────────────
+  // ── Manual search trigger ─────────────────────────────────────────────────────
   useEffect(() => {
     if (findTrigger > 0) handleFind();
     if (findTrigger === -1) clearFind();
@@ -370,12 +541,12 @@ export default function ArchiveMap({
     setIsSearching(true);
     try {
       const center = map.getCenter();
-      const lat = center.lat;
-      const lng = center.lng;
+      const lat = center.lat; const lng = center.lng;
       const latDelta = findRadius / 69;
       const lngDelta = findRadius / (69 * Math.cos((lat * Math.PI) / 180));
       const s = lat - latDelta; const n = lat + latDelta;
       const w = lng - lngDelta; const e = lng + lngDelta;
+      const zoom = map.getZoom();
 
       const promises: Promise<void>[] = [];
 
@@ -387,7 +558,7 @@ export default function ArchiveMap({
 
       if (findType !== "relatives" && findType !== "cemeteries") {
         promises.push(
-          getNotableFiguresInBounds(s, w, n, e).then((figs) => {
+          getNotableFiguresInBounds(s, w, n, e, wikidataMinSitelinks(zoom)).then((figs) => {
             setManualFigures(
               findType === "all" || findType === "other"
                 ? figs
@@ -424,7 +595,9 @@ export default function ArchiveMap({
     setManualFigures(null);
     setManualCemeteries(null);
     setManualRelatives(null);
-    setNotableFigures([]);
+    setAutoFigures([]);
+    setAutoWikiPlaces([]);
+    setAutoHeritagePlaces([]);
     onClearFind();
   };
 
@@ -436,9 +609,7 @@ export default function ArchiveMap({
       const pos = await getUserLocation();
       if (pos) {
         map.setView(pos, 15, { animate: true });
-        if (userMarkerRef.current) {
-          userMarkerRef.current.setLatLng(pos);
-        }
+        if (userMarkerRef.current) userMarkerRef.current.setLatLng(pos);
       }
     } finally {
       setLocating(false);
