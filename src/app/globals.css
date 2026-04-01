@@ -19,6 +19,35 @@ html {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+
+  /* Settings: font scale (default 1 = medium) */
+  --font-scale: 1;
+}
+
+/* Apply font scale to all text elements */
+html body,
+html p, html span, html div, html button, html a,
+html input, html textarea, html select, html label {
+  font-size: calc(1em * var(--font-scale, 1));
+}
+
+/* High-contrast mode: boost foreground text */
+html[data-high-contrast="true"] body {
+  color: #ffffff;
+}
+html[data-high-contrast="true"] .text-stone-400,
+html[data-high-contrast="true"] .text-stone-500,
+html[data-high-contrast="true"] .text-stone-600 {
+  color: #d0cbc5 !important;
+}
+
+/* Light theme (data-theme="light") */
+html[data-theme="light"] body {
+  background-color: #f0ece6;
+  background-image:
+    linear-gradient(rgba(240, 236, 230, 0.55), rgba(240, 236, 230, 0.55)),
+    url('/memorial-bg.jpg');
+  color: #1a1917;
 }
 
 body {

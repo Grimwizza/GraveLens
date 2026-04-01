@@ -6,6 +6,7 @@ import BottomNav from "@/components/layout/BottomNav";
 import { getAllGraves } from "@/lib/storage";
 import type { GraveRecord } from "@/types";
 import ProfileBadge from "@/components/auth/ProfileBadge";
+import { loadSettings } from "@/lib/settings";
 
 const ArchiveMap = dynamic(() => import("./ArchiveMap"), { ssr: false });
 
@@ -15,8 +16,14 @@ export default function MapPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Discovery State
-  const [findRadius, setFindRadius] = useState(15);
+  // Discovery State — default radius seeded from settings (km → miles approx)
+  const [findRadius, setFindRadius] = useState(() => {
+    const km = loadSettings().defaultSearchRadius;
+    // Map to closest available mile option: 1→5, 5→5, 10→15, 25→50
+    if (km <= 5) return 5;
+    if (km <= 10) return 15;
+    return 50;
+  });
   const [findType, setFindType] = useState<any>("all");
   const [findTrigger, setFindTrigger] = useState(0);
   const [hasManualResults, setHasManualResults] = useState(false);

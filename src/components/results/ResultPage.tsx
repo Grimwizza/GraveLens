@@ -12,6 +12,7 @@ import { uploadPhoto, upsertGrave, pushExplorerPoints, deleteFromCloud } from "@
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import { interpretSymbols } from "@/lib/apis/symbols";
 import { checkQuality, qualitySeverity, type QualityResult } from "@/lib/qualityCheck";
+import { loadSettings } from "@/lib/settings";
 import ProfileBadge from "@/components/auth/ProfileBadge";
 import type {
   GraveRecord,
@@ -211,6 +212,12 @@ export default function ResultPage({ id }: { id: string }) {
     // Don't run the quality check on already-archived records opened from history
     const currentExtracted = pending.extracted;
     if ((currentExtracted as any).isRescan) return; // was already upgraded
+
+    // Respect the autoQualityCheck setting
+    if (!loadSettings().autoQualityCheck) {
+      setRescanStatus("done");
+      return;
+    }
 
     setRescanStatus("checking");
     const qr = checkQuality(currentExtracted);
