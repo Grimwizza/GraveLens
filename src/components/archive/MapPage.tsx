@@ -59,9 +59,14 @@ export default function MapPage() {
       <header className="absolute top-0 left-0 right-0 z-[1001] bg-stone-900 border-b border-stone-800" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
         <div className="flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2">
-            <span className="font-serif font-semibold tracking-wide" style={{ fontSize: "1.75rem" }}>
-              <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
-            </span>
+            <div className="flex flex-col">
+              <span className="font-serif font-semibold tracking-wide" style={{ fontSize: "1.75rem" }}>
+                <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
+              </span>
+              <span className="italic text-white text-[10px] leading-none -mt-0.5 opacity-60">
+                By <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer">LowHigh</a>
+              </span>
+            </div>
             {!loading && (
               <span className="text-sm text-stone-500 ml-1">
                 ({filteredGraves.length} {filteredGraves.length === 1 ? "marker" : "markers"})

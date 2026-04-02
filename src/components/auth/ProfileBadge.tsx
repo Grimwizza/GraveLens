@@ -167,6 +167,13 @@ export default function ProfileBadge() {
                 >
                   Sign Out
                 </button>
+
+                <p className="text-center text-[10px] text-stone-600 pt-1">
+                  © 2026{" "}
+                  <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                    LowHigh LLC
+                  </a>
+                </p>
               </div>
             ) : (
               <div className="p-4 flex flex-col gap-3">
@@ -194,6 +201,13 @@ export default function ProfileBadge() {
                   </svg>
                   Settings
                 </button>
+
+                <p className="text-center text-[10px] text-stone-600 pt-1">
+                  © 2026{" "}
+                  <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                    LowHigh LLC
+                  </a>
+                </p>
               </div>
             )}
           </div>

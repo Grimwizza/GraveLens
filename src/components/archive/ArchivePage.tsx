@@ -461,9 +461,14 @@ export default function ArchivePage() {
       >
         <div className="flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2">
-            <span className="font-serif font-semibold tracking-wide" style={{ fontSize: "1.75rem" }}>
-              <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
-            </span>
+            <div className="flex flex-col">
+              <span className="font-serif font-semibold tracking-wide" style={{ fontSize: "1.75rem" }}>
+                <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
+              </span>
+              <span className="italic text-white text-[10px] leading-none -mt-0.5 opacity-60">
+                By <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer">LowHigh</a>
+              </span>
+            </div>
             {archiveTab === "markers" && graves.length > 0 && (
               <span className="text-sm text-stone-500 ml-1">
                 ({filteredGraves.length}{filteredGraves.length !== graves.length && `/${graves.length}`}{" "}
