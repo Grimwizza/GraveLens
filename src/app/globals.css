@@ -20,15 +20,11 @@ html {
   overflow: hidden;
   overscroll-behavior: none;
 
-  /* Settings: font scale (default 1 = medium) */
+  /* Settings: font scale — applied once here so all rem/em values scale
+     uniformly without cascading em-multiplication through child elements.
+     medium = 100% (16px base), small = 95%, large = 105%, xl = 110% */
   --font-scale: 1;
-}
-
-/* Apply font scale to all text elements */
-html body,
-html p, html span, html div, html button, html a,
-html input, html textarea, html select, html label {
-  font-size: calc(1em * var(--font-scale, 1));
+  font-size: calc(100% * var(--font-scale, 1));
 }
 
 /* High-contrast mode: boost foreground text */
@@ -43,10 +39,6 @@ html[data-high-contrast="true"] .text-stone-600 {
 
 /* Light theme (data-theme="light") */
 html[data-theme="light"] body {
-  background-color: #f0ece6;
-  background-image:
-    linear-gradient(rgba(240, 236, 230, 0.55), rgba(240, 236, 230, 0.55)),
-    url('/memorial-bg.jpg');
   color: #1a1917;
 }
 

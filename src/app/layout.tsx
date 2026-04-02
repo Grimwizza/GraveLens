@@ -70,12 +70,14 @@ export default function RootLayout({
       className={`${playfair.variable} ${inter.variable} overflow-hidden`}
       suppressHydrationWarning
     >
-      {/* Apply stored settings before first paint to avoid flash */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `(function(){try{var s=JSON.parse(localStorage.getItem('gl_settings')||'{}');var scale={'small':'0.875','medium':'1','large':'1.125','xl':'1.25'}[s.fontSize||'medium']||'1';document.documentElement.style.setProperty('--font-scale',scale);var dark=s.theme==='dark'||(s.theme==='system'&&matchMedia('(prefers-color-scheme:dark)').matches)||!s.theme;document.documentElement.setAttribute('data-theme',dark?'dark':'light');document.documentElement.setAttribute('data-high-contrast',s.highContrast?'true':'false');}catch(e){}})();`,
-        }}
-      />
+      <head>
+        {/* Apply stored settings before first paint to avoid flash */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=JSON.parse(localStorage.getItem('gl_settings')||'{}');var scale={'small':'0.95','medium':'1','large':'1.05','xl':'1.1'}[s.fontSize||'medium']||'1';document.documentElement.style.setProperty('--font-scale',scale);var dark=s.theme==='dark'||(s.theme==='system'&&matchMedia('(prefers-color-scheme:dark)').matches)||!s.theme;document.documentElement.setAttribute('data-theme',dark?'dark':'light');document.documentElement.setAttribute('data-high-contrast',s.highContrast?'true':'false');}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className="flex flex-col h-full bg-[#1a1917] text-[#f5f2ed] font-sans overflow-hidden">
         <ServiceWorkerRegister />
         {children}

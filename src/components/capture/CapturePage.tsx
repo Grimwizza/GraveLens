@@ -297,7 +297,7 @@ export default function CapturePage() {
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
       >
         <div className="flex items-center justify-between px-5 py-3">
-          <span className="font-serif text-2xl font-semibold tracking-wide">
+          <span className="font-serif font-semibold tracking-wide" style={{ fontSize: "1.75rem" }}>
             <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
           </span>
           <ProfileBadge />
