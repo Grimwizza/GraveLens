@@ -225,17 +225,12 @@ export default function ArchiveMap({
   const leafletRef = useRef<any>(null);
   const graveLayerRef = useRef<any>(null);
   const overlayLayerRef = useRef<any>(null);
-  const autoFetchTimerRef = useRef<any>(null);
   const userMarkerRef = useRef<any>(null);
   const watchIdRef = useRef<number | null>(null);
-  const hasManualResultsRef = useRef(false);
   const [mapReady, setMapReady] = useState(false);
 
-  // Auto-discovery state
-  const [autoFigures, setAutoFigures] = useState<NotableFigure[]>([]);
-  const [autoHeritagePlaces, setAutoHeritagePlaces] = useState<HeritagePlace[]>([]);
-
-  // Manual search state
+  // Search results state
+  const [heritagePlaces, setHeritagePlaces] = useState<HeritagePlace[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [manualFigures, setManualFigures] = useState<NotableFigure[] | null>(null);
   const [manualCemeteries, setManualCemeteries] = useState<CemeteryFeature[] | null>(null);
@@ -245,7 +240,6 @@ export default function ArchiveMap({
 
   const hasManualResults = !!(manualFigures || manualCemeteries || manualRelatives);
 
-  useEffect(() => { hasManualResultsRef.current = hasManualResults; }, [hasManualResults]);
   useEffect(() => { onSearchStateChange(isSearching, hasManualResults); }, [isSearching, hasManualResults, onSearchStateChange]);
 
   // ── Map initialisation (runs once) ───────────────────────────────────────────
@@ -314,58 +308,10 @@ export default function ArchiveMap({
         );
       }
 
-      // ── Auto-discovery on move (zoom-tiered) ────────────────────────────────
-      const runAutoDiscovery = () => {
-        if (hasManualResultsRef.current) return;
-        if (autoFetchTimerRef.current) clearTimeout(autoFetchTimerRef.current);
-        autoFetchTimerRef.current = setTimeout(async () => {
-          if (cancelled || hasManualResultsRef.current) return;
-
-          const z = map.getZoom();
-
-          // Nothing useful to show at very wide national zoom
-          if (z < 6) {
-            setAutoFigures([]);
-            setAutoHeritagePlaces([]);
-            return;
-          }
-
-          const b = map.getBounds();
-          const sw = b.getSouthWest();
-          const ne = b.getNorthEast();
-          const minLinks = wikidataMinSitelinks(z);
-
-          const tasks: Promise<void>[] = [];
-
-          // Wikidata notable buried figures (all zoom levels ≥ 6)
-          tasks.push(
-            getNotableFiguresInBounds(sw.lat, sw.lng, ne.lat, ne.lng, minLinks)
-              .then((figs) => { if (!cancelled) setAutoFigures(figs); })
-              .catch(() => {})
-          );
-
-          // Overpass heritage — skip at very wide bounds (zoom < 8) to avoid timeouts
-          if (z >= 8) {
-            tasks.push(
-              fetchHeritageInBounds(sw.lat, sw.lng, ne.lat, ne.lng, z)
-                .then((places) => { if (!cancelled) setAutoHeritagePlaces(places); })
-                .catch(() => {})
-            );
-          } else {
-            setAutoHeritagePlaces([]);
-          }
-
-          await Promise.all(tasks);
-        }, 600);
-      };
-
-      map.on("moveend", runAutoDiscovery);
-      runAutoDiscovery();
     })();
 
     return () => {
       cancelled = true;
-      if (autoFetchTimerRef.current) clearTimeout(autoFetchTimerRef.current);
       if (watchIdRef.current !== null) navigator.geolocation?.clearWatch(watchIdRef.current);
       if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; }
       graveLayerRef.current = null;
@@ -404,7 +350,7 @@ export default function ArchiveMap({
         </div>`;
       L.marker([grave.location.lat, grave.location.lng], { icon: graveIcon })
         .addTo(layer)
-        .bindPopup(popup);
+        .bindPopup(popup, { autoPan: false });
     });
 
     if (validGraves.length > 1 && map.getZoom() <= 5) {
@@ -433,31 +379,18 @@ export default function ArchiveMap({
         className: "", iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -16],
       });
 
-    if (!hasManualResults) {
-      // ── Auto: Wikidata buried figures ─────────────────────────────────────
-      autoFigures.forEach((n: NotableFigure) => {
-        const icon = makeCircleIcon(figureIconMap[n.category] ?? "📍");
-        const html = `<div style="font-family:system-ui;min-width:180px;padding:14px;background:#1a1917;border-radius:10px;">
-          <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${n.label}</p>
-          <p style="font-size:11px;color:#c9a84c;margin-top:2px;">${n.occupationLabel || n.category}</p>
-          ${n.wikipediaUrl ? `<a href="${n.wikipediaUrl}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;">Wikipedia →</a>` : ""}
-        </div>`;
-        L.marker([n.lat, n.lng], { icon }).addTo(layer).bindPopup(html);
-      });
+    // ── Heritage places (from Search Here) ────────────────────────────────
+    heritagePlaces.forEach((h: HeritagePlace) => {
+      const icon = makeCircleIcon(heritageIcon(h.type), "#2e2b28", "#3a3733");
+      const html = `<div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
+        <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${h.name}</p>
+        <p style="font-size:11px;color:#c9a84c;margin-top:2px;text-transform:capitalize;">${h.type}</p>
+        ${h.wikipedia ? `<a href="${h.wikipedia}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;font-size:13px;">Wikipedia →</a>` : ""}
+      </div>`;
+      L.marker([h.lat, h.lng], { icon }).addTo(layer).bindPopup(html, { autoPan: false });
+    });
 
-      // ── Auto: Overpass heritage sites ─────────────────────────────────────
-      autoHeritagePlaces.forEach((h: HeritagePlace) => {
-        const icon = makeCircleIcon(heritageIcon(h.type), "#2e2b28", "#3a3733");
-        const html = `<div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
-          <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${h.name}</p>
-          <p style="font-size:11px;color:#c9a84c;margin-top:2px;text-transform:capitalize;">${h.type}</p>
-          ${h.wikipedia ? `<a href="${h.wikipedia}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;font-size:13px;">Wikipedia →</a>` : ""}
-        </div>`;
-        L.marker([h.lat, h.lng], { icon }).addTo(layer).bindPopup(html);
-      });
-    }
-
-    // ── Manual search results ───────────────────────────────────────────────
+    // ── Search results ─────────────────────────────────────────────────────
     if (manualFigures) {
       manualFigures.forEach((n: NotableFigure) => {
         const icon = makeCircleIcon(figureIconMap[n.category] ?? "📍");
@@ -466,7 +399,7 @@ export default function ArchiveMap({
           <p style="font-size:11px;color:#c9a84c;margin-top:2px;">${n.occupationLabel || n.category}</p>
           ${n.wikipediaUrl ? `<a href="${n.wikipediaUrl}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;">Wikipedia →</a>` : ""}
         </div>`;
-        L.marker([n.lat, n.lng], { icon }).addTo(layer).bindPopup(html);
+        L.marker([n.lat, n.lng], { icon }).addTo(layer).bindPopup(html, { autoPan: false });
       });
     }
 
@@ -516,7 +449,7 @@ export default function ArchiveMap({
             </div>
             ${c.wikipedia ? `<a href="${c.wikipedia}" target="_blank" style="display:block;margin-top:6px;padding:6px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">Wikipedia →</a>` : ""}
           </div>`;
-        L.marker([c.lat, c.lng], { icon }).addTo(layer).bindPopup(popup, { maxWidth: 280 });
+        L.marker([c.lat, c.lng], { icon }).addTo(layer).bindPopup(popup, { maxWidth: 280, autoPan: false });
       });
     }
 
@@ -531,10 +464,10 @@ export default function ArchiveMap({
           ${cemetery ? `<p style="font-size:11px;color:#c9a84c;margin:0;">${cemetery}</p>` : ""}
           <img src="${g.photoDataUrl}" style="width:100%;height:72px;object-fit:cover;border-radius:6px;margin-top:6px;" />
         </div>`;
-        L.marker([g.location.lat, g.location.lng], { icon }).addTo(layer).bindPopup(html);
+        L.marker([g.location.lat, g.location.lng], { icon }).addTo(layer).bindPopup(html, { autoPan: false });
       });
     }
-  }, [autoFigures, autoHeritagePlaces, manualFigures, manualCemeteries, manualRelatives, hasManualResults, mapReady]);
+  }, [heritagePlaces, manualFigures, manualCemeteries, manualRelatives, mapReady]);
 
   // ── Manual search trigger ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -603,9 +536,59 @@ export default function ArchiveMap({
     setManualFigures(null);
     setManualCemeteries(null);
     setManualRelatives(null);
-    setAutoFigures([]);
-    setAutoHeritagePlaces([]);
+    setHeritagePlaces([]);
     onClearFind();
+  };
+
+  const handleSearchHere = async () => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    setIsSearching(true);
+    try {
+      const b = map.getBounds();
+      const sw = b.getSouthWest();
+      const ne = b.getNorthEast();
+      const z = map.getZoom();
+
+      const tasks: Promise<void>[] = [];
+
+      tasks.push(
+        getNotableFiguresInBounds(sw.lat, sw.lng, ne.lat, ne.lng, wikidataMinSitelinks(z))
+          .then(setManualFigures)
+          .catch(() => {})
+      );
+
+      tasks.push(
+        fetchCemeteriesInBounds(sw.lat, sw.lng, ne.lat, ne.lng)
+          .then(setManualCemeteries)
+          .catch(() => {})
+      );
+
+      if (z >= 8) {
+        tasks.push(
+          fetchHeritageInBounds(sw.lat, sw.lng, ne.lat, ne.lng, z)
+            .then(setHeritagePlaces)
+            .catch(() => {})
+        );
+      } else {
+        setHeritagePlaces([]);
+      }
+
+      setManualRelatives(
+        allGraves.filter(
+          (g) =>
+            g.location?.lat &&
+            g.location.lat >= sw.lat && g.location.lat <= ne.lat &&
+            g.location.lng >= sw.lng && g.location.lng <= ne.lng &&
+            (g.tags || []).some((t) => RELATIVE_TAGS.includes(t.toLowerCase()))
+        )
+      );
+
+      await Promise.all(tasks);
+      onSearchStateChange(false, true);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const handleMyLocation = async () => {
@@ -627,8 +610,8 @@ export default function ArchiveMap({
   const legendItems = useMemo(() => {
     const items: { icon: React.ReactNode; label: string }[] = [];
 
-    const activeFigures = hasManualResults ? manualFigures ?? [] : autoFigures;
-    const activeHeritage = hasManualResults ? [] : autoHeritagePlaces;
+    const activeFigures = manualFigures ?? [];
+    const activeHeritage = heritagePlaces;
 
     const validGraves = graves.filter((g) => g.location?.lat && g.location?.lng);
     if (validGraves.length > 0) {
@@ -704,7 +687,7 @@ export default function ArchiveMap({
     }
 
     return items;
-  }, [graves, autoFigures, autoHeritagePlaces, manualFigures, manualCemeteries, manualRelatives, hasManualResults]);
+  }, [graves, heritagePlaces, manualFigures, manualCemeteries, manualRelatives]);
 
   return (
     <div className="relative flex-1 flex flex-col overflow-hidden h-screen">
@@ -752,6 +735,22 @@ export default function ArchiveMap({
           </svg>
         )}
       </button>
+
+      {/* Search Here button */}
+      {!isSearching && (
+        <div className="absolute inset-x-0 top-4 z-[1000] flex justify-center pointer-events-none">
+          <button
+            onClick={handleSearchHere}
+            className="pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold shadow-xl active:scale-95 transition-all"
+            style={{ background: "#1a1917", border: "1px solid #3a3733", color: "#f5f2ed" }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+            </svg>
+            Search here
+          </button>
+        </div>
+      )}
 
       {/* Searching indicator */}
       {isSearching && (
