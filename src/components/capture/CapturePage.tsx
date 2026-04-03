@@ -9,9 +9,9 @@ import { QUEUE_CHANGED_EVENT } from "@/lib/queue";
 import { reverseGeocode } from "@/lib/apis/nominatim";
 import { takePendingCaptureFile } from "@/lib/pendingCapture";
 import type { ExtractedGraveData, GeoLocation } from "@/types";
+import ReliefCapture from "./ReliefCapture";
 
-type Phase = "idle" | "processing" | "queued";
-
+type Phase = "idle" | "processing" | "queued" | "pro_prompt" | "degraded_prompt";
 
 export default function CapturePage() {
   const router = useRouter();
@@ -24,6 +24,11 @@ export default function CapturePage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [queueReason, setQueueReason] = useState<"offline" | "rate_limited" | null>(null);
+
+  const [showProOnboarding, setShowProOnboarding] = useState(false);
+  const [isReliefActive, setIsReliefActive] = useState(false);
+  const isCurrentScanProRef = useRef(false);
+  const analysisDataRef = useRef<{ extracted: ExtractedGraveData | null, location: GeoLocation | null } | null>(null);
 
   // Prevents stale analyses from saving and cancels in-flight fetches
   const analysisNonceRef = useRef(0);
@@ -58,11 +63,13 @@ export default function CapturePage() {
   // BottomNav camera FAB tapped while already on this page
   useEffect(() => {
     const handler = () => {
-      if (phase === "idle") cameraInputRef.current?.click();
+      if (phase === "idle" && !showProOnboarding) {
+        cameraInputRef.current?.click();
+      }
     };
     window.addEventListener("gravelens:open-camera", handler);
     return () => window.removeEventListener("gravelens:open-camera", handler);
-  }, [phase]);
+  }, [phase, showProOnboarding]);
 
   // Keep the screen awake while the user is on this page
   useEffect(() => {
@@ -100,6 +107,7 @@ export default function CapturePage() {
   }, []);
 
   const handleFileChosen = useCallback(async (file: File) => {
+    isCurrentScanProRef.current = false;
     // Invalidate any in-flight analysis for the previous photo
     analysisNonceRef.current += 1;
     abortControllerRef.current?.abort();
@@ -112,6 +120,28 @@ export default function CapturePage() {
     setPhase("processing");
     setProgress(10);
     setProgressLabel("Reading image…");
+  }, []);
+
+  const handleReliefComplete = useCallback((dataUrl: string) => {
+    setIsReliefActive(false);
+    isCurrentScanProRef.current = true;
+    
+    // Convert dataUrl to a File object so our standard pipeline works
+    const arr = dataUrl.split(',');
+    const mime = arr[0].match(/:(.*?);/)?.[1] || "image/jpeg";
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while(n--){
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    const file = new File([u8arr], "relief_capture.jpg", { type: mime });
+    
+    setPreviewUrl(dataUrl);
+    setSelectedFile(file);
+    setPhase("processing");
+    setProgress(10);
+    setProgressLabel("Reading composite image…");
   }, []);
 
   const handleAnalyze = useCallback(async () => {
@@ -198,29 +228,55 @@ export default function CapturePage() {
       setProgressLabel("Finding location…");
       const location = await geocodePromise;
 
-      // ── Save ────────────────────────────────────────────────────────────
-      setProgress(90);
-      setProgressLabel("Saving…");
+      const isPoorQuality = !extracted || extracted.confidence === "low" || 
+        extracted.condition === "illegible" || extracted.condition === "weathered" || !extracted.name;
 
-      const storageDataUrl = await resizeForStorage(previewUrl);
+      if (isPoorQuality) {
+        analysisDataRef.current = { extracted, location };
+        if (isCurrentScanProRef.current) {
+          setPhase("degraded_prompt");
+        } else {
+          setPhase("pro_prompt");
+        }
+        return;
+      }
 
-      const id = generateId();
-      await savePendingResult(id, {
-        id,
-        photoDataUrl: storageDataUrl,
-        extracted,
-        location,
-        timestamp: Date.now(),
-      });
-
-      setProgress(100);
-      router.push(`/result/${id}`);
+      await saveCurrentAnalysis(extracted, location, previewUrl, selectedFile);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
       console.error("CapturePage: Analysis failed:", err instanceof Error ? err.message : err);
       setPhase("idle");
     }
   }, [selectedFile, previewUrl, router]);
+
+  const saveCurrentAnalysis = useCallback(async (
+    dataOrRef: ExtractedGraveData | null, 
+    locOrRef: GeoLocation | null,
+    pUrl: string | null = previewUrl,
+    sFile: File | null = selectedFile
+  ) => {
+    if (!sFile || !pUrl) return;
+    try {
+      setPhase("processing");
+      setProgress(90);
+      setProgressLabel("Saving…");
+
+      const storageDataUrl = await resizeForStorage(pUrl);
+      const id = generateId();
+      await savePendingResult(id, {
+        id,
+        photoDataUrl: storageDataUrl,
+        extracted: dataOrRef,
+        location: locOrRef,
+        timestamp: Date.now(),
+      });
+      setProgress(100);
+      router.push(`/result/${id}`);
+    } catch (err) {
+      console.error("CapturePage: Save failed:", err);
+      setPhase("idle");
+    }
+  }, [previewUrl, selectedFile, router]);
 
   // Auto-analyze as soon as a file is chosen
   useEffect(() => {
@@ -240,6 +296,7 @@ export default function CapturePage() {
     setSelectedFile(null);
     setProgress(0);
     setQueueReason(null);
+    setIsReliefActive(false);
   }, []);
 
 
@@ -289,25 +346,70 @@ export default function CapturePage() {
   return (
     <PageShell showLogo={true} customMainClasses="items-center px-5 pb-28" backgroundClass="bg-transparent">
       {/* Main content */}
-      {phase === "idle" && (
-          <IdleState
-            onUpload={() => fileInputRef.current?.click()}
-          />
-        )}
-        {phase !== "idle" && (
-          <div className="flex-1 flex flex-col items-center justify-center w-full">
-            {phase === "processing" && previewUrl && (
+      {isReliefActive ? (
+        <ReliefCapture 
+          onCaptureComplete={handleReliefComplete} 
+          onCancel={() => setIsReliefActive(false)} 
+        />
+      ) : (
+        <>
+          {phase === "idle" && !showProOnboarding && (
+            <IdleState
+              onUpload={() => fileInputRef.current?.click()}
+              onCapture={() => cameraInputRef.current?.click()}
+            />
+          )}
+          {phase === "idle" && showProOnboarding && (
+            <ProOnboarding
+              onStart={() => {
+                localStorage.setItem("gravelens_seen_pro_tutorial", "true");
+                setShowProOnboarding(false);
+                setIsReliefActive(true);
+              }}
+              onCancel={() => setShowProOnboarding(false)}
+            />
+          )}
+          {phase === "pro_prompt" && (
+            <ProPrompt
+              onTryPro={() => {
+                const hasSeen = localStorage.getItem("gravelens_seen_pro_tutorial");
+                if (!hasSeen) {
+                  setPhase("idle");
+                  setShowProOnboarding(true);
+                } else {
+                  setPhase("idle");
+                  setIsReliefActive(true);
+                }
+              }}
+              onSkip={() => saveCurrentAnalysis(analysisDataRef.current?.extracted || null, analysisDataRef.current?.location || null)}
+            />
+          )}
+          {phase === "degraded_prompt" && (
+            <DegradedPrompt
+              onManualEnter={() => {
+                // Save empty/partial extraction to proceed to result view where they can manually edit
+                const data = analysisDataRef.current?.extracted || null;
+                const loc = analysisDataRef.current?.location || null;
+                saveCurrentAnalysis(data, loc);
+              }}
+              onDelete={handleReset}
+            />
+          )}
+          {phase === "processing" && previewUrl && (
+            <div className="flex-1 flex flex-col items-center justify-center w-full">
               <ProcessingState
                 previewUrl={previewUrl}
                 progress={progress}
                 label={progressLabel}
               />
-            )}
-            {phase === "queued" && (
+            </div>
+          )}
+          {phase === "queued" && (
+            <div className="flex-1 flex flex-col items-center justify-center w-full">
               <QueuedConfirmation reason={queueReason} />
-            )}
-          </div>
-        )}
+            </div>
+          )}
+      </>)}
 
       {/* Hidden file inputs */}
       <input
@@ -341,15 +443,18 @@ export default function CapturePage() {
 
 function IdleState({
   onUpload,
+  onCapture,
 }: {
   onUpload: () => void;
+  onCapture: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 pt-4 pb-44">
+    <div className="flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 pt-2 pb-0 sm:pb-4 justify-between" style={{ paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
       {/* Graphic + text — takes all available space and centers content within it */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-6">
+      <div className="flex flex-col items-center justify-center gap-4 pt-2">
+        
         {/* Viewfinder graphic */}
-        <div className="relative flex items-center justify-center w-64 h-64 flex-shrink-0">
+        <button onClick={onCapture} className="relative flex items-center justify-center w-[200px] h-[200px] sm:w-56 sm:h-56 flex-shrink-0 active:scale-95 transition-transform touch-none select-none">
           {/* Corner brackets */}
           <svg className="absolute inset-0 w-full h-full" viewBox="0 0 256 256">
             <path
@@ -395,7 +500,7 @@ function IdleState({
           <div className="absolute inset-0 pointer-events-none">
             {/* Camera AF box centered on grave silhouette (y=142 of 256 -> 55.5%) */}
             <div style={{ position: "absolute", left: "50%", top: "55.5%", transform: "translate(-50%, -50%)" }}
-              className="drop-shadow-[0_0_10px_rgba(201,168,76,0.4)]">
+              className="drop-shadow-[0_0_10px_rgba(201,168,76,0.4)] scale-75 sm:scale-100">
               <svg width="40" height="40" viewBox="0 0 100 100" fill="none">
                 {/* Top-left corner */}
                 <path d="M18 38 L18 18 L38 18" stroke="#c9a84c" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -411,25 +516,25 @@ function IdleState({
             </div>
             {/* Text centered below brackets (y=240 of 256 -> 94%) */}
             <div style={{ position: "absolute", left: "50%", top: "94%", transform: "translate(-50%, -50%)" }}>
-              <span className="text-stone-300 text-[13px] font-bold tracking-[0.3em] whitespace-nowrap uppercase opacity-50">
+              <span className="text-stone-300 text-[11px] sm:text-[13px] font-bold tracking-[0.3em] whitespace-nowrap uppercase opacity-50">
                 Point & scan
               </span>
             </div>
           </div>
-        </div>
+        </button>
 
-        <div className="flex flex-col items-center gap-3 text-center px-2">
-          <h1 className="font-serif text-3xl font-semibold text-stone-100 leading-tight">
-            Bring the story behind every stone into focus.
-          </h1>
-          <p className="text-stone-400 text-lg leading-relaxed">
-            Photograph any headstone and experience history like never before.
-          </p>
+        <div className="flex flex-col items-center gap-2 text-center px-2">
+           <h1 className="font-serif text-2xl sm:text-3xl font-semibold text-stone-100 leading-tight">
+             Bring the story behind every stone into focus.
+           </h1>
+           <p className="text-stone-400 text-sm sm:text-lg leading-relaxed">
+             Photograph any headstone and experience history like never before.
+           </p>
         </div>
       </div>
 
       {/* Action buttons — anchored to bottom */}
-      <div className="flex flex-col gap-3 w-full pt-6">
+      <div className="flex flex-col items-center gap-6 w-full pt-4 mt-auto mb-28">
         <button
           onClick={onUpload}
           className="flex items-center justify-center gap-3 w-full h-12 rounded-2xl border border-stone-600 text-stone-200 font-medium text-base transition-all active:scale-[0.97] bg-stone-800/50"
@@ -441,6 +546,103 @@ function IdleState({
           </svg>
           Upload from Library
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Prompts ─────────────────────────────────────────────────────────────────
+
+function ProPrompt({ onTryPro, onSkip }: { onTryPro: () => void, onSkip: () => void }) {
+  return (
+    <div className="flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 justify-center px-4 text-center mt-auto mb-auto">
+      <div className="w-16 h-16 rounded-full bg-amber-500/20 border border-amber-500 flex items-center justify-center mb-6">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="5" />
+          <line x1="12" y1="1" x2="12" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="23" />
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+          <line x1="1" y1="12" x2="3" y2="12" />
+          <line x1="21" y1="12" x2="23" y2="12" />
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+        </svg>
+      </div>
+      <h2 className="font-serif text-2xl font-semibold text-stone-100 mb-4">Degraded Visibility</h2>
+      <p className="text-stone-300 text-lg leading-relaxed mb-10">
+        We noticed some details were hard to read. Want to use Relief Lens Pro to cast dynamic shadows that visually restore faded engravings?
+      </p>
+      
+      <div className="flex flex-col gap-4 w-full">
+        <button onClick={onTryPro} className="w-full py-4 rounded-xl bg-amber-600 text-white font-medium shadow-lg shadow-amber-600/20">Try Pro Scan</button>
+        <button onClick={onSkip} className="w-full py-4 rounded-xl border border-stone-600 text-stone-300 font-medium bg-stone-800/50">Skip (Save Anyway)</button>
+      </div>
+    </div>
+  );
+}
+
+function DegradedPrompt({ onManualEnter, onDelete }: { onManualEnter: () => void, onDelete: () => void }) {
+  return (
+    <div className="flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 justify-center px-4 text-center mt-auto mb-auto">
+      <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500 flex items-center justify-center mb-6">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <h2 className="font-serif text-2xl font-semibold text-stone-100 mb-4">Scan Failed</h2>
+      <p className="text-stone-300 text-lg leading-relaxed mb-10">
+        The quality of the memorial is too degraded and we were unable to analyze it automatically. 
+      </p>
+      
+      <div className="flex flex-col gap-4 w-full">
+        <button onClick={onManualEnter} className="w-full py-4 rounded-xl bg-stone-700 text-white font-medium shadow-md">Manually Enter Details</button>
+        <button onClick={onDelete} className="w-full py-4 rounded-xl bg-red-600/20 border border-red-600/50 text-red-500 font-medium">Delete Image</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Pro Onboarding ─────────────────────────────────────────────────────────
+
+function ProOnboarding({ onStart, onCancel }: { onStart: () => void, onCancel: () => void }) {
+  return (
+    <div className="flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 pt-12 pb-44 px-4 text-center">
+      <div className="w-16 h-16 rounded-full bg-amber-500/20 border border-amber-500 flex items-center justify-center mb-6">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="5" />
+          <line x1="12" y1="1" x2="12" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="23" />
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+          <line x1="1" y1="12" x2="3" y2="12" />
+          <line x1="21" y1="12" x2="23" y2="12" />
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+        </svg>
+      </div>
+      <h2 className="font-serif text-2xl font-semibold text-stone-100 mb-4">Relief Lens Pro</h2>
+      
+      <div className="flex flex-col gap-6 text-stone-300 text-left bg-stone-800/50 p-6 rounded-2xl border border-stone-700 w-full mb-8">
+        <div className="flex gap-4 items-start">
+          <div className="mt-1 text-amber-500 font-bold">1</div>
+          <p className="text-sm">Position your camera squarely over the faded headstone engraving.</p>
+        </div>
+        <div className="flex gap-4 items-start">
+          <div className="mt-1 text-amber-500 font-bold">2</div>
+          <p className="text-sm">We'll automatically activate your torch. <strong>Wait for nightfall or cast a shadow</strong> over the stone with your body for best contrast.</p>
+        </div>
+        <div className="flex gap-4 items-start">
+          <div className="mt-1 text-amber-500 font-bold">3</div>
+          <p className="text-sm">Tap Start, then sweep the light back and forth for 3 seconds.</p>
+        </div>
+      </div>
+      
+      <div className="flex gap-4 w-full">
+        <button onClick={onCancel} className="flex-1 py-3 rounded-xl border border-stone-600 text-stone-300 font-medium">Cancel</button>
+        <button onClick={onStart} className="flex-1 py-3 rounded-xl bg-amber-600 text-white font-medium shadow-lg shadow-amber-600/20">I Understand</button>
       </div>
     </div>
   );
