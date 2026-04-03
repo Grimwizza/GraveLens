@@ -66,9 +66,9 @@ export function patchSettings(patch: Partial<AppSettings>): AppSettings {
 // ── CSS / DOM application ─────────────────────────────────────────────────
 
 const FONT_SCALE_MAP: Record<FontSize, string> = {
-  small:  "1.05",
-  medium: "1.1",
-  large:  "1.15",
+  small:  "0.9",
+  medium: "1",
+  large:  "1.1",
   xl:     "1.2",
 };
 

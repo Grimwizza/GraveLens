@@ -975,21 +975,21 @@ function GraveTileGrid({
                     {grave.extracted.name || "Unknown"}
                   </p>
                   {dates && (
-                    <p className="text-stone-400 text-[11px] mt-0.5">{dates}</p>
+                    <p className="text-stone-400 text-[0.8rem] mt-0.5">{dates}</p>
                   )}
                   {hasCemetery ? (
-                    <p className="text-stone-500 text-[10px] truncate mt-0.5">
+                    <p className="text-stone-500 text-[0.75rem] truncate mt-0.5">
                       {grave.location.cemetery}
                     </p>
                   ) : enriching && hasGps ? (
-                    <p className="text-stone-600 text-[10px] mt-0.5">Looking up…</p>
+                    <p className="text-stone-600 text-[0.75rem] mt-0.5">Looking up…</p>
                   ) : null}
                   {grave.tags && grave.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {grave.tags.slice(0, 2).map((tag) => (
                         <span
                           key={tag}
-                          className="px-1.5 py-0.5 rounded-full text-[9px] bg-stone-800/80 border border-stone-600/60 text-stone-400"
+                          className="px-1.5 py-0.5 rounded-full text-[0.65rem] bg-stone-800/80 border border-stone-600/60 text-stone-400"
                         >
                           {tag}
                         </span>
@@ -1002,7 +1002,7 @@ function GraveTileGrid({
 
             {isNew && (
               <div className="absolute top-2 left-2 z-10 pointer-events-none">
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
+                <span className="px-1.5 py-0.5 rounded text-[0.75rem] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
               </div>
             )}
 
@@ -1012,13 +1012,13 @@ function GraveTileGrid({
                 <div className="flex gap-1">
                   <button
                     onClick={() => onDeleteConfirm(grave.id)}
-                    className="text-[10px] text-red-400 px-2 py-1 rounded-lg bg-stone-900/90 border border-red-500/30"
+                    className="text-[0.75rem] text-red-400 px-2 py-1 rounded-lg bg-stone-900/90 border border-red-500/30"
                   >
                     Delete
                   </button>
                   <button
                     onClick={onDeleteCancel}
-                    className="text-[10px] text-stone-400 px-2 py-1 rounded-lg bg-stone-900/90"
+                    className="text-[0.75rem] text-stone-400 px-2 py-1 rounded-lg bg-stone-900/90"
                   >
                     ✕
                   </button>
@@ -1137,7 +1137,7 @@ function GraveCoverFlow({
                       {grave.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="px-2 py-0.5 rounded-full text-[10px] border text-stone-300"
+                          className="px-2 py-0.5 rounded-full text-[0.75rem] border text-stone-300"
                           style={{
                             background: "rgba(201,168,76,0.12)",
                             borderColor: "rgba(201,168,76,0.3)",
@@ -1154,7 +1154,7 @@ function GraveCoverFlow({
 
             {isNew && (
               <div className="absolute top-3 left-3 z-10 pointer-events-none">
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
+                <span className="px-1.5 py-0.5 rounded text-[0.75rem] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
               </div>
             )}
 
@@ -1270,7 +1270,7 @@ function GraveList({
                     {grave.extracted.name || "Unknown"}
                   </p>
                   {isNew && (
-                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
+                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[0.75rem] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
                   )}
                 </div>
                 <p className="text-stone-500 text-xs mt-0.5">
@@ -1298,7 +1298,7 @@ function GraveList({
                         const name = editValue.trim();
                         if (name && onCemeteryEdit) onCemeteryEdit(grave.id, name).then(() => setEditingId(null));
                       }}
-                      className="text-[10px] font-semibold px-2 py-1 rounded"
+                      className="text-[0.75rem] font-semibold px-2 py-1 rounded"
                       style={{ background: "#c9a84c", color: "#1a1917" }}
                     >
                       Save
@@ -1319,7 +1319,7 @@ function GraveList({
                 {grave.tags && grave.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {grave.tags.map((tag) => (
-                      <span key={tag} className="px-1.5 py-0.5 rounded-full text-[10px] bg-stone-800 border border-stone-700 text-stone-500">
+                      <span key={tag} className="px-1.5 py-0.5 rounded-full text-[0.75rem] bg-stone-800 border border-stone-700 text-stone-500">
                         {tag}
                       </span>
                     ))}
@@ -1411,10 +1411,10 @@ function CemeterySection({
                 <p className="font-serif text-stone-100 text-base font-semibold leading-snug">{c.name}</p>
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
                   {c.established && (
-                    <span className="text-[11px] text-stone-500">Est. {c.established}</span>
+                    <span className="text-[0.8rem] text-stone-500">Est. {c.established}</span>
                   )}
                   {c.denomination && (
-                    <span className="text-[11px] text-stone-500 capitalize">{c.denomination}</span>
+                    <span className="text-[0.8rem] text-stone-500 capitalize">{c.denomination}</span>
                   )}
                 </div>
               </div>
@@ -1422,7 +1422,7 @@ function CemeterySection({
                 {/* Visit badge */}
                 <div className="flex flex-col items-center px-2 py-1 rounded-lg bg-stone-800 border border-stone-700 min-w-[44px]">
                   <span className="text-xs font-bold" style={{ color: "#c9a84c" }}>{c.visitCount}</span>
-                  <span className="text-[9px] text-stone-500 uppercase tracking-wide">{c.visitCount === 1 ? "visit" : "visits"}</span>
+                  <span className="text-[0.65rem] text-stone-500 uppercase tracking-wide">{c.visitCount === 1 ? "visit" : "visits"}</span>
                 </div>
                 {/* Delete */}
                 {deleteId === c.id ? (
@@ -1460,13 +1460,13 @@ function CemeterySection({
 
             {/* Description */}
             {c.description && (
-              <p className="text-stone-400 text-[13px] leading-relaxed">{c.description}</p>
+              <p className="text-stone-400 text-sm leading-relaxed">{c.description}</p>
             )}
 
             {/* Notable features */}
             {c.notableFeatures && c.notableFeatures.length > 0 && (
               <div className="flex flex-col gap-1">
-                <p className="text-[10px] uppercase tracking-widest text-stone-600 font-semibold">Notable Features</p>
+                <p className="text-[0.75rem] uppercase tracking-widest text-stone-600 font-semibold">Notable Features</p>
                 {c.notableFeatures.map((f, i) => (
                   <div key={i} className="flex items-start gap-2">
                     <span className="text-stone-600 text-xs mt-0.5 shrink-0">•</span>
@@ -1479,10 +1479,10 @@ function CemeterySection({
             {/* Historical events */}
             {c.historicalEvents && c.historicalEvents.length > 0 && (
               <div className="flex flex-col gap-1">
-                <p className="text-[10px] uppercase tracking-widest text-stone-600 font-semibold">Historical Events</p>
+                <p className="text-[0.75rem] uppercase tracking-widest text-stone-600 font-semibold">Historical Events</p>
                 {c.historicalEvents.map((e, i) => (
                   <div key={i} className="flex items-start gap-2">
-                    <span className="text-[10px] mt-0.5 shrink-0">📜</span>
+                    <span className="text-[0.75rem] mt-0.5 shrink-0">📜</span>
                     <span className="text-stone-400 text-xs leading-relaxed">{e}</span>
                   </div>
                 ))}
@@ -1492,12 +1492,12 @@ function CemeterySection({
             {/* Navigation buttons */}
             <div className="flex gap-2 mt-1">
               <a href={appleUrl} target="_blank" rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors">
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[0.8rem] font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#007AFF"/><path d="M12 7l4 10-4-2-4 2 4-10z" fill="white"/></svg>
                 Apple Maps
               </a>
               <a href={googleUrl} target="_blank" rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors">
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[0.8rem] font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/><circle cx="12" cy="9" r="2.5" fill="#FBBC05"/></svg>
                 Google Maps
               </a>
@@ -1511,7 +1511,7 @@ function CemeterySection({
             </div>
 
             {/* Visit metadata */}
-            <p className="text-[10px] text-stone-700">
+            <p className="text-[0.75rem] text-stone-700">
               First visited {firstDate}{c.visitCount > 1 ? ` · Last visited ${lastDate}` : ""}
             </p>
           </div>

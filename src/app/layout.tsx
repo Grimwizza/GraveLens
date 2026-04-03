@@ -74,7 +74,7 @@ export default function RootLayout({
         {/* Apply stored settings before first paint to avoid flash */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=JSON.parse(localStorage.getItem('gl_settings')||'{}');var scale={'small':'0.95','medium':'1','large':'1.05','xl':'1.1'}[s.fontSize||'medium']||'1';document.documentElement.style.setProperty('--font-scale',scale);var dark=s.theme==='dark'||(s.theme==='system'&&matchMedia('(prefers-color-scheme:dark)').matches)||!s.theme;document.documentElement.setAttribute('data-theme',dark?'dark':'light');document.documentElement.setAttribute('data-high-contrast',s.highContrast?'true':'false');}catch(e){}})();`,
+            __html: `(function(){try{var s=JSON.parse(localStorage.getItem('gl_settings')||'{}');var scale={'small':'0.9','medium':'1','large':'1.1','xl':'1.2'}[s.fontSize||'medium']||'1';document.documentElement.style.setProperty('--font-scale',scale);var dark=s.theme==='dark'||(s.theme==='system'&&matchMedia('(prefers-color-scheme:dark)').matches)||!s.theme;document.documentElement.setAttribute('data-theme',dark?'dark':'light');document.documentElement.setAttribute('data-high-contrast',s.highContrast?'true':'false');}catch(e){}})();`,
           }}
         />
       </head>

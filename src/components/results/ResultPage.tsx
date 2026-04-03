@@ -882,11 +882,11 @@ export default function ResultPage({ id }: { id: string }) {
                 {a.icon}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-widest font-medium" style={{ color: "#c9a84c" }}>
+                <p className="text-[0.75rem] uppercase tracking-widest font-medium" style={{ color: "#c9a84c" }}>
                   Achievement Unlocked
                 </p>
                 <p className="text-sm font-semibold text-stone-100 leading-tight mt-0.5">{a.title}</p>
-                <p className="text-[11px] text-stone-400 truncate">{a.flavour}</p>
+                <p className="text-[0.8rem] text-stone-400 truncate">{a.flavour}</p>
               </div>
               <span
                 className="text-xs font-bold shrink-0 px-2 py-1 rounded-lg"
@@ -1115,7 +1115,7 @@ function QualityIssueSheet({
               className="flex items-start gap-2.5 px-3 py-2.5 border-b border-stone-800 last:border-0"
               style={{ background: "rgb(26 24 22)" }}
             >
-              <span className="text-[11px] mt-0.5 shrink-0">⚠️</span>
+              <span className="text-[0.8rem] mt-0.5 shrink-0">⚠️</span>
               <span className="text-stone-400 text-xs leading-relaxed">{issue.message}</span>
             </div>
           ))}
@@ -1230,7 +1230,7 @@ function PrimaryCard({
     return (
       <div className="py-6 animate-fade-up flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] uppercase tracking-widest text-stone-500 font-bold">Name</label>
+          <label className="text-[0.75rem] uppercase tracking-widest text-stone-500 font-bold">Name</label>
           <input
             autoFocus
             value={name}
@@ -1240,7 +1240,7 @@ function PrimaryCard({
         </div>
         <div className="flex gap-3">
           <div className="flex flex-col gap-1 flex-1">
-            <label className="text-[10px] uppercase tracking-widest text-stone-500 font-bold">Birth Date</label>
+            <label className="text-[0.75rem] uppercase tracking-widest text-stone-500 font-bold">Birth Date</label>
             <input
               value={birthDate}
               onChange={(e) => setBirthDate(e.target.value)}
@@ -1249,7 +1249,7 @@ function PrimaryCard({
             />
           </div>
           <div className="flex flex-col gap-1 flex-1">
-            <label className="text-[10px] uppercase tracking-widest text-stone-500 font-bold">Death Date</label>
+            <label className="text-[0.75rem] uppercase tracking-widest text-stone-500 font-bold">Death Date</label>
             <input
               value={deathDate}
               onChange={(e) => setDeathDate(e.target.value)}
@@ -1432,7 +1432,7 @@ function CemeteryCard({
               href={`https://maps.apple.com/?q=${encodeURIComponent(location.cemetery || "Grave Location")}&ll=${location.lat},${location.lng}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[0.8rem] font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#007AFF"/><path d="M12 7l4 10-4-2-4 2 4-10z" fill="white"/></svg>
               Apple Maps
@@ -1441,7 +1441,7 @@ function CemeteryCard({
               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.cemetery || "Grave Location")}&center=${location.lat},${location.lng}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[0.8rem] font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/><circle cx="12" cy="9" r="2.5" fill="#FBBC05"/></svg>
               Google Maps
@@ -2290,7 +2290,7 @@ function LocalHistoryCard({
                   key={i}
                   className="px-3 py-2 rounded-xl bg-stone-800 border border-stone-700/60 text-center"
                 >
-                  <p className="text-stone-500 text-[10px] uppercase tracking-wide">{entry.year}</p>
+                  <p className="text-stone-500 text-[0.75rem] uppercase tracking-wide">{entry.year}</p>
                   <p className="text-stone-200 text-sm font-medium mt-0.5">
                     {entry.population.toLocaleString()}
                   </p>
@@ -2305,7 +2305,7 @@ function LocalHistoryCard({
                 {censusExpanded ? "Show fewer" : "Show all census years"}
               </button>
             )}
-            <p className="text-stone-600 text-[10px] mt-1.5">
+            <p className="text-stone-600 text-[0.75rem] mt-1.5">
               Census Bureau data — coverage begins 1990.
             </p>
           </div>
@@ -2477,7 +2477,7 @@ function NarrativeCard({
             {p}
           </p>
         ))}
-        <p className="text-stone-600 text-[10px] italic pt-1">
+        <p className="text-stone-600 text-[0.75rem] italic pt-1">
           Historical narrative generated by AI based on verified era context. Not specific to this individual.
         </p>
       </div>
@@ -2625,7 +2625,7 @@ function CulturalContextCard({
           );
         })}
       </div>
-      <p className="text-stone-600 text-[10px] italic mt-3">
+      <p className="text-stone-600 text-[0.75rem] italic mt-3">
         Era context generated by AI. Reflects the period and region — not specific to this individual.
       </p>
     </div>

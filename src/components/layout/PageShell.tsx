@@ -61,7 +61,7 @@ export default function PageShell({
                     <span className="font-serif font-semibold tracking-wide text-[1.75rem] leading-none">
                       <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
                     </span>
-                    <span className="italic text-white text-[10px] leading-none opacity-60 mt-0.5">
+                    <span className="italic text-white text-[0.65rem] leading-none opacity-60 mt-0.5">
                       By <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer" className="hover:text-gold-400">LowHigh</a>
                     </span>
                   </>

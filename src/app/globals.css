@@ -51,7 +51,7 @@ body {
    */
   background-color: #0a0908; /* fallback if image hasn't loaded */
   background-image:
-    linear-gradient(rgba(10, 9, 8, 0.65), rgba(10, 9, 8, 0.65)),
+    linear-gradient(rgba(10, 9, 8, 0.50), rgba(10, 9, 8, 0.50)),
     url('/memorial-bg.jpg');
   background-size: cover, cover;
   background-position: center 30%, center 30%;
@@ -108,9 +108,22 @@ body {
   background-color: var(--color-stone-900) !important;
 }
 
-/* Subtly tint Carto tiles to match the warm stone aesthetics */
+/* Tint Carto tiles to match warm stone aesthetics; boosted contrast makes roads/lines pop */
 .leaflet-tile-pane {
-  filter: sepia(0.1) hue-rotate(330deg) brightness(1.2) contrast(1.0);
+  filter: sepia(0.15) hue-rotate(330deg) brightness(1.5) contrast(1.5);
+}
+
+/* Dim Leaflet attribution / zoom controls to blend with the dark map */
+.leaflet-control-attribution {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: rgba(138, 133, 128, 0.5) !important;
+  font-size: 9px !important;
+}
+
+.leaflet-control-attribution a,
+.leaflet-control-attribution a:hover {
+  color: rgba(138, 133, 128, 0.6) !important;
 }
 
 /* Overwrite Leaflet popup default styling to match the GraveLens dark theme */

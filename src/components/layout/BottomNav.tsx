@@ -156,14 +156,14 @@ export default function BottomNav() {
                 {tab.icon(isActive)}
                 {showBadge && (
                   <span
-                    className="absolute top-1 right-1 min-w-[16px] h-4 rounded-full text-[10px] font-bold flex items-center justify-center px-1"
+                    className="absolute top-1 right-1 min-w-[16px] h-4 rounded-full text-[0.75rem] font-bold flex items-center justify-center px-1"
                     style={{ background: "#c9a84c", color: "#1a1917" }}
                   >
                     {queueCount > 9 ? "9+" : queueCount}
                   </span>
                 )}
                 <span
-                  className="text-[9px] font-bold tracking-wide uppercase mt-1"
+                  className="text-[0.65rem] font-bold tracking-wide uppercase mt-1"
                   style={{ color: isActive ? "#c9a84c" : "#8a8580", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
                 >
                   {tab.label}
@@ -208,7 +208,7 @@ export default function BottomNav() {
               >
                 {tab.icon(isActive)}
                 <span
-                  className="text-[9px] font-bold tracking-wide uppercase mt-1"
+                  className="text-[0.65rem] font-bold tracking-wide uppercase mt-1"
                   style={{ color: isActive ? "#c9a84c" : "#8a8580", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
                 >
                   {tab.label}

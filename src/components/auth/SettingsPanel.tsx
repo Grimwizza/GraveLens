@@ -28,7 +28,7 @@ function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }
       >
         {icon}
       </div>
-      <p className="text-[11px] uppercase tracking-widest font-semibold text-stone-500">{title}</p>
+      <p className="text-[0.8rem] uppercase tracking-widest font-semibold text-stone-500">{title}</p>
     </div>
   );
 }
@@ -48,7 +48,7 @@ function Label({ title, sub }: { title: string; sub?: string }) {
   return (
     <div className="flex-1 min-w-0 pr-3">
       <p className="text-stone-200 text-sm font-medium">{title}</p>
-      {sub && <p className="text-stone-500 text-[11px] mt-0.5 leading-relaxed">{sub}</p>}
+      {sub && <p className="text-stone-500 text-[0.8rem] mt-0.5 leading-relaxed">{sub}</p>}
     </div>
   );
 }
@@ -411,7 +411,7 @@ export default function SettingsPanel({ onClose }: Props) {
           </div>
 
           {/* App version */}
-          <p className="text-center text-[10px] text-stone-700 pb-6">
+          <p className="text-center text-[0.75rem] text-stone-700 pb-6">
             GraveLens · Build {process.env.NEXT_PUBLIC_BUILD_TIME ?? "dev"}
           </p>
         </div>

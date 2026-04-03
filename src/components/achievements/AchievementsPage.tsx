@@ -51,7 +51,7 @@ function RankBadge({ level, title: _title }: { level: number; title: string }) {
         {level}
       </span>
       <span
-        className="text-[9px] font-medium tracking-widest uppercase mt-0.5"
+        className="text-[0.65rem] font-medium tracking-widest uppercase mt-0.5"
         style={{ color: isMax ? "#1a1510" : "#8a8580" }}
       >
         Level
@@ -72,7 +72,7 @@ function XPBar({ progress, label }: { progress: number; label: string }) {
           }}
         />
       </div>
-      <p className="text-[11px] text-stone-500 mt-1 text-right">{label}</p>
+      <p className="text-[0.8rem] text-stone-500 mt-1 text-right">{label}</p>
     </div>
   );
 }
@@ -128,7 +128,7 @@ function AchievementCard({
             {achievement.title}
           </p>
           <span
-            className="text-[10px] font-bold shrink-0 px-1.5 py-0.5 rounded"
+            className="text-[0.75rem] font-bold shrink-0 px-1.5 py-0.5 rounded"
             style={{
               background: unlocked ? "rgba(201,168,76,0.2)" : "rgba(255,255,255,0.06)",
               color: unlocked ? "#c9a84c" : "#6a6560",
@@ -139,11 +139,11 @@ function AchievementCard({
         </div>
 
         {unlocked ? (
-          <p className="text-[11px] text-stone-400 mt-0.5 leading-snug italic">
+          <p className="text-[0.8rem] text-stone-400 mt-0.5 leading-snug italic">
             &ldquo;{achievement.flavour}&rdquo;
           </p>
         ) : (
-          <p className="text-[11px] text-stone-500 mt-0.5 leading-snug">
+          <p className="text-[0.8rem] text-stone-500 mt-0.5 leading-snug">
             {achievement.description}
           </p>
         )}
@@ -160,7 +160,7 @@ function AchievementCard({
                 }}
               />
             </div>
-            <p className="text-[10px] text-stone-600 mt-0.5">{label}</p>
+            <p className="text-[0.75rem] text-stone-600 mt-0.5">{label}</p>
           </div>
         )}
 
@@ -170,11 +170,11 @@ function AchievementCard({
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
-            <span className="text-[10px]" style={{ color: "#c9a84c" }}>Unlocked · tap for details</span>
+            <span className="text-[0.75rem]" style={{ color: "#c9a84c" }}>Unlocked · tap for details</span>
           </div>
         )}
         {!unlocked && (
-          <p className="text-[10px] text-stone-700 mt-1.5">Tap to see how to earn this</p>
+          <p className="text-[0.75rem] text-stone-700 mt-1.5">Tap to see how to earn this</p>
         )}
       </div>
     </button>
@@ -298,7 +298,7 @@ function AchievementDetailSheet({
 
           {/* How to earn */}
           <div className="mb-4">
-            <p className="text-[10px] uppercase tracking-widest text-stone-500 font-medium mb-1.5">
+            <p className="text-[0.75rem] uppercase tracking-widest text-stone-500 font-medium mb-1.5">
               How to earn
             </p>
             <p className="text-stone-300 text-sm leading-relaxed">
@@ -309,7 +309,7 @@ function AchievementDetailSheet({
           {/* Progress (if in progress) */}
           {!unlocked && progress > 0 && (
             <div className="mb-4">
-              <p className="text-[10px] uppercase tracking-widest text-stone-500 font-medium mb-2">
+              <p className="text-[0.75rem] uppercase tracking-widest text-stone-500 font-medium mb-2">
                 Your progress
               </p>
               <div className="h-2 rounded-full bg-stone-700 overflow-hidden mb-1">
@@ -420,7 +420,7 @@ export default function AchievementsPage() {
           <div className="flex items-center gap-4">
             <RankBadge level={rank.level} title={rank.title} />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] uppercase tracking-widest text-stone-500 font-medium">
+              <p className="text-[0.8rem] uppercase tracking-widest text-stone-500 font-medium">
                 Current Rank
               </p>
               <h2
@@ -457,7 +457,7 @@ export default function AchievementsPage() {
                   title={r.title}
                 >
                   <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border"
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-[0.75rem] font-bold border"
                     style={{
                       background: isCurrentRank
                         ? "#c9a84c"
@@ -505,7 +505,7 @@ export default function AchievementsPage() {
                 <p className="text-lg font-bold font-serif" style={{ color: "#c9a84c" }}>
                   {s.value}
                 </p>
-                <p className="text-[10px] uppercase tracking-wide text-stone-500 mt-0.5">
+                <p className="text-[0.75rem] uppercase tracking-wide text-stone-500 mt-0.5">
                   {s.label}
                 </p>
               </div>
@@ -524,7 +524,7 @@ export default function AchievementsPage() {
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-lg">{CATEGORY_ICONS[category]}</span>
                 <h3 className="font-serif text-base font-semibold text-stone-200">{category}</h3>
-                <span className="ml-auto text-[11px] text-stone-500">
+                <span className="ml-auto text-[0.8rem] text-stone-500">
                   {catUnlocked}/{items.length}
                 </span>
               </div>

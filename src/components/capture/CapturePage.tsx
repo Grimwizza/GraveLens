@@ -515,7 +515,7 @@ function IdleState({
             </div>
             {/* Text centered below brackets (y=240 of 256 -> 94%) */}
             <div className="absolute left-1/2 top-[94%] -translate-x-1/2 -translate-y-1/2">
-              <span className="text-stone-300 text-[11px] sm:text-[13px] font-bold tracking-[0.3em] whitespace-nowrap uppercase opacity-50">
+              <span className="text-stone-300 text-[0.75rem] sm:text-sm font-bold tracking-[0.3em] whitespace-nowrap uppercase opacity-50">
                 Point & scan
               </span>
             </div>

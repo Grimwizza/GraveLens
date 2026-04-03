@@ -85,7 +85,7 @@ export default function ProfileBadge() {
           aria-label={user ? "Account" : "Sign in"}
         >
           {user && initials ? (
-            <span className="text-[11px] font-bold text-stone-900">{initials}</span>
+            <span className="text-[0.8rem] font-bold text-stone-900">{initials}</span>
           ) : (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a8580" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="8" r="4" />
@@ -115,7 +115,7 @@ export default function ProfileBadge() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-stone-100 font-medium text-xs truncate">{user.email}</p>
-                    <p className="text-stone-500 text-[10px] mt-0.5">Signed in</p>
+                    <p className="text-stone-500 text-[0.75rem] mt-0.5">Signed in</p>
                   </div>
                 </div>
 
@@ -168,7 +168,7 @@ export default function ProfileBadge() {
                   Sign Out
                 </button>
 
-                <p className="text-center text-[10px] text-stone-600 pt-1">
+                <p className="text-center text-[0.75rem] text-stone-600 pt-1">
                   © 2026{" "}
                   <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
                     LowHigh LLC
@@ -202,7 +202,7 @@ export default function ProfileBadge() {
                   Settings
                 </button>
 
-                <p className="text-center text-[10px] text-stone-600 pt-1">
+                <p className="text-center text-[0.75rem] text-stone-600 pt-1">
                   © 2026{" "}
                   <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
                     LowHigh LLC
