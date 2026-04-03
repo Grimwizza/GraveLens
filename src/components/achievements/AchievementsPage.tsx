@@ -19,6 +19,7 @@ import {
 } from "@/lib/achievements";
 import { getAllGraves } from "@/lib/storage";
 import type { GraveRecord } from "@/types";
+import { RankInsignia } from "@/components/ui/RankInsignia";
 
 const CATEGORY_ICONS: Record<AchievementCategory, string> = {
   "First Steps": "🪦",
@@ -35,7 +36,7 @@ function RankBadge({ level, title: _title }: { level: number; title: string }) {
   const isMax = level === 10;
   return (
     <div
-      className="relative flex flex-col items-center justify-center rounded-full border-2 w-24 h-24 shrink-0"
+      className="relative flex flex-col items-center justify-center rounded-full border-2 w-28 h-28 shrink-0"
       style={{
         background: isMax
           ? "radial-gradient(circle at 40% 35%, #f5d080, #c9a84c 55%, #8a6820)"
@@ -44,18 +45,7 @@ function RankBadge({ level, title: _title }: { level: number; title: string }) {
         boxShadow: isMax ? "0 0 20px rgba(201,168,76,0.45)" : "0 0 8px rgba(201,168,76,0.2)",
       }}
     >
-      <span
-        className="text-2xl font-bold font-serif leading-none"
-        style={{ color: isMax ? "#1a1510" : "#c9a84c" }}
-      >
-        {level}
-      </span>
-      <span
-        className="text-[0.65rem] font-medium tracking-widest uppercase mt-0.5"
-        style={{ color: isMax ? "#1a1510" : "#8a8580" }}
-      >
-        Level
-      </span>
+      <RankInsignia level={level} size={88} />
     </div>
   );
 }
@@ -376,7 +366,7 @@ export default function AchievementsPage() {
 
   return (
     <PageShell
-      title="Explorer"
+      title="History Explorer"
       icon={
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />

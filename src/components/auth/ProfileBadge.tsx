@@ -7,34 +7,7 @@ import { createClient } from "@/lib/supabase/browser";
 import { syncLocalToCloud, pushExplorerPoints } from "@/lib/cloudSync";
 import { loadUnlocks, totalXP, getRank } from "@/lib/achievements";
 import SettingsPanel from "./SettingsPanel";
-
-function RankInsignia({ level }: { level: number }) {
-  const isMax = level === 10;
-  const isHigh = level >= 7;
-  const isMid = level >= 4;
-
-  const color = isMax ? "#f5d080" : isHigh ? "#c9a84c" : isMid ? "#a09890" : "#8a8580";
-  const glow = isMax ? "0 0 8px rgba(245,208,128,0.4)" : isHigh ? "0 0 6px rgba(201,168,76,0.25)" : "none";
-
-  return (
-    <div 
-      className="flex items-center justify-center w-4 h-4 rounded-sm border-[1.5px] shrink-0" 
-      style={{ 
-        borderColor: color, 
-        background: `linear-gradient(135deg, ${color}20, transparent)`,
-        boxShadow: glow,
-        transform: "rotate(45deg)",
-      }}
-    >
-      <div 
-        className="text-[9px] font-black -rotate-45 leading-none flex items-center justify-center translate-y-[0.5px]" 
-        style={{ color }}
-      >
-        {level}
-      </div>
-    </div>
-  );
-}
+import { RankInsignia, getRankColor } from "@/components/ui/RankInsignia";
 
 export default function ProfileBadge() {
   const { user, loading } = useAuth();
@@ -44,15 +17,16 @@ export default function ProfileBadge() {
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [rankLevel, setRankLevel] = useState(1);
+  const [rankTitle, setRankTitle] = useState("The Wanderer");
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Load explorer rank
+  // Load explorer rank (both offline and online)
   useEffect(() => {
-    if (user) {
-      const unlocks = loadUnlocks();
-      const xp = totalXP(unlocks);
-      setRankLevel(getRank(xp).level);
-    }
+    const unlocks = loadUnlocks();
+    const xp = totalXP(unlocks);
+    const rank = getRank(xp);
+    setRankLevel(rank.level);
+    setRankTitle(rank.title);
   }, [user]);
 
   // Close dropdown on outside click
@@ -116,19 +90,26 @@ export default function ProfileBadge() {
   return (
     <>
       <div ref={containerRef} className="relative flex items-center">
-        {user && (
-          <div className="flex flex-col items-end mr-3 pointer-events-none select-none">
-            <span className="text-stone-100 text-[0.8rem] font-bold tracking-tight leading-none mb-1">
-              {displayName}
+        <button 
+          onClick={() => router.push("/achievements")}
+          className="flex flex-col items-end mr-3 select-none text-right transition-all hover:opacity-80 active:scale-95"
+          aria-label="View Achievements"
+        >
+          <span className="text-stone-100 text-[0.8rem] font-bold tracking-tight leading-none mb-1">
+            {displayName}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <span 
+              className="text-[10px] uppercase font-black tracking-[0.1em] opacity-90 mt-0.5"
+              style={{ color: getRankColor(rankLevel) }}
+            >
+              {rankTitle}
             </span>
-            <div className="flex items-center gap-1.5">
-              <span className="text-stone-500 text-[10px] uppercase font-black tracking-[0.1em] opacity-80">
-                Explorer
-              </span>
-              <RankInsignia level={rankLevel} />
+            <div className="shrink-0 pointer-events-none">
+              <RankInsignia level={rankLevel} size={18} />
             </div>
           </div>
-        )}
+        </button>
 
         {/* Avatar button */}
         <button
