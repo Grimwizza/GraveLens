@@ -1,3 +1,14 @@
+export interface PersonData {
+  name: string;
+  firstName: string;
+  lastName: string;
+  birthDate: string;
+  birthYear: number | null;
+  deathDate: string;
+  deathYear: number | null;
+  ageAtDeath: number | null;
+}
+
 export interface ExtractedGraveData {
   name: string;
   firstName: string;
@@ -16,6 +27,8 @@ export interface ExtractedGraveData {
   confidence: "high" | "medium" | "low";
   source: "claude" | "tesseract";
   analysisModel?: string;
+  /** Populated when the marker commemorates more than one person. */
+  people?: PersonData[];
 }
 
 export interface GeoLocation {
@@ -181,7 +194,10 @@ export interface ResearchData {
   naraRecords?: NaraRecord[];
   cemetery?: CemeteryInfo;
   historical?: HistoricalContext;
+  /** Single-person narrative (legacy / single-person entries). */
   narrative?: LifeNarrative;
+  /** Per-person narratives, parallel to extracted.people[]. Multi-person entries only. */
+  narratives?: LifeNarrative[];
   localHistory?: LocalHistoryContext;
   culturalContext?: CulturalContext;
 }

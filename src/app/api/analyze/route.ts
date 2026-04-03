@@ -38,14 +38,26 @@ Return ONLY valid JSON — no markdown, no explanation, no code fences.`;
 const USER_PROMPT = `Analyze this grave marker photograph and extract all information. Return JSON with exactly these fields:
 
 {
-  "name": "full name as inscribed",
-  "firstName": "first name only",
-  "lastName": "last name only",
-  "birthDate": "full birth date as inscribed, or empty string",
-  "birthYear": null or integer year,
-  "deathDate": "full death date as inscribed, or empty string",
-  "deathYear": null or integer year,
-  "ageAtDeath": null or integer (calculate from dates if not explicitly stated),
+  "name": "full name as inscribed (primary or only person)",
+  "firstName": "first name only (primary or only person)",
+  "lastName": "last name only (primary or only person)",
+  "birthDate": "full birth date as inscribed, or empty string (primary or only person)",
+  "birthYear": null or integer year (primary or only person),
+  "deathDate": "full death date as inscribed, or empty string (primary or only person)",
+  "deathYear": null or integer year (primary or only person),
+  "ageAtDeath": null or integer (primary or only person; calculate from dates if not explicitly stated),
+  "people": [
+    {
+      "name": "full name as inscribed",
+      "firstName": "first name only",
+      "lastName": "last name only",
+      "birthDate": "full birth date as inscribed, or empty string",
+      "birthYear": null or integer year,
+      "deathDate": "full death date as inscribed, or empty string",
+      "deathYear": null or integer year,
+      "ageAtDeath": null or integer
+    }
+  ],
   "inscription": "complete verbatim transcription of ALL text visible on the marker",
   "epitaph": "any epitaph, verse, or sentiment inscribed (separate from dates/name)",
   "symbols": ["array of described symbols: religious, military, fraternal, decorative"],
@@ -60,7 +72,8 @@ Rules:
 - For symbols, describe each one specifically (e.g., "Masonic square and compass", "lamb — symbol of innocence", "U.S. Army emblem", "IHS Christogram").
 - Calculate ageAtDeath if birth and death years are both present.
 - If text is partially obscured, include what is legible with [?] for uncertain characters.
-- If the marker is in a language other than English, translate all text fields (name, inscription, epitaph) into English. Preserve the original spelling of proper names (e.g. "Johann" stays "Johann"), but translate all non-name text.`;
+- If the marker is in a language other than English, translate all text fields (name, inscription, epitaph) into English. Preserve the original spelling of proper names (e.g. "Johann" stays "Johann"), but translate all non-name text.
+- The "people" array must contain one entry per distinct person commemorated on the marker. If only one person is commemorated, "people" contains just that one entry (identical to the top-level name/date fields). Only include a person in "people" if they have a distinct name AND at least one date (birth or death). The top-level name/firstName/lastName/birthDate/birthYear/deathDate/deathYear/ageAtDeath must always reflect the primary (or only) person.`;
 
 function buildRescanPrompt(issues: string[]): string {
   const issueList = issues.length > 0

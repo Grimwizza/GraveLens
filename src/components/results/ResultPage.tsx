@@ -21,6 +21,7 @@ import type {
   GeoLocation,
   LifeNarrative,
   CulturalContext,
+  PersonData,
 } from "@/types";
 
 interface PendingResult {
@@ -40,8 +41,9 @@ export default function ResultPage({ id }: { id: string }) {
   const [tags, setTags] = useState<string[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
   const [achievementToasts, setAchievementToasts] = useState<Achievement[]>([]);
-  const [narrative, setNarrative] = useState<LifeNarrative | null>(null);
-  const [narrativeLoading, setNarrativeLoading] = useState(false);
+  const [narratives, setNarratives] = useState<(LifeNarrative | null)[]>([null]);
+  const [narrativeLoadingIndex, setNarrativeLoadingIndex] = useState<number | null>(null);
+  const [selectedPersonIndex, setSelectedPersonIndex] = useState(0);
   const [culturalContext, setCulturalContext] = useState<CulturalContext | null>(null);
   const [culturalLoading, setCulturalLoading] = useState(false);
   const [expandingCategory, setExpandingCategory] = useState<string | null>(null);
@@ -79,7 +81,12 @@ export default function ResultPage({ id }: { id: string }) {
           timestamp: archived.timestamp,
         });
         setResearch(archived.research ?? {});
-        setNarrative(archived.research?.narrative ?? null);
+        const archivePeople = archived.extracted?.people;
+        if (archivePeople && archivePeople.length > 1) {
+          setNarratives(archived.research?.narratives ?? new Array(archivePeople.length).fill(null));
+        } else {
+          setNarratives([archived.research?.narrative ?? null]);
+        }
         setCulturalContext(archived.research?.culturalContext ?? null);
         setTags(archived.tags ?? []);
         setSaved(true);
@@ -414,23 +421,25 @@ export default function ResultPage({ id }: { id: string }) {
     }
   }, [pending, expandingCategory, culturalContext]);
 
-  const handleGenerateNarrative = useCallback(async () => {
-    if (!pending || narrativeLoading) return;
-    setNarrativeLoading(true);
+  const handleGenerateNarrative = useCallback(async (personIndex: number = 0) => {
+    if (!pending || narrativeLoadingIndex !== null) return;
+    setNarrativeLoadingIndex(personIndex);
     try {
       const { extracted, location } = pending;
+      const people = extracted.people;
+      const person = people && people.length > personIndex ? people[personIndex] : null;
       const historical = research?.historical;
       const militaryContext = research?.militaryContext;
       const res = await fetch("/api/narrative", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: extracted.name,
-          birthYear: extracted.birthYear,
-          deathYear: extracted.deathYear,
-          birthDate: extracted.birthDate,
-          deathDate: extracted.deathDate,
-          ageAtDeath: extracted.ageAtDeath,
+          name: person?.name ?? extracted.name,
+          birthYear: person?.birthYear ?? extracted.birthYear,
+          deathYear: person?.deathYear ?? extracted.deathYear,
+          birthDate: person?.birthDate ?? extracted.birthDate,
+          deathDate: person?.deathDate ?? extracted.deathDate,
+          ageAtDeath: person?.ageAtDeath ?? extracted.ageAtDeath,
           city: location?.city,
           state: location?.state,
           country: location?.country,
@@ -446,17 +455,45 @@ export default function ResultPage({ id }: { id: string }) {
         }),
       });
       if (res.ok) {
-        const data = await res.json();
-        setNarrative(data);
-        // Persist narrative into research so it's saved with the record
-        setResearch((prev) => ({ ...(prev ?? {}), narrative: data }));
+        const data: LifeNarrative = await res.json();
+        setNarratives((prev) => {
+          const updated = [...prev];
+          updated[personIndex] = data;
+          return updated;
+        });
+        const isMulti = people && people.length > 1;
+        if (isMulti) {
+          setResearch((prev) => {
+            const existing = prev?.narratives ?? new Array(people!.length).fill(null);
+            const updated = [...existing];
+            updated[personIndex] = data;
+            return { ...(prev ?? {}), narratives: updated };
+          });
+        } else {
+          setResearch((prev) => ({ ...(prev ?? {}), narrative: data }));
+        }
+        // Persist to IndexedDB
+        const existing = await getGrave(pending.id);
+        if (existing) {
+          const updatedResearch = isMulti
+            ? {
+                ...existing.research,
+                narratives: (() => {
+                  const arr = [...(existing.research?.narratives ?? new Array(people!.length).fill(null))];
+                  arr[personIndex] = data;
+                  return arr;
+                })(),
+              }
+            : { ...existing.research, narrative: data };
+          await saveGrave({ ...existing, research: updatedResearch });
+        }
       }
     } catch (err) {
       console.warn("Narrative generation failed:", err);
     } finally {
-      setNarrativeLoading(false);
+      setNarrativeLoadingIndex(null);
     }
-  }, [pending, research, narrativeLoading]);
+  }, [pending, research, narrativeLoadingIndex]);
 
   const currentLocation = locationOverride ?? pending?.location ?? null;
 
@@ -550,7 +587,7 @@ export default function ResultPage({ id }: { id: string }) {
             : undefined,
         };
         setResearch(researchData);
-        setNarrative(null);
+        setNarratives(new Array(Math.max(1, pending.extracted?.people?.length ?? 1)).fill(null));
         setCulturalContext(null);
         const existing = await getGrave(pending.id);
         if (existing) await saveGrave({ ...existing, extracted: current, research: researchData });
@@ -724,10 +761,13 @@ export default function ResultPage({ id }: { id: string }) {
 
           {/* A Life in Context — on-demand narrative */}
           <NarrativeCard
-            narrative={narrative}
-            loading={narrativeLoading}
-            onGenerate={handleGenerateNarrative}
+            narrative={narratives[selectedPersonIndex] ?? null}
+            loading={narrativeLoadingIndex === selectedPersonIndex}
+            onGenerate={() => handleGenerateNarrative(selectedPersonIndex)}
             extracted={extracted}
+            people={extracted.people}
+            selectedPersonIndex={selectedPersonIndex}
+            onSelectPerson={setSelectedPersonIndex}
           />
 
           {/* A Life in Their Era — cultural context */}
@@ -744,8 +784,8 @@ export default function ResultPage({ id }: { id: string }) {
           <InscriptionCard
             inscription={extracted.inscription}
             epitaph={extracted.epitaph}
-            epitaphSource={narrative?.epitaphSource}
-            epitaphMeaning={narrative?.epitaphMeaning}
+            epitaphSource={narratives[selectedPersonIndex]?.epitaphSource}
+            epitaphMeaning={narratives[selectedPersonIndex]?.epitaphMeaning}
             onSave={(inscription) => handleExtractedEdit({ inscription })}
           />
 
@@ -2337,20 +2377,54 @@ function NarrativeCard({
   loading,
   onGenerate,
   extracted,
+  people,
+  selectedPersonIndex = 0,
+  onSelectPerson,
 }: {
-  narrative: import("@/types").LifeNarrative | null;
+  narrative: LifeNarrative | null;
   loading: boolean;
   onGenerate: () => void;
   extracted: ExtractedGraveData;
+  people?: PersonData[];
+  selectedPersonIndex?: number;
+  onSelectPerson?: (index: number) => void;
 }) {
   // Only offer the feature when we have enough data to generate something meaningful
   const hasEnoughData = !!(extracted.birthYear || extracted.deathYear || extracted.inscription);
   if (!hasEnoughData) return null;
 
+  const isMulti = people && people.length > 1;
+
+  const eligiblePeople = isMulti
+    ? people.map((person, i) => ({ person, i })).filter(({ person }) => !!(person.deathDate || person.deathYear))
+    : [];
+
+  const pillSelector = eligiblePeople.length > 1 ? (
+    <div className="flex flex-wrap gap-2 mt-3">
+      {eligiblePeople.map(({ person, i }) => {
+        const label = person.firstName || person.name.split(" ")[0] || `Person ${i + 1}`;
+        const isSelected = i === selectedPersonIndex;
+        return (
+          <button
+            key={i}
+            onClick={() => onSelectPerson?.(i)}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-all active:scale-[0.97] ${
+              isSelected ? "text-stone-900" : "bg-stone-800 text-stone-400 hover:bg-stone-700"
+            }`}
+            style={isSelected ? { background: "linear-gradient(135deg, #c9a84c, #d4b76a)" } : undefined}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  ) : null;
+
   if (!narrative && !loading) {
     return (
       <div className="py-5 animate-fade-up" style={{ animationDelay: "0.12s" }}>
         <SectionHeader icon="📜" title="A Life in Context" />
+        {pillSelector}
         <p className="mt-2 text-stone-500 text-sm leading-relaxed">
           Generate a historical narrative about what life was like for someone of this era, place, and background.
         </p>
@@ -2372,6 +2446,7 @@ function NarrativeCard({
     return (
       <div className="py-5 animate-fade-up" style={{ animationDelay: "0.12s" }}>
         <SectionHeader icon="📜" title="A Life in Context" />
+        {pillSelector}
         <div className="mt-3 space-y-2">
           <div className="h-4 shimmer rounded w-full" />
           <div className="h-4 shimmer rounded w-5/6" />
@@ -2395,6 +2470,7 @@ function NarrativeCard({
   return (
     <div className="py-5 animate-fade-up" style={{ animationDelay: "0.12s" }}>
       <SectionHeader icon="📜" title="A Life in Context" />
+      {pillSelector}
       <div className="mt-3 space-y-3">
         {paragraphs.map((p, i) => (
           <p key={i} className="text-stone-300 text-sm leading-relaxed">
