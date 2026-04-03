@@ -163,7 +163,7 @@ export default function BottomNav() {
                   </span>
                 )}
                 <span
-                  className="text-[10px] font-bold tracking-wider uppercase mt-1"
+                  className="text-[9px] font-bold tracking-wide uppercase mt-1"
                   style={{ color: isActive ? "#c9a84c" : "#8a8580", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
                 >
                   {tab.label}
@@ -185,7 +185,6 @@ export default function BottomNav() {
               }}
               aria-label="Take a photo"
             >
-              {/* Inner highlight rim */}
               <div className="absolute inset-[1px] rounded-full border border-white/30 pointer-events-none" />
               <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#1a1917" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 2px 2px rgba(255,255,255,0.4))" }}>
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -209,7 +208,7 @@ export default function BottomNav() {
               >
                 {tab.icon(isActive)}
                 <span
-                  className="text-[10px] font-bold tracking-wider uppercase mt-1"
+                  className="text-[9px] font-bold tracking-wide uppercase mt-1"
                   style={{ color: isActive ? "#c9a84c" : "#8a8580", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
                 >
                   {tab.label}
