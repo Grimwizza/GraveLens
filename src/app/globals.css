@@ -108,9 +108,9 @@ body {
   background-color: var(--color-stone-900) !important;
 }
 
-/* Tint Carto tiles to match warm stone aesthetics; boosted contrast makes roads/lines pop */
+/* Tint Carto tiles to match warm stone aesthetics; brightness lifts roads without crushing darks */
 .leaflet-tile-pane {
-  filter: sepia(0.15) hue-rotate(330deg) brightness(1.5) contrast(1.5);
+  filter: sepia(0.1) hue-rotate(330deg) brightness(2.2) contrast(0.95);
 }
 
 /* Dim Leaflet attribution / zoom controls to blend with the dark map */
