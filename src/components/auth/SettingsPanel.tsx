@@ -104,16 +104,20 @@ function SegmentControl<T extends string>({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+import { createPortal } from "react-dom";
+
 export default function SettingsPanel({ onClose }: Props) {
   const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [clearDone, setClearDone] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   // Keep settings in sync with any changes from this session
   useEffect(() => {
     setSettings(loadSettings());
+    setMounted(true);
   }, []);
 
   function update<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
@@ -166,8 +170,10 @@ export default function SettingsPanel({ onClose }: Props) {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  return (
-    <div className="fixed inset-0 z-[300] flex items-end justify-center">
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[2000] flex items-end justify-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-stone-950/70 backdrop-blur-sm"
@@ -410,6 +416,7 @@ export default function SettingsPanel({ onClose }: Props) {
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
