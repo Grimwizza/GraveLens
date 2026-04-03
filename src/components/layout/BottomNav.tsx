@@ -11,7 +11,7 @@ import { setPendingCaptureFile } from "@/lib/pendingCapture";
 const leftTabs = [
   {
     href: "/",
-    label: "Scan",
+    label: "Home",
     icon: (active: boolean) => (
       <svg
         width="28"
@@ -23,8 +23,8 @@ const leftTabs = [
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <circle cx="12" cy="12" r="3" />
-        <path d="M3 9V6a1 1 0 0 1 1-1h3M21 9V6a1 1 0 0 0-1-1h-3M3 15v3a1 1 0 0 0 1 1h3M21 15v3a1 1 0 0 1-1 1h-3" />
+        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9.5z" />
+        <path d="M9 21V12h6v9" />
       </svg>
     ),
   },
