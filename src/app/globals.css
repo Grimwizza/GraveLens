@@ -66,8 +66,6 @@ body {
    */
   position: fixed;
   inset: 0;
-  height: 100dvh;
-  width: 100dvw;
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
