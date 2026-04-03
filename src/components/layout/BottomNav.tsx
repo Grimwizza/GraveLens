@@ -134,7 +134,7 @@ export default function BottomNav() {
   };
 
   return (
-    <div className="fixed bottom-4 sm:bottom-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none pb-safe">
+    <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none" style={{ paddingBottom: "max(calc(env(safe-area-inset-bottom) + 0.5rem), 1rem)" }}>
       <nav className="glass relative pointer-events-auto flex items-center justify-between w-full max-w-[400px] h-[72px] rounded-[36px] border border-stone-700/50 bg-[#121110]/85 backdrop-blur-2xl shadow-[0_20px_40px_-8px_rgba(0,0,0,0.8)] px-2">
         
         {/* Left tabs */}
