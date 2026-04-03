@@ -41,6 +41,14 @@ const GRAVE_ICON_HTML = `
   <rect x="10" y="20" width="8" height="9" rx="1" fill="#1a1917" opacity="0.3"/>
 </svg>`.trim();
 
+const VISITED_ICON_HTML = `
+<div style="filter:drop-shadow(0 2px 5px rgba(0,0,0,0.4))">
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="16" cy="16" r="14" fill="#1a1917" stroke="#c9a84c" stroke-width="2.5"/>
+    <path d="M10 16.5L14 20.5L23 11.5" stroke="#c9a84c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+</div>`.trim();
+
 // ── Zoom-tier helpers ─────────────────────────────────────────────────────────
 
 function wikidataMinSitelinks(zoom: number): number {
@@ -237,6 +245,28 @@ export default function ArchiveMap({
   const [manualRelatives, setManualRelatives] = useState<GraveRecord[] | null>(null);
 
   const [locating, setLocating] = useState(false);
+  const [currentZoom, setCurrentZoom] = useState(13);
+
+  // Group graves by cemetery to find visited locations
+  const visitedCemeteries = useMemo(() => {
+    const stores = new Map<string, { lat: number; lng: number; name: string; count: number }>();
+    allGraves.forEach((g) => {
+      const cName = g.location.cemetery || "Unknown Location";
+      const key = cName.toLowerCase().trim();
+      const existing = stores.get(key);
+      if (existing) {
+        existing.count++;
+      } else {
+        stores.set(key, {
+          lat: g.location.lat,
+          lng: g.location.lng,
+          name: cName,
+          count: 1,
+        });
+      }
+    });
+    return Array.from(stores.values());
+  }, [allGraves]);
 
   const hasManualResults = !!(manualFigures || manualCemeteries || manualRelatives);
 
@@ -280,6 +310,11 @@ export default function ArchiveMap({
 
       graveLayerRef.current = L.layerGroup().addTo(map);
       overlayLayerRef.current = L.layerGroup().addTo(map);
+
+      map.on("zoomend", () => {
+        setCurrentZoom(map.getZoom());
+      });
+
       setMapReady(true); // ← signals layer effects to run
 
       // User location dot
@@ -321,43 +356,67 @@ export default function ArchiveMap({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Grave marker layer ────────────────────────────────────────────────────────
+  // ── Graves layer (zoom-dependent) ───────────────────────────────────────────
   useEffect(() => {
     const map = mapInstanceRef.current;
     const layer = graveLayerRef.current;
     const L = leafletRef.current;
-    if (!map || !layer || !L) return;
+    if (!map || !layer || !L || !mapReady) return;
 
     layer.clearLayers();
 
-    const validGraves = graves.filter((g) => g.location?.lat && g.location?.lng);
-    const graveIcon = L.divIcon({
-      html: GRAVE_ICON_HTML,
-      className: "",
-      iconSize: [28, 36],
-      iconAnchor: [14, 36],
-      popupAnchor: [0, -38],
-    });
+    if (currentZoom >= 16) {
+      // Zoomed in: Show individual gravestones
+      const validGraves = graves.filter((g) => g.location?.lat && g.location?.lng);
+      const graveIcon = L.divIcon({
+        html: GRAVE_ICON_HTML,
+        className: "",
+        iconSize: [28, 36],
+        iconAnchor: [14, 36],
+        popupAnchor: [0, -32],
+      });
 
-    validGraves.forEach((grave) => {
-      const name = grave.extracted.name || "Unknown";
-      const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" – ");
-      const popup = `
-        <div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
-          <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0 0 2px;">${name}</p>
-          ${dates ? `<p style="font-size:11px;color:#c9a84c;margin:0 0 6px;">${dates}</p>` : ""}
-          <img src="${grave.photoDataUrl}" style="width:100%;height:80px;object-fit:cover;border-radius:6px;" />
-        </div>`;
-      L.marker([grave.location.lat, grave.location.lng], { icon: graveIcon })
-        .addTo(layer)
-        .bindPopup(popup, { autoPan: false });
-    });
+      validGraves.forEach((grave) => {
+        const name = grave.extracted.name || "Unknown";
+        const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" – ");
+        const popup = `
+          <div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
+            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0 0 2px;">${name}</p>
+            ${dates ? `<p style="font-size:11px;color:#c9a84c;margin:0 0 6px;">${dates}</p>` : ""}
+            <img src="${grave.photoDataUrl}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;" />
+          </div>`;
+        L.marker([grave.location.lat, grave.location.lng], { icon: graveIcon })
+          .addTo(layer)
+          .bindPopup(popup, { autoPan: false });
+      });
 
-    if (validGraves.length > 1 && map.getZoom() <= 5) {
-      const bounds = L.latLngBounds(validGraves.map((g) => [g.location.lat, g.location.lng] as [number, number]));
-      map.fitBounds(bounds, { padding: [40, 40] });
+      if (validGraves.length > 1 && map.getZoom() <= 5) {
+        const bounds = L.latLngBounds(validGraves.map((g) => [g.location.lat, g.location.lng] as [number, number]));
+        map.fitBounds(bounds, { padding: [40, 40] });
+      }
+    } else {
+      // Zoomed out: Show "Visited Cemetery" markers
+      const visitedIcon = L.divIcon({
+        html: VISITED_ICON_HTML,
+        className: "",
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+        popupAnchor: [0, -16],
+      });
+
+      visitedCemeteries.forEach((c) => {
+        const popup = `
+          <div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
+            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0 0 2px;">${c.name}</p>
+            <p style="font-size:11px;color:#c9a84c;margin:0 0 4px;">Visited Location</p>
+            <p style="font-size:10px;color:#8a8580;">${c.count} archive ${c.count === 1 ? 'record' : 'records'}</p>
+          </div>`;
+        L.marker([c.lat, c.lng], { icon: visitedIcon })
+          .addTo(layer)
+          .bindPopup(popup, { autoPan: false });
+      });
     }
-  }, [graves, mapReady]);
+  }, [graves, visitedCemeteries, currentZoom, mapReady]);
 
   // ── Overlay layer: auto + manual results ──────────────────────────────────────
   useEffect(() => {
@@ -382,10 +441,10 @@ export default function ArchiveMap({
     // ── Heritage places (from Search Here) ────────────────────────────────
     heritagePlaces.forEach((h: HeritagePlace) => {
       const icon = makeCircleIcon(heritageIcon(h.type), "#2e2b28", "#3a3733");
-      const html = `<div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
+      const html = `<div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
         <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${h.name}</p>
         <p style="font-size:11px;color:#c9a84c;margin-top:2px;text-transform:capitalize;">${h.type}</p>
-        ${h.wikipedia ? `<a href="${h.wikipedia}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;font-size:13px;">Wikipedia →</a>` : ""}
+        ${h.wikipedia ? `<a href="${h.wikipedia}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:10px;font-weight:bold;text-decoration:none;font-size:13px;">Learn more →</a>` : ""}
       </div>`;
       L.marker([h.lat, h.lng], { icon }).addTo(layer).bindPopup(html, { autoPan: false });
     });
@@ -394,10 +453,10 @@ export default function ArchiveMap({
     if (manualFigures) {
       manualFigures.forEach((n: NotableFigure) => {
         const icon = makeCircleIcon(figureIconMap[n.category] ?? "📍");
-        const html = `<div style="font-family:system-ui;min-width:180px;padding:14px;background:#1a1917;border-radius:10px;">
+        const html = `<div style="font-family:system-ui;min-width:180px;padding:10px;text-align:center;">
           <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${n.label}</p>
           <p style="font-size:11px;color:#c9a84c;margin-top:2px;">${n.occupationLabel || n.category}</p>
-          ${n.wikipediaUrl ? `<a href="${n.wikipediaUrl}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-weight:bold;text-decoration:none;">Wikipedia →</a>` : ""}
+          ${n.wikipediaUrl ? `<a href="${n.wikipediaUrl}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:10px;font-weight:bold;text-decoration:none;">Learn more →</a>` : ""}
         </div>`;
         L.marker([n.lat, n.lng], { icon }).addTo(layer).bindPopup(html, { autoPan: false });
       });
@@ -405,24 +464,29 @@ export default function ArchiveMap({
 
     if (manualCemeteries) {
       manualCemeteries.forEach((c) => {
+        const isVisited = visitedCemeteries.some(vc => vc.name.toLowerCase().trim() === c.name.toLowerCase().trim());
+
         const icon = L.divIcon({
-          html: `<div style="width:34px;height:34px;background:linear-gradient(135deg,#4a4845,#2e2c2a);border-radius:6px;border:2px solid #1a1917;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,0.5);">
+          html: isVisited ? VISITED_ICON_HTML : `<div style="width:34px;height:34px;background:linear-gradient(135deg,#4a4845,#2e2c2a);border-radius:6px;border:2px solid #1a1917;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,0.5);">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M6 21h12"/><path d="M7 21v-8a5 5 0 0 1 10 0v8"/><path d="M12 7v4"/><path d="M10 9h4"/>
             </svg>
           </div>`,
-          className: "", iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -38],
+          className: "",
+          iconSize: isVisited ? [32, 32] : [34, 34],
+          iconAnchor: isVisited ? [16, 16] : [17, 34],
+          popupAnchor: isVisited ? [0, -16] : [0, -38],
         });
 
         const hoursLine = c.openingHours
-          ? `<div style="display:flex;align-items:flex-start;gap:6px;margin-top:6px;">
+          ? `<div style="display:flex;align-items:flex-start;justify-content:center;gap:6px;margin-top:6px;">
                <span style="font-size:13px;flex-shrink:0;">🕐</span>
-               <span style="font-size:11px;color:#a09585;line-height:1.4;">${formatOpeningHours(c.openingHours)}</span>
+               <span style="font-size:11px;color:#a09585;line-height:1.4;text-align:left;">${formatOpeningHours(c.openingHours)}</span>
              </div>`
           : "";
 
         const phoneLine = c.phone
-          ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+          ? `<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px;">
                <span style="font-size:13px;">📞</span>
                <a href="tel:${c.phone}" style="font-size:11px;color:#c9a84c;text-decoration:none;">${c.phone}</a>
              </div>`
@@ -432,24 +496,24 @@ export default function ArchiveMap({
         const googleUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.name)}&center=${c.lat},${c.lng}`;
 
         const popup = `
-          <div style="font-family:system-ui;min-width:220px;max-width:260px;padding:14px;background:#1a1917;border-radius:10px;">
+          <div style="font-family:system-ui;min-width:220px;max-width:260px;padding:12px;text-align:center;">
             <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0 0 2px;">${c.name}</p>
             <p style="font-size:10px;color:#6a6560;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px;">Cemetery</p>
             ${hoursLine}
             ${phoneLine}
             <div style="display:flex;gap:6px;margin-top:10px;">
               <a href="${appleUrl}" target="_blank"
-                 style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 4px;background:#2e2b28;color:#f5f2ed;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
+                 style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 4px;background:#2e2b28;color:#f5f2ed;border-radius:10px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#007AFF"/><path d="M12 7l4 10-4-2-4 2 4-10z" fill="white"/></svg>
                 Apple
               </a>
               <a href="${googleUrl}" target="_blank"
-                 style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 4px;background:#2e2b28;color:#f5f2ed;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
+                 style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 4px;background:#2e2b28;color:#f5f2ed;border-radius:10px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/><circle cx="12" cy="9" r="2.5" fill="#FBBC05"/></svg>
                 Google
               </a>
             </div>
-            ${c.wikipedia ? `<a href="${c.wikipedia}" target="_blank" style="display:block;margin-top:6px;padding:6px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">Wikipedia →</a>` : ""}
+            ${c.wikipedia ? `<a href="${c.wikipedia}" target="_blank" style="display:block;margin-top:6px;padding:6px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:10px;font-size:11px;font-weight:700;text-decoration:none;">Learn more →</a>` : ""}
           </div>`;
         L.marker([c.lat, c.lng], { icon }).addTo(layer).bindPopup(popup, { maxWidth: 280, autoPan: false });
       });
@@ -461,10 +525,10 @@ export default function ArchiveMap({
         const icon = makeCircleIcon("👤", "linear-gradient(135deg,#7c5cbf,#5b3fa0)", "#1a1917");
         const name = g.extracted.name || "Unknown";
         const cemetery = g.location?.cemetery || "";
-        const html = `<div style="font-family:system-ui;min-width:160px;padding:12px;background:#1a1917;border-radius:10px;">
+        const html = `<div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
           <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0 0 4px;">${name}</p>
           ${cemetery ? `<p style="font-size:11px;color:#c9a84c;margin:0;">${cemetery}</p>` : ""}
-          <img src="${g.photoDataUrl}" style="width:100%;height:72px;object-fit:cover;border-radius:6px;margin-top:6px;" />
+          <img src="${g.photoDataUrl}" style="width:100%;height:72px;object-fit:cover;border-radius:10px;margin-top:6px;" />
         </div>`;
         L.marker([g.location.lat, g.location.lng], { icon }).addTo(layer).bindPopup(html, { autoPan: false });
       });
@@ -546,6 +610,13 @@ export default function ArchiveMap({
     const map = mapInstanceRef.current;
     if (!map) return;
     setIsSearching(true);
+    
+    // Clear old state so legend and map accurately reflect a fresh search
+    setManualFigures(null);
+    setManualCemeteries(null);
+    setHeritagePlaces([]);
+    setManualRelatives(null);
+
     try {
       const b = map.getBounds();
       const sw = b.getSouthWest();
@@ -554,40 +625,52 @@ export default function ArchiveMap({
 
       const tasks: Promise<void>[] = [];
 
-      tasks.push(
-        getNotableFiguresInBounds(sw.lat, sw.lng, ne.lat, ne.lng, wikidataMinSitelinks(z))
-          .then(setManualFigures)
-          .catch(() => {})
-      );
+      if (findType === "all" || findType === "cemeteries") {
+        tasks.push(
+          fetchCemeteriesInBounds(sw.lat, sw.lng, ne.lat, ne.lng)
+            .then(setManualCemeteries)
+            .catch(() => setManualCemeteries(null))
+        );
+      }
 
-      tasks.push(
-        fetchCemeteriesInBounds(sw.lat, sw.lng, ne.lat, ne.lng)
-          .then(setManualCemeteries)
-          .catch(() => {})
-      );
+      if (findType !== "relatives" && findType !== "cemeteries") {
+        tasks.push(
+          getNotableFiguresInBounds(sw.lat, sw.lng, ne.lat, ne.lng, wikidataMinSitelinks(z))
+            .then((figs) => {
+              setManualFigures(
+                findType === "all" || findType === "other"
+                  ? figs
+                  : figs.filter((f) => f.category === findType)
+              );
+            })
+            .catch(() => setManualFigures(null))
+        );
+      }
 
-      if (z >= 8) {
+      if (z >= 8 && (findType === "all" || findType === "other")) {
         tasks.push(
           fetchHeritageInBounds(sw.lat, sw.lng, ne.lat, ne.lng, z)
             .then(setHeritagePlaces)
-            .catch(() => {})
+            .catch(() => setHeritagePlaces([]))
         );
-      } else {
-        setHeritagePlaces([]);
       }
 
-      setManualRelatives(
-        allGraves.filter(
-          (g) =>
-            g.location?.lat &&
-            g.location.lat >= sw.lat && g.location.lat <= ne.lat &&
-            g.location.lng >= sw.lng && g.location.lng <= ne.lng &&
-            (g.tags || []).some((t) => RELATIVE_TAGS.includes(t.toLowerCase()))
-        )
-      );
+      if (findType === "all" || findType === "relatives") {
+        setManualRelatives(
+          allGraves.filter(
+            (g) =>
+              g.location?.lat &&
+              g.location.lat >= sw.lat && g.location.lat <= ne.lat &&
+              g.location.lng >= sw.lng && g.location.lng <= ne.lng &&
+              (g.tags || []).some((t) => RELATIVE_TAGS.includes(t.toLowerCase()))
+          )
+        );
+      }
 
       await Promise.all(tasks);
       onSearchStateChange(false, true);
+    } catch (e) {
+      onSearchStateChange(false, false);
     } finally {
       setIsSearching(false);
     }
@@ -626,7 +709,7 @@ export default function ArchiveMap({
             <line x1="10" y1="9" x2="18" y2="9" stroke="#1a1917" strokeWidth="2" strokeLinecap="round"/>
           </svg>
         ),
-        label: "Your graves",
+        label: "Visited graves",
       });
     }
 
@@ -634,6 +717,18 @@ export default function ArchiveMap({
       items.push({
         icon: <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#4a90e2", border: "2px solid #fff", boxShadow: "0 0 0 3px rgba(74,144,226,0.3)" }} />,
         label: "Your location",
+      });
+    }
+
+    if (visitedCemeteries.length > 0) {
+      items.push({
+        icon: (
+          <svg width="14" height="14" viewBox="0 0 32 32" fill="none">
+            <circle cx="16" cy="16" r="14" fill="#1a1917" stroke="#c9a84c" strokeWidth="2.5"/>
+            <path d="M10 16.5L14 20.5L23 11.5" stroke="#c9a84c" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        ),
+        label: "Visited location",
       });
     }
 
@@ -700,7 +795,7 @@ export default function ArchiveMap({
         <div
           className="absolute left-4 z-[1000] rounded-xl px-3 py-2 flex flex-col gap-1.5"
           style={{
-            bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))",
+            bottom: "calc(6.5rem + env(safe-area-inset-bottom, 0px))",
             background: "rgba(26,25,23,0.88)",
             border: "1px solid rgba(255,255,255,0.08)",
             backdropFilter: "blur(8px)",
@@ -722,7 +817,7 @@ export default function ArchiveMap({
         aria-label="My location"
         className="absolute right-4 z-[1000] w-11 h-11 rounded-full flex items-center justify-center shadow-xl transition-all active:scale-95 disabled:opacity-60"
         style={{
-          bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))",
+          bottom: "calc(6.5rem + env(safe-area-inset-bottom, 0px))",
           background: "#1a1917",
           border: "2px solid #2e2b28",
         }}

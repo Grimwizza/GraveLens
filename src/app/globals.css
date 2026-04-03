@@ -115,3 +115,39 @@ body {
   filter: sepia(0.1) hue-rotate(330deg) brightness(1.2) contrast(1.0);
 }
 
+/* Overwrite Leaflet popup default styling to match the GraveLens dark theme */
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: #1a1917 !important;
+  color: #f5f2ed !important;
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.7) !important;
+  border-radius: 12px !important;
+  padding: 0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  width: auto !important;
+  line-height: inherit !important;
+}
+
+.leaflet-popup-tip-container {
+  margin-top: -1px !important;
+}
+
+.leaflet-popup-close-button {
+  top: 4px !important;
+  right: 4px !important;
+  color: #8a8580 !important;
+  font-size: 14px !important;
+  width: 20px !important;
+  height: 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #f5f2ed !important;
+  background: transparent !important;
+}
