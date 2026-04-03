@@ -9,6 +9,7 @@ import { enrichCemetery, cemeteryId } from "@/lib/apis/cemetery";
 import { checkAndUnlock, loadStats, type Achievement } from "@/lib/achievements";
 import { createClient } from "@/lib/supabase/browser";
 import { uploadPhoto, upsertGrave, pushExplorerPoints, deleteFromCloud } from "@/lib/cloudSync";
+import { setGravePublic } from "@/lib/community";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import { interpretSymbols } from "@/lib/apis/symbols";
 import { checkQuality, qualitySeverity, type QualityResult } from "@/lib/qualityCheck";
@@ -52,6 +53,7 @@ export default function ResultPage({ id }: { id: string }) {
   const [photoFullscreen, setPhotoFullscreen] = useState(false);
   const [extractedOverride, setExtractedOverride] = useState<Partial<ExtractedGraveData> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
 
   // Quality check state
   type RescanStatus = "idle" | "checking" | "rescanning" | "done";
@@ -89,6 +91,7 @@ export default function ResultPage({ id }: { id: string }) {
         }
         setCulturalContext(archived.research?.culturalContext ?? null);
         setTags(archived.tags ?? []);
+        setIsPublic(archived.isPublic ?? false);
         setSaved(true);
         return;
       }
@@ -297,6 +300,21 @@ export default function ResultPage({ id }: { id: string }) {
       if (user) await upsertGrave(supabase, user.id, updated, updated.photoDataUrl);
     } catch { /* non-fatal */ }
   }, [saved, pending]);
+
+  // Toggle community sharing for this grave
+  const handleTogglePublic = useCallback(async (next: boolean) => {
+    setIsPublic(next);
+    if (!pending) return;
+    // Persist locally
+    const existing = await getGrave(pending.id);
+    if (existing) await saveGrave({ ...existing, isPublic: next });
+    // Sync to cloud
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) await setGravePublic(supabase, pending.id, next);
+    } catch { /* non-fatal */ }
+  }, [pending]);
 
   const handleDeepRescan = useCallback(async () => {
     if (!pending || deepRescanDone) return;
@@ -796,6 +814,33 @@ export default function ResultPage({ id }: { id: string }) {
 
           {/* Tags */}
           <TagsCard tags={tags} onChange={handleTagsChange} />
+
+          {/* Community sharing */}
+          <div
+            className="rounded-2xl px-4 py-3.5 flex items-center justify-between gap-3"
+            style={{ background: "rgba(26,25,23,0.7)", border: "1px solid rgba(255,255,255,0.07)" }}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-stone-200 text-sm font-medium">Share with community</p>
+              <p className="text-stone-500 text-[0.8rem] mt-0.5 leading-relaxed">
+                {isPublic
+                  ? "Visible on the community map as a coral marker"
+                  : "Private — only you can see this on the map"}
+              </p>
+            </div>
+            <button
+              onClick={() => handleTogglePublic(!isPublic)}
+              className="shrink-0 w-11 h-6 rounded-full relative transition-colors duration-200"
+              style={{ background: isPublic ? "#c97c6b" : "#3a3733" }}
+              role="switch"
+              aria-checked={isPublic}
+            >
+              <span
+                className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
+                style={{ transform: isPublic ? "translateX(1.25rem)" : "translateX(0.125rem)" }}
+              />
+            </button>
+          </div>
 
           {/* Newspaper records */}
           {(research?.newspapers?.length || researchLoading) ? (

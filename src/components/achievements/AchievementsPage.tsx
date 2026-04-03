@@ -18,8 +18,10 @@ import {
   type AchievementCategory,
 } from "@/lib/achievements";
 import { getAllGraves } from "@/lib/storage";
-import type { GraveRecord } from "@/types";
+import type { GraveRecord, UserProfile } from "@/types";
 import { RankInsignia } from "@/components/ui/RankInsignia";
+import { useAuth } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/browser";
 
 const CATEGORY_ICONS: Record<AchievementCategory, string> = {
   "First Steps": "🪦",
@@ -340,11 +342,51 @@ function AchievementDetailSheet({
   );
 }
 
+// ── Friend profile card ────────────────────────────────────────────────────
+function FriendCard({ profile }: { profile: UserProfile }) {
+  const rank = getRank(profile.explorerXp);
+  const displayName = profile.showUsername && profile.username
+    ? `@${profile.username}`
+    : profile.displayName || "Explorer";
+
+  return (
+    <div
+      className="flex items-center gap-3 rounded-xl p-3"
+      style={{
+        background: "rgba(30,28,24,0.7)",
+        border: "1px solid rgba(255,255,255,0.06)",
+      }}
+    >
+      <div
+        className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-lg font-bold font-serif"
+        style={{ background: "rgba(201,168,76,0.12)", border: "1px solid rgba(201,168,76,0.25)", color: "#c9a84c" }}
+      >
+        {displayName.replace("@", "").slice(0, 1).toUpperCase()}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-stone-200 text-sm font-semibold truncate">{displayName}</p>
+        <p className="text-stone-500 text-[0.75rem] mt-0.5">{rank.title} · {profile.publicGraveCount} graves shared</p>
+      </div>
+      <RankInsignia level={rank.level} size={32} />
+    </div>
+  );
+}
+
 export default function AchievementsPage() {
+  const { user } = useAuth();
   const [graves, setGraves] = useState<GraveRecord[]>([]);
   const [unlocks, setUnlocks] = useState<UnlockRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Friends state
+  const [friends, setFriends] = useState<UserProfile[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(false);
+  const [addFriendOpen, setAddFriendOpen] = useState(false);
+  const [friendSearch, setFriendSearch] = useState("");
+  const [friendSearchResult, setFriendSearchResult] = useState<UserProfile | null | "notfound">(null);
+  const [friendSearching, setFriendSearching] = useState(false);
+  const [sendingRequest, setSendingRequest] = useState(false);
 
   useEffect(() => {
     getAllGraves()
@@ -355,6 +397,92 @@ export default function AchievementsPage() {
       })
       .catch(() => setLoaded(true));
   }, []);
+
+  // Load confirmed friends
+  useEffect(() => {
+    if (!user) return;
+    setFriendsLoading(true);
+    const supabase = createClient();
+    (async () => {
+      try {
+        const { data: relData } = await supabase
+          .from("user_relationships")
+          .select("from_user_id, to_user_id")
+          .eq("type", "friend")
+          .or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`);
+        if (!relData?.length) return;
+        const friendIds = relData.map((r) =>
+          r.from_user_id === user.id ? r.to_user_id : r.from_user_id
+        );
+        const { data: profiles } = await supabase
+          .from("user_profiles")
+          .select("user_id, username, display_name, show_username, explorer_xp, explorer_rank, public_grave_count")
+          .in("user_id", friendIds);
+        setFriends(
+          (profiles ?? []).map((p) => ({
+            userId: p.user_id,
+            username: p.username ?? undefined,
+            displayName: p.display_name ?? undefined,
+            showUsername: p.show_username ?? true,
+            shareAllByDefault: false,
+            explorerXp: p.explorer_xp ?? 0,
+            explorerRank: p.explorer_rank ?? 1,
+            graveCount: 0,
+            publicGraveCount: p.public_grave_count ?? 0,
+            joinedAt: "",
+          }))
+        );
+      } catch { /* non-fatal */ }
+      finally { setFriendsLoading(false); }
+    })();
+  }, [user]);
+
+  const handleSearchFriend = async () => {
+    if (!friendSearch.trim()) return;
+    setFriendSearching(true);
+    setFriendSearchResult(null);
+    try {
+      const supabase = createClient();
+      const query = friendSearch.trim().replace(/^@/, "");
+      const { data } = await supabase
+        .from("user_profiles")
+        .select("user_id, username, display_name, show_username, explorer_xp, explorer_rank, public_grave_count")
+        .or(`username.eq.${query},display_name.ilike.%${query}%`)
+        .limit(1)
+        .maybeSingle();
+      if (!data) { setFriendSearchResult("notfound"); return; }
+      setFriendSearchResult({
+        userId: data.user_id,
+        username: data.username ?? undefined,
+        displayName: data.display_name ?? undefined,
+        showUsername: data.show_username ?? true,
+        shareAllByDefault: false,
+        explorerXp: data.explorer_xp ?? 0,
+        explorerRank: data.explorer_rank ?? 1,
+        graveCount: 0,
+        publicGraveCount: data.public_grave_count ?? 0,
+        joinedAt: "",
+      });
+    } catch { setFriendSearchResult("notfound"); }
+    finally { setFriendSearching(false); }
+  };
+
+  const handleSendRequest = async (toUserId: string) => {
+    if (!user) return;
+    setSendingRequest(true);
+    try {
+      const supabase = createClient();
+      await supabase.from("user_relationships").insert({
+        from_user_id: user.id,
+        to_user_id: toUserId,
+        type: "friend_request",
+      });
+      setAddFriendOpen(false);
+      setFriendSearch("");
+      setFriendSearchResult(null);
+    } catch { /* non-fatal */ }
+    finally { setSendingRequest(false); }
+  };
 
   const stats = loadStats();
   const xp = totalXP(unlocks);
@@ -501,6 +629,87 @@ export default function AchievementsPage() {
               </div>
             ))}
           </div>
+        )}
+
+        {/* Friends section — only shown when signed in */}
+        {user && (
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg">👥</span>
+              <h3 className="font-serif text-base font-semibold text-stone-200">Explorer Friends</h3>
+              <button
+                onClick={() => { setAddFriendOpen((o) => !o); setFriendSearch(""); setFriendSearchResult(null); }}
+                className="ml-auto flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all active:scale-95"
+                style={{ background: "rgba(201,168,76,0.12)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.25)" }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add
+              </button>
+            </div>
+
+            {addFriendOpen && (
+              <div
+                className="rounded-2xl p-4 mb-3 flex flex-col gap-3"
+                style={{ background: "rgba(26,25,23,0.8)", border: "1px solid rgba(255,255,255,0.07)" }}
+              >
+                <p className="text-stone-400 text-xs">Search by @username</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={friendSearch}
+                    onChange={(e) => setFriendSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSearchFriend()}
+                    placeholder="@username"
+                    className="flex-1 bg-stone-800 text-stone-200 text-sm rounded-lg px-3 py-2 border border-stone-700 focus:outline-none focus:border-stone-500 placeholder:text-stone-600"
+                  />
+                  <button
+                    onClick={handleSearchFriend}
+                    disabled={friendSearching}
+                    className="px-3.5 py-2 rounded-lg text-xs font-semibold transition-all active:scale-95 disabled:opacity-50"
+                    style={{ background: "rgba(201,168,76,0.15)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.3)" }}
+                  >
+                    {friendSearching ? "…" : "Search"}
+                  </button>
+                </div>
+
+                {friendSearchResult === "notfound" && (
+                  <p className="text-stone-500 text-xs">No explorer found with that username.</p>
+                )}
+                {friendSearchResult && friendSearchResult !== "notfound" && (
+                  <div className="flex items-center gap-3 rounded-xl p-3" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-stone-200 text-sm font-semibold">
+                        {friendSearchResult.showUsername && friendSearchResult.username ? `@${friendSearchResult.username}` : friendSearchResult.displayName || "Explorer"}
+                      </p>
+                      <p className="text-stone-500 text-[0.75rem]">{getRank(friendSearchResult.explorerXp).title}</p>
+                    </div>
+                    <button
+                      onClick={() => handleSendRequest(friendSearchResult.userId)}
+                      disabled={sendingRequest}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 disabled:opacity-50"
+                      style={{ background: "#c9a84c", color: "#1a1510" }}
+                    >
+                      {sendingRequest ? "…" : "Send Request"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {friendsLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <div className="w-5 h-5 border-2 border-stone-600 border-t-stone-400 rounded-full animate-spin" />
+              </div>
+            ) : friends.length === 0 ? (
+              <p className="text-stone-600 text-sm text-center py-4 italic">
+                No friends yet — search above to connect with other explorers.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {friends.map((f) => <FriendCard key={f.userId} profile={f} />)}
+              </div>
+            )}
+          </section>
         )}
 
         {/* Achievement categories */}

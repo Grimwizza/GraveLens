@@ -12,6 +12,13 @@ import {
   type LocationPref,
 } from "@/lib/settings";
 import { getAllGraves, getAllCemeteries } from "@/lib/storage";
+import { useAuth } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/browser";
+import {
+  fetchOwnProfile,
+  upsertUserProfile,
+  bulkSetGravesPublic,
+} from "@/lib/community";
 
 interface Props {
   onClose: () => void;
@@ -107,6 +114,7 @@ function SegmentControl<T extends string>({
 import { createPortal } from "react-dom";
 
 export default function SettingsPanel({ onClose }: Props) {
+  const { user } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -114,11 +122,67 @@ export default function SettingsPanel({ onClose }: Props) {
   const [clearDone, setClearDone] = useState(false);
   const [mounted, setMounted] = useState(false);
 
+  // Community profile state
+  const [username, setUsername] = useState("");
+  const [showUsername, setShowUsername] = useState(true);
+  const [shareAll, setShareAll] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [shareAllConfirm, setShareAllConfirm] = useState(false);
+
   // Keep settings in sync with any changes from this session
   useEffect(() => {
     setSettings(loadSettings());
     setMounted(true);
   }, []);
+
+  // Load community profile when signed in
+  useEffect(() => {
+    if (!user) return;
+    setProfileLoading(true);
+    const supabase = createClient();
+    fetchOwnProfile(supabase, user.id)
+      .then((p) => {
+        if (p) {
+          setUsername(p.username ?? "");
+          setShowUsername(p.showUsername);
+          setShareAll(p.shareAllByDefault);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setProfileLoading(false));
+  }, [user]);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    setProfileSaving(true);
+    try {
+      const supabase = createClient();
+      await upsertUserProfile(supabase, user.id, {
+        username: username.trim() || undefined,
+        showUsername,
+        shareAllByDefault: shareAll,
+      });
+    } catch { /* non-fatal */ }
+    finally { setProfileSaving(false); }
+  };
+
+  const handleShareAllToggle = async (next: boolean) => {
+    if (next && !shareAllConfirm) {
+      setShareAllConfirm(true);
+      return;
+    }
+    setShareAll(next);
+    setShareAllConfirm(false);
+    if (!user) return;
+    try {
+      const supabase = createClient();
+      await Promise.all([
+        upsertUserProfile(supabase, user.id, { shareAllByDefault: next }),
+        bulkSetGravesPublic(supabase, user.id, next),
+      ]);
+    } catch { /* non-fatal */ }
+  };
 
   function update<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
     const next = patchSettings({ [key]: value } as Partial<AppSettings>);
@@ -330,6 +394,89 @@ export default function SettingsPanel({ onClose }: Props) {
               />
             </Row>
           </div>
+
+          {/* ── COMMUNITY ────────────────────────────────────────────── */}
+          {user && (
+            <>
+              <SectionHeader
+                title="Community"
+                icon={
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
+                }
+              />
+              <div className="mx-5 rounded-2xl overflow-hidden border border-stone-800/80 mb-1">
+                {/* Username */}
+                <div className="px-5 py-3.5 border-b border-stone-800/60" style={{ background: "rgba(26,25,23,0.6)" }}>
+                  <Label title="Username" sub="Your @handle visible to other explorers (optional)" />
+                  <div className="flex gap-2 mt-2.5">
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 30))}
+                      placeholder="e.g. gravehunter42"
+                      maxLength={30}
+                      className="flex-1 bg-stone-800 text-stone-200 text-sm rounded-lg px-3 py-2 border border-stone-700 focus:outline-none focus:border-stone-500 placeholder:text-stone-600"
+                    />
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={profileSaving || profileLoading}
+                      className="px-3.5 py-2 rounded-lg text-xs font-semibold transition-all active:scale-95 disabled:opacity-50"
+                      style={{ background: "rgba(201,168,76,0.15)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.3)" }}
+                    >
+                      {profileSaving ? "…" : "Save"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Show username toggle */}
+                <Row>
+                  <Label title="Show username publicly" sub="When off, you appear as 'Community Member'" />
+                  <Toggle
+                    on={showUsername}
+                    onChange={(v) => { setShowUsername(v); handleSaveProfile(); }}
+                  />
+                </Row>
+
+                {/* Share all graves */}
+                <div className="border-t border-stone-800/60">
+                  <Row>
+                    <Label
+                      title="Share all my discoveries"
+                      sub="Public graves appear on the community map for other users"
+                    />
+                    <Toggle on={shareAll} onChange={handleShareAllToggle} />
+                  </Row>
+                  {shareAllConfirm && (
+                    <div className="px-5 pb-4 pt-1" style={{ background: "rgba(26,25,23,0.6)" }}>
+                      <p className="text-stone-300 text-sm mb-3">
+                        This will make <strong>all your existing graves</strong> visible on the community map. You can hide individual graves from their detail page.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShareAllConfirm(false)}
+                          className="flex-1 py-2 rounded-xl text-sm text-stone-400 border border-stone-700 bg-stone-800"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => handleShareAllToggle(true)}
+                          className="flex-1 py-2 rounded-xl text-sm font-semibold"
+                          style={{ background: "#c9a84c", color: "#1a1510" }}
+                        >
+                          Share All
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* ── PRIVACY & DATA ────────────────────────────────────────── */}
           <SectionHeader
