@@ -3,6 +3,7 @@
 import React, { ReactNode } from "react";
 import BottomNav from "@/components/layout/BottomNav";
 import ProfileBadge from "@/components/auth/ProfileBadge";
+import BrandLogo from "@/components/ui/BrandLogo";
 
 interface PageShellProps {
   children: ReactNode;
@@ -57,14 +58,17 @@ export default function PageShell({
             <div className="flex items-center gap-2">
               <div className="flex flex-col">
                 {showLogo ? (
-                  <>
-                    <span className="font-serif font-semibold tracking-wide text-[1.75rem] leading-none">
-                      <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
-                    </span>
-                    <span className="italic text-white text-[0.65rem] leading-none opacity-60 mt-0.5">
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <BrandLogo size={22} color="#c9a84c" />
+                      <span className="font-serif font-semibold tracking-wide text-[1.5rem] leading-none">
+                        <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
+                      </span>
+                    </div>
+                    <span className="italic text-white text-[0.65rem] leading-none opacity-60 mt-1 ml-7">
                       By <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer" className="hover:text-gold-400">LowHigh</a>
                     </span>
-                  </>
+                  </div>
                 ) : (
                   <div className="flex items-center gap-2.5 py-1">
                     {icon && <div className="text-gold-400 shrink-0">{icon}</div>}

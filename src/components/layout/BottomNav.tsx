@@ -70,7 +70,7 @@ const rightTabs = [
     ),
   },
   {
-    href: "/achievements",
+    href: "/explorer",
     label: "Explorer",
     icon: (active: boolean) => (
       <svg

@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import BrandLogo from "@/components/ui/BrandLogo";
 import PageShell from "@/components/layout/PageShell";
 import { fileToDataUrl, extractExifLocation, correctOrientation, generateId } from "@/lib/exif";
 import { savePendingResult, addToQueue } from "@/lib/storage";
@@ -456,38 +457,42 @@ function IdleState({
         {/* Viewfinder graphic */}
         <button onClick={onCapture} className="relative flex items-center justify-center w-[200px] h-[200px] sm:w-56 sm:h-56 flex-shrink-0 active:scale-95 transition-transform touch-none select-none">
           {/* Corner brackets */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-[0.08] pointer-events-none">
+            <BrandLogo size={220} color="#c9a84c" />
+          </div>
           <svg className="absolute inset-0 w-full h-full" viewBox="0 0 256 256">
+            {/* Corner brackets replaced with subtle scanning markers */}
             <path
               d="M32 80 L32 32 L80 32"
               stroke="#c9a84c"
-              strokeWidth="2"
+              strokeWidth="1.5"
               strokeLinecap="round"
               fill="none"
-              opacity="0.8"
+              opacity="0.2"
             />
             <path
               d="M176 32 L224 32 L224 80"
               stroke="#c9a84c"
-              strokeWidth="2"
+              strokeWidth="1.5"
               strokeLinecap="round"
               fill="none"
-              opacity="0.8"
+              opacity="0.2"
             />
             <path
               d="M32 176 L32 224 L80 224"
               stroke="#c9a84c"
-              strokeWidth="2"
+              strokeWidth="1.5"
               strokeLinecap="round"
               fill="none"
-              opacity="0.8"
+              opacity="0.2"
             />
             <path
               d="M176 224 L224 224 L224 176"
               stroke="#c9a84c"
-              strokeWidth="2"
+              strokeWidth="1.5"
               strokeLinecap="round"
               fill="none"
-              opacity="0.8"
+              opacity="0.2"
             />
             {/* Headstone silhouette */}
             <path
@@ -500,18 +505,7 @@ function IdleState({
           <div className="absolute inset-0 pointer-events-none">
             {/* Camera AF box perfectly centered on both grave silhouette and container */}
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_0_10px_rgba(201,168,76,0.4)] scale-75 sm:scale-100">
-              <svg width="40" height="40" viewBox="0 0 100 100" fill="none">
-                {/* Top-left corner */}
-                <path d="M18 38 L18 18 L38 18" stroke="#c9a84c" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
-                {/* Top-right corner */}
-                <path d="M82 38 L82 18 L62 18" stroke="#c9a84c" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
-                {/* Bottom-left corner */}
-                <path d="M18 62 L18 82 L38 82" stroke="#c9a84c" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
-                {/* Bottom-right corner */}
-                <path d="M82 62 L82 82 L62 82" stroke="#c9a84c" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
-                {/* Center focus point */}
-                <circle cx="50" cy="50" r="3" fill="#c9a84c" opacity="0.7"/>
-              </svg>
+              <BrandLogo size={40} color="#c9a84c" />
             </div>
             {/* Text centered below brackets (y=240 of 256 -> 94%) */}
             <div className="absolute left-1/2 top-[94%] -translate-x-1/2 -translate-y-1/2">
