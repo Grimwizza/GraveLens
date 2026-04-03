@@ -394,9 +394,17 @@ export default function ArchiveMap({
         const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" – ");
         const popup = `
           <div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
-            <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0 0 2px;">${name}</p>
-            ${dates ? `<p style="font-size:11px;color:#c9a84c;margin:0 0 6px;">${dates}</p>` : ""}
-            <img src="${grave.photoDataUrl}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;" />
+            <a href="/result/${grave.id}" style="text-decoration:none;display:block;">
+              <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0 0 2px;">${name}</p>
+              ${dates ? `<p style="font-size:11px;color:#c9a84c;margin:0 0 6px;">${dates}</p>` : ""}
+              <img src="${grave.photoDataUrl}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px;" />
+              <div style="font-size:10px;font-weight:700;color:#c9a84c;text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;justify-content:center;gap:4px;">
+                View Archive Entry
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </div>
+            </a>
           </div>`;
         L.marker([grave.location.lat, grave.location.lng], { icon: graveIcon })
           .addTo(layer)
