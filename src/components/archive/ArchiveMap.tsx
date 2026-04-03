@@ -27,8 +27,20 @@ interface HeritagePlace {
   wikipedia?: string;
 }
 
-export type SearchType = "all" | "cemeteries" | "political" | "military" | "artist" | "musician" | "actor" | "relatives" | "other";
+export type SearchType = "all" | "cemeteries" | "political" | "military" | "artist" | "musician" | "actor" | "relatives" | "other" | "heritage";
 const RELATIVE_TAGS = ["family", "relative", "ancestor", "kin", "grandparent", "parent", "mother", "father"];
+
+const FILTER_OPTIONS = [
+  { id: "cemeteries", label: "Cemeteries" },
+  { id: "heritage", label: "Heritage Sites" },
+  { id: "relatives", label: "Family & Ancestors" },
+  { id: "political", label: "Political Heritage" },
+  { id: "military", label: "Military Service" },
+  { id: "artist", label: "Artists" },
+  { id: "musician", label: "Musicians" },
+  { id: "actor", label: "Actors" },
+  { id: "other", label: "Other Notable Figures" }
+];
 
 // ── Icon SVGs ─────────────────────────────────────────────────────────────────
 
@@ -215,7 +227,6 @@ export default function ArchiveMap({
   graves,
   allGraves,
   findRadius,
-  findType,
   findTrigger,
   onSearchStateChange,
   onClearFind,
@@ -223,7 +234,6 @@ export default function ArchiveMap({
   graves: GraveRecord[];
   allGraves: GraveRecord[];
   findRadius: number;
-  findType: SearchType;
   findTrigger: number;
   onSearchStateChange: (searching: boolean, hasResults: boolean) => void;
   onClearFind: () => void;
@@ -246,6 +256,9 @@ export default function ArchiveMap({
 
   const [locating, setLocating] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(13);
+
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(() => new Set(FILTER_OPTIONS.map(o => o.id)));
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
 
   // Group graves by cemetery to find visited locations
   const visitedCemeteries = useMemo(() => {
@@ -439,19 +452,22 @@ export default function ArchiveMap({
       });
 
     // ── Heritage places (from Search Here) ────────────────────────────────
-    heritagePlaces.forEach((h: HeritagePlace) => {
-      const icon = makeCircleIcon(heritageIcon(h.type), "#2e2b28", "#3a3733");
-      const html = `<div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
-        <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${h.name}</p>
-        <p style="font-size:11px;color:#c9a84c;margin-top:2px;text-transform:capitalize;">${h.type}</p>
-        ${h.wikipedia ? `<a href="${h.wikipedia}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:10px;font-weight:bold;text-decoration:none;font-size:13px;">Learn more →</a>` : ""}
-      </div>`;
-      L.marker([h.lat, h.lng], { icon }).addTo(layer).bindPopup(html, { autoPan: false });
-    });
+    if (activeFilters.has("heritage")) {
+      heritagePlaces.forEach((h: HeritagePlace) => {
+        const icon = makeCircleIcon(heritageIcon(h.type), "#2e2b28", "#3a3733");
+        const html = `<div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
+          <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${h.name}</p>
+          <p style="font-size:11px;color:#c9a84c;margin-top:2px;text-transform:capitalize;">${h.type}</p>
+          ${h.wikipedia ? `<a href="${h.wikipedia}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:10px;font-weight:bold;text-decoration:none;font-size:13px;">Learn more →</a>` : ""}
+        </div>`;
+        L.marker([h.lat, h.lng], { icon }).addTo(layer).bindPopup(html, { autoPan: false });
+      });
+    }
 
     // ── Search results ─────────────────────────────────────────────────────
     if (manualFigures) {
       manualFigures.forEach((n: NotableFigure) => {
+        if (!activeFilters.has(n.category)) return;
         const icon = makeCircleIcon(figureIconMap[n.category] ?? "📍");
         const html = `<div style="font-family:system-ui;min-width:180px;padding:10px;text-align:center;">
           <p style="font-family:Georgia,serif;font-size:15px;font-weight:600;color:#f5f2ed;margin:0;">${n.label}</p>
@@ -462,7 +478,7 @@ export default function ArchiveMap({
       });
     }
 
-    if (manualCemeteries) {
+    if (manualCemeteries && activeFilters.has("cemeteries")) {
       manualCemeteries.forEach((c) => {
         const isVisited = visitedCemeteries.some(vc => vc.name.toLowerCase().trim() === c.name.toLowerCase().trim());
 
@@ -520,7 +536,7 @@ export default function ArchiveMap({
     }
 
 
-    if (manualRelatives) {
+    if (manualRelatives && activeFilters.has("relatives")) {
       manualRelatives.forEach((g) => {
         const icon = makeCircleIcon("👤", "linear-gradient(135deg,#7c5cbf,#5b3fa0)", "#1a1917");
         const name = g.extracted.name || "Unknown";
@@ -533,7 +549,7 @@ export default function ArchiveMap({
         L.marker([g.location.lat, g.location.lng], { icon }).addTo(layer).bindPopup(html, { autoPan: false });
       });
     }
-  }, [heritagePlaces, manualFigures, manualCemeteries, manualRelatives, mapReady]);
+  }, [heritagePlaces, manualFigures, manualCemeteries, manualRelatives, mapReady, activeFilters]);
 
   // ── Manual search trigger ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -557,39 +573,37 @@ export default function ArchiveMap({
 
       const promises: Promise<void>[] = [];
 
-      if (findType === "all" || findType === "cemeteries") {
-        promises.push(fetchCemeteriesInBounds(s, w, n, e).then(setManualCemeteries));
-      } else {
-        setManualCemeteries(null);
-      }
+      promises.push(
+        fetchCemeteriesInBounds(s, w, n, e)
+          .then(setManualCemeteries)
+          .catch(() => setManualCemeteries(null))
+      );
 
-      if (findType !== "relatives" && findType !== "cemeteries") {
+      promises.push(
+        getNotableFiguresInBounds(s, w, n, e, wikidataMinSitelinks(zoom))
+          .then(setManualFigures)
+          .catch(() => setManualFigures(null))
+      );
+
+      if (zoom >= 8) {
         promises.push(
-          getNotableFiguresInBounds(s, w, n, e, wikidataMinSitelinks(zoom)).then((figs) => {
-            setManualFigures(
-              findType === "all" || findType === "other"
-                ? figs
-                : figs.filter((f) => f.category === findType)
-            );
-          })
+          fetchHeritageInBounds(s, w, n, e, zoom)
+            .then(setHeritagePlaces)
+            .catch(() => setHeritagePlaces([]))
         );
       } else {
-        setManualFigures(null);
+        setHeritagePlaces([]);
       }
 
-      if (findType === "all" || findType === "relatives") {
-        setManualRelatives(
-          allGraves.filter(
-            (g) =>
-              g.location?.lat &&
-              g.location.lat >= s && g.location.lat <= n &&
-              g.location.lng >= w && g.location.lng <= e &&
-              (g.tags || []).some((t) => RELATIVE_TAGS.includes(t.toLowerCase()))
-          )
-        );
-      } else {
-        setManualRelatives(null);
-      }
+      setManualRelatives(
+        allGraves.filter(
+          (g) =>
+            g.location?.lat &&
+            g.location.lat >= s && g.location.lat <= n &&
+            g.location.lng >= w && g.location.lng <= e &&
+            (g.tags || []).some((t) => RELATIVE_TAGS.includes(t.toLowerCase()))
+        )
+      );
 
       await Promise.all(promises);
       map.fitBounds([[s, w], [n, e]], { padding: [20, 20] });
@@ -625,47 +639,37 @@ export default function ArchiveMap({
 
       const tasks: Promise<void>[] = [];
 
-      if (findType === "all" || findType === "cemeteries") {
-        tasks.push(
-          fetchCemeteriesInBounds(sw.lat, sw.lng, ne.lat, ne.lng)
-            .then(setManualCemeteries)
-            .catch(() => setManualCemeteries(null))
-        );
-      }
+      tasks.push(
+        fetchCemeteriesInBounds(sw.lat, sw.lng, ne.lat, ne.lng)
+          .then(setManualCemeteries)
+          .catch(() => setManualCemeteries(null))
+      );
 
-      if (findType !== "relatives" && findType !== "cemeteries") {
-        tasks.push(
-          getNotableFiguresInBounds(sw.lat, sw.lng, ne.lat, ne.lng, wikidataMinSitelinks(z))
-            .then((figs) => {
-              setManualFigures(
-                findType === "all" || findType === "other"
-                  ? figs
-                  : figs.filter((f) => f.category === findType)
-              );
-            })
-            .catch(() => setManualFigures(null))
-        );
-      }
+      tasks.push(
+        getNotableFiguresInBounds(sw.lat, sw.lng, ne.lat, ne.lng, wikidataMinSitelinks(z))
+          .then(setManualFigures)
+          .catch(() => setManualFigures(null))
+      );
 
-      if (z >= 8 && (findType === "all" || findType === "other")) {
+      if (z >= 8) {
         tasks.push(
           fetchHeritageInBounds(sw.lat, sw.lng, ne.lat, ne.lng, z)
             .then(setHeritagePlaces)
             .catch(() => setHeritagePlaces([]))
         );
+      } else {
+        setHeritagePlaces([]);
       }
 
-      if (findType === "all" || findType === "relatives") {
-        setManualRelatives(
-          allGraves.filter(
-            (g) =>
-              g.location?.lat &&
-              g.location.lat >= sw.lat && g.location.lat <= ne.lat &&
-              g.location.lng >= sw.lng && g.location.lng <= ne.lng &&
-              (g.tags || []).some((t) => RELATIVE_TAGS.includes(t.toLowerCase()))
-          )
-        );
-      }
+      setManualRelatives(
+        allGraves.filter(
+          (g) =>
+            g.location?.lat &&
+            g.location.lat >= sw.lat && g.location.lat <= ne.lat &&
+            g.location.lng >= sw.lng && g.location.lng <= ne.lng &&
+            (g.tags || []).some((t) => RELATIVE_TAGS.includes(t.toLowerCase()))
+        )
+      );
 
       await Promise.all(tasks);
       onSearchStateChange(false, true);
@@ -768,7 +772,7 @@ export default function ArchiveMap({
       }
     }
 
-    if (manualCemeteries && manualCemeteries.length > 0) {
+    if (manualCemeteries && manualCemeteries.length > 0 && activeFilters.has("cemeteries")) {
       items.push({
         icon: (
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -779,12 +783,12 @@ export default function ArchiveMap({
       });
     }
 
-    if (manualRelatives && manualRelatives.length > 0) {
+    if (manualRelatives && manualRelatives.length > 0 && activeFilters.has("relatives")) {
       items.push({ icon: <span style={{ fontSize: 13 }}>👤</span>, label: "Tagged relatives" });
     }
 
     return items;
-  }, [graves, heritagePlaces, manualFigures, manualCemeteries, manualRelatives]);
+  }, [graves, heritagePlaces, manualFigures, manualCemeteries, manualRelatives, activeFilters]);
 
   return (
     <div className="relative flex-1 flex flex-col overflow-hidden h-screen">
@@ -809,6 +813,60 @@ export default function ArchiveMap({
           ))}
         </div>
       )}
+
+      {/* Filter Button */}
+      <div className="absolute top-4 right-4 z-[1000]">
+        <button
+          onClick={() => setFilterMenuOpen(o => !o)}
+          className="w-11 h-11 rounded-full flex items-center justify-center shadow-xl transition-all active:scale-95 bg-[#1a1917] border-2 border-[#2e2b28]"
+          aria-label="Map Filters"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={filterMenuOpen ? "#c9a84c" : "#8a8580"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+          </svg>
+        </button>
+
+        {filterMenuOpen && (
+          <div className="absolute top-14 right-0 w-56 rounded-2xl shadow-2xl overflow-hidden p-3 flex flex-col gap-2"
+               style={{ background: "rgba(26,25,23,0.95)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(12px)" }}>
+            <div className="flex items-center justify-between px-2 pb-2 border-b border-stone-800">
+              <span className="text-stone-200 font-serif font-semibold text-sm">Map Filters</span>
+              <button
+                onClick={() => setActiveFilters(new Set(FILTER_OPTIONS.map(o => o.id)))}
+                className="text-[#c9a84c] text-[10px] uppercase tracking-wider font-bold hover:text-[#d4b76a]"
+              >
+                Reset All
+              </button>
+            </div>
+            <div className="flex flex-col gap-1 max-h-64 overflow-y-auto pr-1">
+              {FILTER_OPTIONS.map(opt => {
+                const checked = activeFilters.has(opt.id);
+                return (
+                  <label key={opt.id} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-stone-800 cursor-pointer transition-colors">
+                    <input 
+                      type="checkbox" 
+                      className="hidden" 
+                      checked={checked}
+                      onChange={() => {
+                        setActiveFilters(prev => {
+                           const next = new Set(prev);
+                           if (next.has(opt.id)) next.delete(opt.id);
+                           else next.add(opt.id);
+                           return next;
+                        });
+                      }}
+                    />
+                    <div className={`w-4 h-4 rounded shadow-inner flex items-center justify-center transition-colors ${checked ? 'bg-[#c9a84c]' : 'bg-[#1a1917] border border-[#3a3733]'}`}>
+                      {checked && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#1a1917" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                    </div>
+                    <span className="text-stone-300 text-xs font-medium">{opt.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* My Location button — floats above bottom nav */}
       <button

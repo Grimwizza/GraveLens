@@ -23,8 +23,6 @@ export default function MapPage() {
     if (km <= 10) return 15;
     return 50;
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [findType, setFindType] = useState<any>("all");
   const [findTrigger, setFindTrigger] = useState(0);
   const [hasManualResults, setHasManualResults] = useState(false);
 
@@ -48,8 +46,8 @@ export default function MapPage() {
       const name = g.extracted.name?.toLowerCase() || "";
       const cemetery = g.location?.cemetery?.toLowerCase() || "";
       const city = g.location?.city?.toLowerCase() || "";
-      const tags = (g.tags || []).join(" ").toLowerCase();
-      return name.includes(q) || cemetery.includes(q) || city.includes(q) || tags.includes(q);
+      const state = g.location?.state?.toLowerCase() || "";
+      return name.includes(q) || cemetery.includes(q) || city.includes(q) || state.includes(q);
     });
   }, [graves, searchQuery]);
 
@@ -82,7 +80,7 @@ export default function MapPage() {
       headerPanels={
         menuOpen && (
           <div className="px-4 pb-3 border-t border-stone-800 pt-3 flex flex-col gap-3">
-            <p className="font-serif text-stone-100 text-base font-semibold">Local Discovery</p>
+
             {/* Archive search */}
             <div className="relative">
               <input
@@ -115,18 +113,6 @@ export default function MapPage() {
                   </button>
                 ))}
               </div>
-              <select
-                value={findType}
-                onChange={(e) => setFindType(e.target.value)}
-                className="flex-1 bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none focus:outline-none focus:border-gold-500/50"
-              >
-                <option value="all">Discover Everything</option>
-                <option value="cemeteries">Cemeteries Only</option>
-                <option value="relatives">Family & Ancestors</option>
-                <option value="political">Political Heritage</option>
-                <option value="military">Military Service</option>
-                <option value="other">Notable Figures</option>
-              </select>
             </div>
 
             <div className="flex gap-2">
@@ -139,7 +125,7 @@ export default function MapPage() {
                 className="flex-1 py-2 rounded-lg font-semibold text-sm active:scale-[0.97] transition-all"
                 style={{ background: "#c9a84c", color: "#1a1917" }}
               >
-                Discover Local
+                Search
               </button>
               {hasManualResults && (
                 <button
@@ -171,7 +157,6 @@ export default function MapPage() {
           graves={filteredGraves}
           allGraves={graves}
           findRadius={findRadius}
-          findType={findType}
           findTrigger={findTrigger}
           onSearchStateChange={(_searching, hasResults) => {
             setHasManualResults(hasResults);
