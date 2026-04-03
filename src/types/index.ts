@@ -212,6 +212,58 @@ export interface GraveRecord {
   tags?: string[];
   userNotes?: string;
   syncedAt?: number; // Unix ms — set after a successful cloud sync
+  /** Whether this grave is shared with the community. Default false. */
+  isPublic?: boolean;
+  /** Optional note shown to community members on the map. */
+  communityNote?: string;
+}
+
+// ── Community / social types ──────────────────────────────────────────────────
+
+export interface UserProfile {
+  userId: string;
+  username?: string;
+  displayName?: string;
+  showUsername: boolean;
+  shareAllByDefault: boolean;
+  explorerXp: number;
+  explorerRank: number;
+  graveCount: number;
+  publicGraveCount: number;
+  joinedAt: string; // ISO timestamptz
+}
+
+/** Relationship between two users */
+export type RelationshipType = "friend_request" | "friend" | "blocked";
+
+export interface UserRelationship {
+  id: string;
+  fromUserId: string;
+  toUserId: string;
+  type: RelationshipType;
+  createdAt: string;
+}
+
+/**
+ * A public grave record returned when fetching community or friend graves.
+ * Contains only the data needed for map display — no full research payload.
+ */
+export interface CommunityGraveRecord {
+  id: string;
+  lat: number;
+  lng: number;
+  name: string;
+  birthDate?: string;
+  deathDate?: string;
+  cemetery?: string;
+  photoUrl: string;
+  communityNote?: string;
+  /** Who this belongs to — "friend" = confirmed friend, "community" = everyone else */
+  tier: "friend" | "community";
+  /** Resolved display name for the contributor */
+  contributorLabel: string;
+  /** Explorer rank level (1–10) for insignia display */
+  contributorRank: number;
 }
 
 /**

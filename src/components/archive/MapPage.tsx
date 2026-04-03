@@ -4,13 +4,18 @@ import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import PageShell from "@/components/layout/PageShell";
 import { getAllGraves } from "@/lib/storage";
-import type { GraveRecord } from "@/types";
+import type { CommunityGraveRecord, GraveRecord } from "@/types";
 import { loadSettings } from "@/lib/settings";
+import { useAuth } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/browser";
+import { fetchCommunityGravesInBounds } from "@/lib/community";
 
 const ArchiveMap = dynamic(() => import("./ArchiveMap"), { ssr: false });
 
 export default function MapPage() {
+  const { user } = useAuth();
   const [graves, setGraves] = useState<GraveRecord[]>([]);
+  const [communityGraves, setCommunityGraves] = useState<CommunityGraveRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -38,6 +43,16 @@ export default function MapPage() {
     });
     return () => clearTimeout(timer);
   }, []);
+
+  // Fetch community graves when the user is signed in.
+  // Uses a wide default bounding box (CONUS); the map layer filters client-side.
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+    fetchCommunityGravesInBounds(supabase, user.id, 24, -125, 50, -66)
+      .then(setCommunityGraves)
+      .catch(() => {});
+  }, [user]);
 
   const filteredGraves = useMemo(() => {
     return graves.filter((g) => {
@@ -156,6 +171,7 @@ export default function MapPage() {
         <ArchiveMap
           graves={filteredGraves}
           allGraves={graves}
+          communityGraves={communityGraves}
           findRadius={findRadius}
           findTrigger={findTrigger}
           onSearchStateChange={(_searching, hasResults) => {

@@ -2,7 +2,7 @@
 
 import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { GraveRecord, NotableFigure } from "@/types";
+import type { GraveRecord, NotableFigure, CommunityGraveRecord } from "@/types";
 import { getNotableFiguresInBounds } from "@/lib/apis/wikidata";
 import { formatOpeningHours } from "@/lib/apis/cemetery";
 
@@ -48,6 +48,26 @@ const GRAVE_ICON_HTML = `
 <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6))">
   <rect x="2" y="14" width="24" height="18" rx="2" fill="#c9a84c"/>
   <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#c9a84c"/>
+  <line x1="14" y1="6" x2="14" y2="12" stroke="#1a1917" stroke-width="2" stroke-linecap="round"/>
+  <line x1="10" y1="9" x2="18" y2="9" stroke="#1a1917" stroke-width="2" stroke-linecap="round"/>
+  <rect x="10" y="20" width="8" height="9" rx="1" fill="#1a1917" opacity="0.3"/>
+</svg>`.trim();
+
+// Friend tier: warm coral/rose
+const FRIEND_GRAVE_ICON_HTML = `
+<svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6))">
+  <rect x="2" y="14" width="24" height="18" rx="2" fill="#c97c6b"/>
+  <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#c97c6b"/>
+  <line x1="14" y1="6" x2="14" y2="12" stroke="#1a1917" stroke-width="2" stroke-linecap="round"/>
+  <line x1="10" y1="9" x2="18" y2="9" stroke="#1a1917" stroke-width="2" stroke-linecap="round"/>
+  <rect x="10" y="20" width="8" height="9" rx="1" fill="#1a1917" opacity="0.3"/>
+</svg>`.trim();
+
+// Community tier: muted slate-blue
+const COMMUNITY_GRAVE_ICON_HTML = `
+<svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6))">
+  <rect x="2" y="14" width="24" height="18" rx="2" fill="#6b89b5"/>
+  <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#6b89b5"/>
   <line x1="14" y1="6" x2="14" y2="12" stroke="#1a1917" stroke-width="2" stroke-linecap="round"/>
   <line x1="10" y1="9" x2="18" y2="9" stroke="#1a1917" stroke-width="2" stroke-linecap="round"/>
   <rect x="10" y="20" width="8" height="9" rx="1" fill="#1a1917" opacity="0.3"/>
@@ -226,6 +246,7 @@ function heritageIcon(type: string): string {
 export default function ArchiveMap({
   graves,
   allGraves,
+  communityGraves = [],
   findRadius,
   findTrigger,
   onSearchStateChange,
@@ -233,6 +254,8 @@ export default function ArchiveMap({
 }: {
   graves: GraveRecord[];
   allGraves: GraveRecord[];
+  /** Public graves from friends and community members. */
+  communityGraves?: CommunityGraveRecord[];
   findRadius: number;
   findTrigger: number;
   onSearchStateChange: (searching: boolean, hasResults: boolean) => void;
@@ -242,6 +265,7 @@ export default function ArchiveMap({
   const mapInstanceRef = useRef<any>(null);
   const leafletRef = useRef<any>(null);
   const graveLayerRef = useRef<any>(null);
+  const communityLayerRef = useRef<any>(null);
   const overlayLayerRef = useRef<any>(null);
   const userMarkerRef = useRef<any>(null);
   const watchIdRef = useRef<number | null>(null);
@@ -322,6 +346,7 @@ export default function ArchiveMap({
       }).addTo(map);
 
       graveLayerRef.current = L.layerGroup().addTo(map);
+      communityLayerRef.current = L.layerGroup().addTo(map);
       overlayLayerRef.current = L.layerGroup().addTo(map);
 
       map.on("zoomend", () => {
@@ -363,6 +388,7 @@ export default function ArchiveMap({
       if (watchIdRef.current !== null) navigator.geolocation?.clearWatch(watchIdRef.current);
       if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; }
       graveLayerRef.current = null;
+      communityLayerRef.current = null;
       overlayLayerRef.current = null;
       userMarkerRef.current = null;
     };
@@ -438,6 +464,52 @@ export default function ArchiveMap({
       });
     }
   }, [graves, visitedCemeteries, currentZoom, mapReady]);
+
+  // ── Community graves layer ───────────────────────────────────────────────────
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const layer = communityLayerRef.current;
+    const L = leafletRef.current;
+    if (!map || !layer || !L || !mapReady) return;
+
+    layer.clearLayers();
+
+    if (communityGraves.length === 0) return;
+
+    const friendIcon = L.divIcon({
+      html: FRIEND_GRAVE_ICON_HTML,
+      className: "",
+      iconSize: [28, 36],
+      iconAnchor: [14, 36],
+      popupAnchor: [0, -32],
+    });
+
+    const communityIcon = L.divIcon({
+      html: COMMUNITY_GRAVE_ICON_HTML,
+      className: "",
+      iconSize: [28, 36],
+      iconAnchor: [14, 36],
+      popupAnchor: [0, -32],
+    });
+
+    communityGraves.forEach((g) => {
+      const icon = g.tier === "friend" ? friendIcon : communityIcon;
+      const dates = [g.birthDate, g.deathDate].filter(Boolean).join(" – ");
+      const rankLabel = `Rank ${g.contributorRank}`;
+      const popup = `
+        <div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
+          <p style="font-family:Georgia,serif;font-size:1rem;font-weight:600;color:#f5f2ed;margin:0 0 2px;">${g.name}</p>
+          ${dates ? `<p style="font-size:0.75rem;color:${g.tier === "friend" ? "#c97c6b" : "#6b89b5"};margin:0 0 4px;">${dates}</p>` : ""}
+          ${g.cemetery ? `<p style="font-size:0.7rem;color:#8a8580;margin:0 0 4px;">${g.cemetery}</p>` : ""}
+          <img src="${g.photoUrl}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px;" />
+          <p style="font-size:0.7rem;color:#8a8580;margin:0;">${g.contributorLabel} · ${rankLabel}</p>
+          ${g.communityNote ? `<p style="font-size:0.7rem;color:#d0cbc5;margin:4px 0 0;font-style:italic;">"${g.communityNote}"</p>` : ""}
+        </div>`;
+      L.marker([g.lat, g.lng], { icon })
+        .addTo(layer)
+        .bindPopup(popup, { autoPan: false });
+    });
+  }, [communityGraves, mapReady]);
 
   // ── Overlay layer: auto + manual results ──────────────────────────────────────
   useEffect(() => {
@@ -725,6 +797,37 @@ export default function ArchiveMap({
       });
     }
 
+    const hasFriendGraves = communityGraves.some((g) => g.tier === "friend");
+    const hasCommunityGraves = communityGraves.some((g) => g.tier === "community");
+
+    if (hasFriendGraves) {
+      items.push({
+        icon: (
+          <svg width="14" height="18" viewBox="0 0 28 36" fill="none">
+            <rect x="2" y="14" width="24" height="18" rx="2" fill="#c97c6b"/>
+            <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#c97c6b"/>
+            <line x1="14" y1="6" x2="14" y2="12" stroke="#1a1917" strokeWidth="2" strokeLinecap="round"/>
+            <line x1="10" y1="9" x2="18" y2="9" stroke="#1a1917" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        ),
+        label: "Friend discoveries",
+      });
+    }
+
+    if (hasCommunityGraves) {
+      items.push({
+        icon: (
+          <svg width="14" height="18" viewBox="0 0 28 36" fill="none">
+            <rect x="2" y="14" width="24" height="18" rx="2" fill="#6b89b5"/>
+            <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#6b89b5"/>
+            <line x1="14" y1="6" x2="14" y2="12" stroke="#1a1917" strokeWidth="2" strokeLinecap="round"/>
+            <line x1="10" y1="9" x2="18" y2="9" stroke="#1a1917" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        ),
+        label: "Community graves",
+      });
+    }
+
     if (userMarkerRef.current) {
       items.push({
         icon: <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#4a90e2", border: "2px solid #fff", boxShadow: "0 0 0 3px rgba(74,144,226,0.3)" }} />,
@@ -796,7 +899,7 @@ export default function ArchiveMap({
     }
 
     return items;
-  }, [graves, heritagePlaces, manualFigures, manualCemeteries, manualRelatives, activeFilters]);
+  }, [graves, communityGraves, heritagePlaces, manualFigures, manualCemeteries, manualRelatives, activeFilters]);
 
   return (
     <div className="relative flex-1 flex flex-col overflow-hidden h-screen">

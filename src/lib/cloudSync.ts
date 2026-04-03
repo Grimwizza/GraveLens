@@ -78,6 +78,8 @@ export async function upsertGrave(
     research: record.research ?? {},
     tags: record.tags ?? [],
     user_notes: record.userNotes ?? null,
+    is_public: record.isPublic ?? false,
+    community_note: record.communityNote ?? null,
     synced_at: new Date().toISOString(),
   });
 
