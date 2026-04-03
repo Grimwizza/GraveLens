@@ -134,92 +134,91 @@ export default function BottomNav() {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50">
-      {/* Camera FAB — protrudes above the nav bar */}
-      <div className="absolute left-1/2 -translate-x-1/2 z-10" style={{ top: "-38px" }}>
-        <button
-          onClick={handleCameraClick}
-          className="w-[76px] h-[76px] rounded-full flex items-center justify-center transition-transform active:scale-90"
-          style={{
-            background: "linear-gradient(145deg, #d4b76a, #c9a84c, #a8873a)",
-            boxShadow: "0 4px 20px rgba(201, 168, 76, 0.5), 0 2px 8px rgba(0,0,0,0.6)",
-          }}
-          aria-label="Take a photo"
-        >
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#1a1917" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-        </button>
-      </div>
+    <div className="fixed bottom-4 sm:bottom-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none pb-safe">
+      <nav className="glass relative pointer-events-auto flex items-center justify-between w-full max-w-[400px] h-[72px] rounded-[36px] border border-stone-700/50 bg-[#121110]/85 backdrop-blur-2xl shadow-[0_20px_40px_-8px_rgba(0,0,0,0.8)] px-2">
+        
+        {/* Left tabs */}
+        <div className="flex items-center justify-around flex-1 h-full">
+          {leftTabs.map((tab) => {
+            const isActive =
+              tab.href === "/"
+                ? pathname === "/" || pathname.startsWith("/result")
+                : pathname === tab.href || pathname.startsWith(tab.href + "/");
 
-      {/* Nav bar */}
-      <div className="glass border-t border-stone-700/50 pb-safe shadow-[0_-8px_24px_rgba(0,0,0,0.4)]">
-        <div className="flex items-center h-[72px] max-w-lg mx-auto px-3">
-          {/* Left tabs */}
-          <div className="flex-1 flex items-center justify-around">
-            {leftTabs.map((tab) => {
-              const isActive =
-                tab.href === "/"
-                  ? pathname === "/" || pathname.startsWith("/result")
-                  : pathname === tab.href || pathname.startsWith(tab.href + "/");
+            const showBadge = tab.href === "/" && queueCount > 0;
 
-              const showBadge = tab.href === "/" && queueCount > 0;
-
-              return (
-                <Link
-                  key={tab.href}
-                  href={tab.href}
-                  className="relative flex flex-col items-center gap-1 min-w-[72px] py-1 transition-all active:scale-95"
-                >
-                  {tab.icon(isActive)}
-                  {showBadge && (
-                    <span
-                      className="absolute -top-0.5 right-3 min-w-[16px] h-4 rounded-full text-[10px] font-bold flex items-center justify-center px-1"
-                      style={{ background: "#c9a84c", color: "#1a1917" }}
-                    >
-                      {queueCount > 9 ? "9+" : queueCount}
-                    </span>
-                  )}
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className={`relative flex flex-col items-center justify-center w-[64px] h-[64px] rounded-[32px] transition-all duration-300 active:scale-95 ${isActive ? 'bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/5'}`}
+              >
+                {tab.icon(isActive)}
+                {showBadge && (
                   <span
-                    className="text-[13px] font-semibold tracking-wide uppercase"
-                    style={{ color: isActive ? "#c9a84c" : "#8a8580" }}
+                    className="absolute top-1 right-1 min-w-[16px] h-4 rounded-full text-[10px] font-bold flex items-center justify-center px-1"
+                    style={{ background: "#c9a84c", color: "#1a1917" }}
                   >
-                    {tab.label}
+                    {queueCount > 9 ? "9+" : queueCount}
                   </span>
-                </Link>
-              );
-            })}
-          </div>
-
-          {/* Center spacer for FAB */}
-          <div className="w-[96px] flex-shrink-0" />
-
-          {/* Right tabs */}
-          <div className="flex-1 flex items-center justify-around">
-            {rightTabs.map((tab) => {
-              const isActive =
-                pathname === tab.href || pathname.startsWith(tab.href + "/");
-
-              return (
-                <Link
-                  key={tab.href}
-                  href={tab.href}
-                  className="relative flex flex-col items-center gap-1 min-w-[72px] py-1 transition-all active:scale-95"
+                )}
+                <span
+                  className="text-[10px] font-bold tracking-wider uppercase mt-1"
+                  style={{ color: isActive ? "#c9a84c" : "#8a8580", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
                 >
-                  {tab.icon(isActive)}
-                  <span
-                    className="text-[13px] font-semibold tracking-wide uppercase"
-                    style={{ color: isActive ? "#c9a84c" : "#8a8580" }}
-                  >
-                    {tab.label}
-                  </span>
-                </Link>
-              );
-            })}
+                  {tab.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Center Action FAB */}
+        <div className="flex-shrink-0 mx-1 -mt-8 relative z-10 transition-transform active:scale-[0.92]">
+          <div className="p-1.5 rounded-full bg-[#121110]/60 backdrop-blur-md shadow-[0_8px_16px_rgba(0,0,0,0.4)]">
+            <button
+              onClick={handleCameraClick}
+              className="relative w-[64px] h-[64px] rounded-full flex items-center justify-center overflow-hidden"
+              style={{
+                background: "linear-gradient(135deg, #eadd9a 0%, #c9a84c 50%, #9e7f33 100%)",
+                boxShadow: "0 8px 24px rgba(201, 168, 76, 0.4), inset 0 2px 4px rgba(255,255,255,0.4), inset 0 -2px 8px rgba(0,0,0,0.2)",
+              }}
+              aria-label="Take a photo"
+            >
+              {/* Inner highlight rim */}
+              <div className="absolute inset-[1px] rounded-full border border-white/30 pointer-events-none" />
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#1a1917" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 2px 2px rgba(255,255,255,0.4))" }}>
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            </button>
           </div>
         </div>
-      </div>
+
+        {/* Right tabs */}
+        <div className="flex items-center justify-around flex-1 h-full">
+          {rightTabs.map((tab) => {
+            const isActive =
+              pathname === tab.href || pathname.startsWith(tab.href + "/");
+
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className={`relative flex flex-col items-center justify-center w-[64px] h-[64px] rounded-[32px] transition-all duration-300 active:scale-95 ${isActive ? 'bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/5'}`}
+              >
+                {tab.icon(isActive)}
+                <span
+                  className="text-[10px] font-bold tracking-wider uppercase mt-1"
+                  style={{ color: isActive ? "#c9a84c" : "#8a8580", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
+                >
+                  {tab.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
 
       {/* Hidden camera input — used when FAB is tapped from non-capture pages */}
       <input
@@ -230,7 +229,7 @@ export default function BottomNav() {
         className="hidden"
         onChange={handleFileChosen}
       />
-    </nav>
+    </div>
   );
 }
 

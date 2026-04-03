@@ -273,8 +273,8 @@ export default function ArchiveMap({
       const map = L.map(mapRef.current!, { center, zoom, zoomControl: false });
       mapInstanceRef.current = map;
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
         maxZoom: 19,
       }).addTo(map);
 
@@ -439,12 +439,14 @@ export default function ArchiveMap({
             ${phoneLine}
             <div style="display:flex;gap:6px;margin-top:10px;">
               <a href="${appleUrl}" target="_blank"
-                 style="flex:1;padding:7px 4px;background:#2e2b28;color:#f5f2ed;text-align:center;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
-                🍎 Apple Maps
+                 style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 4px;background:#2e2b28;color:#f5f2ed;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#007AFF"/><path d="M12 7l4 10-4-2-4 2 4-10z" fill="white"/></svg>
+                Apple
               </a>
               <a href="${googleUrl}" target="_blank"
-                 style="flex:1;padding:7px 4px;background:#2e2b28;color:#f5f2ed;text-align:center;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
-                🗺 Google Maps
+                 style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 4px;background:#2e2b28;color:#f5f2ed;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/><circle cx="12" cy="9" r="2.5" fill="#FBBC05"/></svg>
+                Google
               </a>
             </div>
             ${c.wikipedia ? `<a href="${c.wikipedia}" target="_blank" style="display:block;margin-top:6px;padding:6px;background:#c9a84c;color:#1a1917;text-align:center;border-radius:8px;font-size:11px;font-weight:700;text-decoration:none;">Wikipedia →</a>` : ""}

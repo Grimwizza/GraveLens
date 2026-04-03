@@ -2,10 +2,9 @@
 
 import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
-import BottomNav from "@/components/layout/BottomNav";
+import PageShell from "@/components/layout/PageShell";
 import { getAllGraves } from "@/lib/storage";
 import type { GraveRecord } from "@/types";
-import ProfileBadge from "@/components/auth/ProfileBadge";
 import { loadSettings } from "@/lib/settings";
 
 const ArchiveMap = dynamic(() => import("./ArchiveMap"), { ssr: false });
@@ -24,6 +23,7 @@ export default function MapPage() {
     if (km <= 10) return 15;
     return 50;
   });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [findType, setFindType] = useState<any>("all");
   const [findTrigger, setFindTrigger] = useState(0);
   const [hasManualResults, setHasManualResults] = useState(false);
@@ -54,45 +54,33 @@ export default function MapPage() {
   }, [graves, searchQuery]);
 
   return (
-    <div className="relative w-screen h-screen bg-stone-950 overflow-hidden">
-      {/* Header */}
-      <header className="absolute top-0 left-0 right-0 z-[1001] bg-stone-900 border-b border-stone-800" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
-        <div className="flex items-center justify-between px-5 py-3">
-          <div className="flex items-center gap-2">
-            <div className="flex flex-col">
-              <span className="font-serif font-semibold tracking-wide" style={{ fontSize: "1.75rem" }}>
-                <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
-              </span>
-              <span className="italic text-white text-[10px] leading-none -mt-0.5 opacity-60">
-                By <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer">LowHigh</a>
-              </span>
-            </div>
-            {!loading && (
-              <span className="text-sm text-stone-500 ml-1">
-                ({filteredGraves.length} {filteredGraves.length === 1 ? "marker" : "markers"})
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setMenuOpen((o) => !o)}
-              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
-                menuOpen ? "bg-stone-700" : "bg-stone-800"
-              }`}
-              aria-label="Discovery and Search"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={menuOpen ? "#c9a84c" : "#8a8580"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.3-4.3" />
-              </svg>
-            </button>
-            <ProfileBadge />
-          </div>
-        </div>
-
-        {/* Discovery & Search Panel */}
-        {menuOpen && (
+    <PageShell
+      noScroll={true}
+      title="Discovery Map"
+      icon={
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+        </svg>
+      }
+      customMainClasses="w-full h-full relative"
+      headerTitleActions={null}
+      headerActions={
+        <button
+          onClick={() => setMenuOpen((o) => !o)}
+          className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
+            menuOpen ? "bg-stone-700" : "bg-stone-800"
+          }`}
+          aria-label="Discovery and Search"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={menuOpen ? "#c9a84c" : "#8a8580"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+        </button>
+      }
+      headerPanels={
+        menuOpen && (
           <div className="px-4 pb-3 border-t border-stone-800 pt-3 flex flex-col gap-3">
             <p className="font-serif text-stone-100 text-base font-semibold">Local Discovery</p>
             {/* Archive search */}
@@ -167,39 +155,30 @@ export default function MapPage() {
               )}
             </div>
           </div>
-        )}
-      </header>
-
+        )
+      }
+    >
       {/* Main Map Background */}
-      <main className="w-full h-full">
-        {loading ? (
-          <div className="w-full h-full flex items-center justify-center bg-stone-950">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-10 h-10 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
-              <p className="font-serif italic text-stone-500 text-sm tracking-widest animate-pulse">Initializing Archive...</p>
-            </div>
+      {loading ? (
+        <div className="w-full h-full flex items-center justify-center bg-stone-950">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-10 h-10 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
+            <p className="font-serif italic text-stone-500 text-sm tracking-widest animate-pulse">Initializing Archive...</p>
           </div>
-        ) : (
-          <ArchiveMap
-            graves={filteredGraves}
-            allGraves={graves}
-            findRadius={findRadius}
-            findType={findType}
-            findTrigger={findTrigger}
-            onSearchStateChange={(_searching, hasResults) => {
-              setHasManualResults(hasResults);
-            }}
-            onClearFind={() => setFindTrigger(0)}
-          />
-        )}
-      </main>
-
-      {/* Navigation Overlay */}
-      <div className="absolute bottom-0 left-0 right-0 z-[1001] pointer-events-none">
-        <div className="pointer-events-auto">
-          <BottomNav />
         </div>
-      </div>
-    </div>
+      ) : (
+        <ArchiveMap
+          graves={filteredGraves}
+          allGraves={graves}
+          findRadius={findRadius}
+          findType={findType}
+          findTrigger={findTrigger}
+          onSearchStateChange={(_searching, hasResults) => {
+            setHasManualResults(hasResults);
+          }}
+          onClearFind={() => setFindTrigger(0)}
+        />
+      )}
+    </PageShell>
   );
 }

@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import BottomNav from "@/components/layout/BottomNav";
-import ProfileBadge from "@/components/auth/ProfileBadge";
+import PageShell from "@/components/layout/PageShell";
 import { getAllGraves, deleteGrave, saveGrave, getAllCemeteries, deleteCemetery } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/browser";
 import { fetchAllFromCloud, deleteFromCloud } from "@/lib/cloudSync";
@@ -453,269 +452,217 @@ export default function ArchivePage() {
   const showAssignBanner = assignmentQueue.length > 0 && !enriching && !activeAssignmentId && !nearbyConfirm;
 
   return (
-    <div className="flex flex-col h-full bg-stone-900 overflow-hidden">
-      {/* Header */}
-      <header
-        className="sticky top-0 z-30 bg-stone-900 border-b border-stone-800"
-        style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
-      >
-        <div className="flex items-center justify-between px-5 py-3">
-          <div className="flex items-center gap-2">
-            <div className="flex flex-col">
-              <span className="font-serif font-semibold tracking-wide" style={{ fontSize: "1.75rem" }}>
-                <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
-              </span>
-              <span className="italic text-white text-[10px] leading-none -mt-0.5 opacity-60">
-                By <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer">LowHigh</a>
-              </span>
-            </div>
-            {archiveTab === "markers" && graves.length > 0 && (
-              <span className="text-sm text-stone-500 ml-1">
-                ({filteredGraves.length}{filteredGraves.length !== graves.length && `/${graves.length}`}{" "}
-                {graves.length === 1 ? "marker" : "markers"})
-              </span>
-            )}
-            {archiveTab === "places" && cemeteries.length > 0 && (
-              <span className="text-sm text-stone-500 ml-1">
-                ({cemeteries.length} {cemeteries.length === 1 ? "place" : "places"})
-              </span>
-            )}
+    <PageShell
+      title="Archive"
+      icon={
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+        </svg>
+      }
+      headerTitleActions={null}
+      headerActions={
+        graves.length > 0 && (
+          <div className="flex bg-stone-800/60 rounded-full p-1 border border-white/5 shadow-[inset_0_1px_4px_rgba(0,0,0,0.5)]">
+            <button
+              onClick={() => {
+                setSearchOpen((o) => !o);
+                if (filtersOpen) setFiltersOpen(false);
+              }}
+              className={`w-8 h-8 flex items-center justify-center rounded-full transition-all ${
+                searchOpen ? "bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]" : "hover:bg-white/5"
+              }`}
+              aria-label="Toggle search"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={searchQuery || searchOpen ? "#c9a84c" : "#8a8580"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+              </svg>
+            </button>
+            <button
+              onClick={() => {
+                setFiltersOpen((o) => !o);
+                if (searchOpen) setSearchOpen(false);
+              }}
+              className={`relative w-8 h-8 flex items-center justify-center rounded-full transition-all ${
+                filtersOpen ? "bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]" : "hover:bg-white/5"
+              }`}
+              aria-label="Toggle filters"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={hasActiveFilters || filtersOpen ? "#c9a84c" : "#8a8580"} strokeWidth="2" strokeLinecap="round">
+                <path d="M1 3h14M3 8h10M6 13h4" />
+              </svg>
+              {hasActiveFilters && (
+                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-gold-400 rounded-full shadow-[0_0_4px_rgba(201,168,76,0.8)]" />
+              )}
+            </button>
           </div>
-
-          <div className="flex items-center gap-2">
-            {graves.length > 0 && (
-              <>
-                {/* View mode toggle */}
-                <div className="flex items-center rounded-lg overflow-hidden border border-stone-700 bg-stone-800">
-                  {(
-                    [
-                      {
-                        mode: "list" as ViewMode,
-                        label: "List",
-                        icon: (
-                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                            <path d="M2 4h12M2 8h12M2 12h12" />
-                          </svg>
-                        ),
-                      },
-                      {
-                        mode: "tile" as ViewMode,
-                        label: "Tile",
-                        icon: (
-                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="1" y="1" width="6" height="6" rx="1" />
-                            <rect x="9" y="1" width="6" height="6" rx="1" />
-                            <rect x="1" y="9" width="6" height="6" rx="1" />
-                            <rect x="9" y="9" width="6" height="6" rx="1" />
-                          </svg>
-                        ),
-                      },
-                      {
-                        mode: "cover" as ViewMode,
-                        label: "Cover",
-                        icon: (
-                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="1" y="2" width="14" height="12" rx="2" />
-                            <path d="M4 13V9" strokeWidth="1" opacity="0.5" />
-                            <path d="M12 13V9" strokeWidth="1" opacity="0.5" />
-                          </svg>
-                        ),
-                      },
-                    ] as const
-                  ).map(({ mode, label, icon }) => (
-                    <button
-                      key={mode}
-                      onClick={() => handleViewMode(mode)}
-                      aria-label={label}
-                      className="w-8 h-8 flex items-center justify-center transition-colors"
-                      style={{ color: viewMode === mode ? "#c9a84c" : "#6a6560", background: viewMode === mode ? "rgba(201,168,76,0.12)" : "transparent" }}
-                    >
-                      {icon}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Search button */}
+        )
+      }
+      headerBottomRow={
+        <>
+          <div className="flex bg-[#1a1917]/80 rounded-[14px] p-1 border border-stone-800 shadow-[inset_0_1px_4px_rgba(0,0,0,0.5)]">
+            {(["markers", "places"] as ArchiveTab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setArchiveTab(tab)}
+                className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[10px] transition-all flex items-center gap-1.5 ${
+                  archiveTab === tab 
+                    ? "bg-stone-700/80 text-gold-400 shadow-[0_2px_8px_rgba(0,0,0,0.5)] border border-stone-600/50" 
+                    : "text-stone-500 hover:text-stone-300 border border-transparent"
+                }`}
+              >
+                {tab === "markers" ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/>
+                  </svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 21h12"/><path d="M7 21v-8a5 5 0 0 1 10 0v8"/><path d="M12 7v4"/><path d="M10 9h4"/>
+                  </svg>
+                )}
+                {tab}
+              </button>
+            ))}
+          </div>
+          {archiveTab === "markers" && graves.length > 0 && (
+            <div className="flex items-center gap-1">
+              {(
+                [
+                  { mode: "list" as ViewMode, label: "List", icon: <path d="M2 4h12M2 8h12M2 12h12" /> },
+                  { mode: "tile" as ViewMode, label: "Tile", icon: <><rect x="1" y="1" width="6" height="6" rx="1" /><rect x="9" y="1" width="6" height="6" rx="1" /><rect x="1" y="9" width="6" height="6" rx="1" /><rect x="9" y="9" width="6" height="6" rx="1" /></> },
+                  { mode: "cover" as ViewMode, label: "Cover", icon: <><rect x="1" y="2" width="14" height="12" rx="2" /><path d="M4 13V9" strokeWidth="1" opacity="0.5" /><path d="M12 13V9" strokeWidth="1" opacity="0.5" /></> },
+                ] as const
+              ).map(({ mode, label, icon }) => (
                 <button
-                  onClick={() => {
-                    setSearchOpen((o) => !o);
-                    if (filtersOpen) setFiltersOpen(false);
-                  }}
-                  className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
-                    searchOpen ? "bg-stone-700" : "bg-stone-800"
+                  key={mode}
+                  onClick={() => handleViewMode(mode)}
+                  aria-label={label}
+                  className={`w-8 h-8 flex items-center justify-center rounded-[10px] transition-all ${
+                    viewMode === mode ? "bg-gold-500/15 text-gold-400 shadow-[inset_0_1px_2px_rgba(201,168,76,0.2)]" : "text-stone-500 hover:bg-white/5 hover:text-stone-300"
                   }`}
-                  aria-label="Toggle search"
                 >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke={searchQuery ? "#c9a84c" : "#8a8580"}
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    {icon}
+                  </svg>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      }
+      headerPanels={
+        <>
+          {searchOpen && (
+            <div className="px-4 pb-3 border-t border-stone-800 pt-3">
+              <div className="relative">
+                <input
+                  autoFocus
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search name, cemetery, inscription..."
+                  className="w-full bg-stone-800 text-stone-200 text-sm rounded-lg pl-9 pr-8 py-1.5 border border-stone-700 focus:outline-none focus:border-gold-500/50"
+                />
+                <div className="absolute left-3 top-2 text-stone-500">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="11" cy="11" r="8" />
                     <path d="m21 21-4.3-4.3" />
                   </svg>
-                </button>
-
-                {/* Filter button */}
-                <button
-                  onClick={() => {
-                    setFiltersOpen((o) => !o);
-                    if (searchOpen) setSearchOpen(false);
-                  }}
-                  className={`relative w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
-                    filtersOpen ? "bg-stone-700" : "bg-stone-800"
-                  }`}
-                  aria-label="Toggle filters"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke={hasActiveFilters ? "#c9a84c" : "#8a8580"}
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
+                </div>
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2.5 top-2 text-stone-500 active:text-stone-300"
                   >
-                    <path d="M1 3h14M3 8h10M6 13h4" />
-                  </svg>
-                  {hasActiveFilters && (
-                    <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-gold-500 rounded-full" />
-                  )}
-                </button>
-              </>
-            )}
-            <ProfileBadge />
-          </div>
-        </div>
-
-        {/* Markers / Places tab bar */}
-        <div className="flex border-b border-stone-800">
-          {(["markers", "places"] as ArchiveTab[]).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setArchiveTab(tab)}
-              className="flex-1 py-2.5 text-sm font-medium capitalize transition-colors relative"
-              style={{
-                color: archiveTab === tab ? "#c9a84c" : "#6a6560",
-                borderBottom: archiveTab === tab ? "2px solid #c9a84c" : "2px solid transparent",
-              }}
-            >
-              {tab === "markers" ? (
-                <span className="flex items-center justify-center gap-1.5">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-                    <circle cx="12" cy="9" r="2.5"/>
-                  </svg>
-                  Markers
-                </span>
-              ) : (
-                <span className="flex items-center justify-center gap-1.5">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 21h12"/><path d="M7 21v-8a5 5 0 0 1 10 0v8"/><path d="M12 7v4"/><path d="M10 9h4"/>
-                  </svg>
-                  Places
-                  {cemeteries.length > 0 && (
-                    <span className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold" style={{ background: archiveTab === "places" ? "rgba(201,168,76,0.2)" : "rgba(255,255,255,0.06)", color: archiveTab === "places" ? "#c9a84c" : "#6a6560" }}>
-                      {cemeteries.length}
-                    </span>
-                  )}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Search panel */}
-        {searchOpen && (
-          <div className="px-4 pb-3 border-t border-stone-800 pt-3">
-            <div className="relative">
-              <input
-                autoFocus
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search name, cemetery, inscription..."
-                className="w-full bg-stone-800 text-stone-200 text-sm rounded-lg pl-9 pr-8 py-1.5 border border-stone-700 focus:outline-none focus:border-gold-500/50"
-              />
-              <div className="absolute left-3 top-2 text-stone-500">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.3-4.3" />
-                </svg>
-              </div>
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-2.5 top-2 text-stone-500 active:text-stone-300"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M18 6 6 18M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-         {/* Filter panel */}
-        {filtersOpen && graves.length > 0 && (
-          <div className="px-4 pb-3 border-t border-stone-800 pt-3 flex flex-col gap-2">
-            <div className="flex gap-2">
-              <select
-                value={sortField}
-                onChange={(e) => setSortField(e.target.value as SortField)}
-                className="flex-1 bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none"
-              >
-                <option value="deathYear">Sort by death year</option>
-                <option value="birthYear">Sort by birth year</option>
-              </select>
-              <button
-                onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-                className="flex items-center gap-1 px-3 py-2 bg-stone-800 border border-stone-700 text-stone-300 text-xs rounded-lg shrink-0"
-              >
-                {sortDir === "asc" ? (
-                  <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v8M3 7l3 3 3-3" /></svg>Oldest first</>
-                ) : (
-                  <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 10V2M3 5l3-3 3 3" /></svg>Newest first</>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
                 )}
-              </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <select value={filterState} onChange={(e) => handleFilterState(e.target.value)} className="flex-1 bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none">
-                <option value="">All states</option>
-                {uniqueStates.map((s) => <option key={s} value={s}>{s}</option>)}
+          )}
+          {filtersOpen && graves.length > 0 && (
+            <div className="px-4 pb-3 border-t border-stone-800 pt-3 flex flex-col gap-2">
+              <div className="flex gap-2">
+                <select
+                  value={sortField}
+                  onChange={(e) => setSortField(e.target.value as SortField)}
+                  className="flex-1 bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none"
+                >
+                  <option value="deathYear">Sort by death year</option>
+                  <option value="birthYear">Sort by birth year</option>
+                </select>
+                <button
+                  onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                  className="flex items-center gap-1 px-3 py-2 bg-stone-800 border border-stone-700 text-stone-300 text-xs rounded-lg shrink-0"
+                >
+                  {sortDir === "asc" ? (
+                    <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v8M3 7l3 3 3-3" /></svg>Oldest first</>
+                  ) : (
+                    <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 10V2M3 5l3-3 3 3" /></svg>Newest first</>
+                  )}
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <select value={filterState} onChange={(e) => handleFilterState(e.target.value)} className="flex-1 bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none">
+                  <option value="">All states</option>
+                  {uniqueStates.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <select value={filterCity} onChange={(e) => handleFilterCity(e.target.value)} disabled={uniqueCities.length === 0} className="flex-1 bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none disabled:opacity-40">
+                  <option value="">All cities</option>
+                  {uniqueCities.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <select value={filterCemetery} onChange={(e) => setFilterCemetery(e.target.value)} disabled={uniqueCemeteries.length === 0} className="w-full bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none disabled:opacity-40">
+                <option value="">All cemeteries</option>
+                {uniqueCemeteries.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-              <select value={filterCity} onChange={(e) => handleFilterCity(e.target.value)} disabled={uniqueCities.length === 0} className="flex-1 bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none disabled:opacity-40">
-                <option value="">All cities</option>
-                {uniqueCities.map((c) => <option key={c} value={c}>{c}</option>)}
+              <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)} disabled={uniqueTags.length === 0} className="w-full bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none disabled:opacity-40">
+                <option value="">All tags</option>
+                {uniqueTags.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
+              {hasActiveFilters && (
+                <button
+                  onClick={() => { setFilterState(""); setFilterCity(""); setFilterCemetery(""); setFilterTag(""); setSortField("deathYear"); setSortDir("asc"); }}
+                  className="text-xs text-gold-400 text-left"
+                >
+                  Clear all filters
+                </button>
+              )}
             </div>
-            <select value={filterCemetery} onChange={(e) => setFilterCemetery(e.target.value)} disabled={uniqueCemeteries.length === 0} className="w-full bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none disabled:opacity-40">
-              <option value="">All cemeteries</option>
-              {uniqueCemeteries.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)} disabled={uniqueTags.length === 0} className="w-full bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none disabled:opacity-40">
-              <option value="">All tags</option>
-              {uniqueTags.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-            {hasActiveFilters && (
-              <button
-                onClick={() => { setFilterState(""); setFilterCity(""); setFilterCemetery(""); setFilterTag(""); setSortField("deathYear"); setSortDir("asc"); }}
-                className="text-xs text-gold-400 text-left"
-              >
-                Clear all filters
-              </button>
-            )}
-          </div>
-        )}
-      </header>
-
-      <main className="scroll-container pb-44">
+          )}
+        </>
+      }
+      absoluteOverlays={
+        <>
+          {activeAssignmentId && (() => {
+            const grave = graves.find((g) => g.id === activeAssignmentId);
+            if (!grave) return null;
+            const queueIndex = assignmentQueue.indexOf(activeAssignmentId);
+            return (
+              <AssignmentSheet
+                grave={grave}
+                value={assignmentInput}
+                onChange={setAssignmentInput}
+                onSave={handleAssignSave}
+                onSkip={handleAssignSkip}
+                current={queueIndex + 1}
+                total={assignmentQueue.length}
+              />
+            );
+          })()}
+          {nearbyConfirm && (
+            <NearbyConfirmSheet
+              cemeteryName={nearbyConfirm.name}
+              nearby={nearbyConfirm.graves}
+              onYes={handleNearbyYes}
+              onNo={handleNearbyNo}
+            />
+          )}
+        </>
+      }
+    >
         {loading ? (
           <div className="flex items-center justify-center flex-1">
             <div className="w-6 h-6 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
@@ -797,42 +744,9 @@ export default function ArchivePage() {
             }}
           />
         )}
-      </main>
+      
 
-      {/* Assignment bottom sheet */}
-      {activeAssignmentId && (() => {
-        const grave = graves.find((g) => g.id === activeAssignmentId);
-        if (!grave) return null;
-        const queueIndex = assignmentQueue.indexOf(activeAssignmentId);
-        const position = assignmentQueue.length - assignmentQueue.filter((id) => {
-          // count how many we've already passed (not active, not in queue anymore) — just use original position
-          return true;
-        }).length;
-        return (
-          <AssignmentSheet
-            grave={grave}
-            value={assignmentInput}
-            onChange={setAssignmentInput}
-            onSave={handleAssignSave}
-            onSkip={handleAssignSkip}
-            current={queueIndex + 1}
-            total={assignmentQueue.length}
-          />
-        );
-      })()}
-
-      {/* Proximity confirmation sheet */}
-      {nearbyConfirm && (
-        <NearbyConfirmSheet
-          cemeteryName={nearbyConfirm.name}
-          nearby={nearbyConfirm.graves}
-          onYes={handleNearbyYes}
-          onNo={handleNearbyNo}
-        />
-      )}
-
-      <BottomNav />
-    </div>
+      </PageShell>
   );
 }
 
@@ -1578,12 +1492,14 @@ function CemeterySection({
             {/* Navigation buttons */}
             <div className="flex gap-2 mt-1">
               <a href={appleUrl} target="_blank" rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors">
-                🍎 Apple Maps
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#007AFF"/><path d="M12 7l4 10-4-2-4 2 4-10z" fill="white"/></svg>
+                Apple Maps
               </a>
               <a href={googleUrl} target="_blank" rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors">
-                🗺 Google Maps
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/><circle cx="12" cy="9" r="2.5" fill="#FBBC05"/></svg>
+                Google Maps
               </a>
               {c.wikipediaUrl && (
                 <a href={c.wikipediaUrl} target="_blank" rel="noopener noreferrer"

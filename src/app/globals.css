@@ -105,3 +105,13 @@ body {
   padding-top: env(safe-area-inset-top);
 }
 
+/* Force leaflet map container to match the PageShell bg-stone-900 instead of default gray */
+.leaflet-container {
+  background-color: var(--color-stone-900) !important;
+}
+
+/* Subtly tint Carto tiles to match the warm stone aesthetics */
+.leaflet-tile-pane {
+  filter: sepia(0.1) hue-rotate(330deg) brightness(1.2) contrast(1.0);
+}
+

@@ -2,16 +2,13 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import BottomNav from "@/components/layout/BottomNav";
-
-
+import PageShell from "@/components/layout/PageShell";
 import { fileToDataUrl, extractExifLocation, correctOrientation, generateId } from "@/lib/exif";
 import { savePendingResult, addToQueue } from "@/lib/storage";
 import { QUEUE_CHANGED_EVENT } from "@/lib/queue";
 import { reverseGeocode } from "@/lib/apis/nominatim";
 import { takePendingCaptureFile } from "@/lib/pendingCapture";
 import type { ExtractedGraveData, GeoLocation } from "@/types";
-import ProfileBadge from "@/components/auth/ProfileBadge";
 
 type Phase = "idle" | "processing" | "queued";
 
@@ -290,28 +287,9 @@ export default function CapturePage() {
   }, [selectedFile, previewUrl, handleReset]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden relative">
-      {/* Header */}
-      <header
-        className="flex-shrink-0"
-        style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
-      >
-        <div className="flex items-center justify-between px-5 py-3">
-          <div className="flex flex-col">
-            <span className="font-serif font-semibold tracking-wide" style={{ fontSize: "1.75rem" }}>
-              <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
-            </span>
-            <span className="italic text-white text-[10px] leading-none -mt-0.5 opacity-60">
-              By <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer">LowHigh</a>
-            </span>
-          </div>
-          <ProfileBadge />
-        </div>
-      </header>
-
+    <PageShell showLogo={true} customMainClasses="items-center px-5 pb-28">
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center px-5 overflow-y-auto no-scrollbar pb-28" style={{ scrollbarWidth: "none" }}>
-        {phase === "idle" && (
+      {phase === "idle" && (
           <IdleState
             onUpload={() => fileInputRef.current?.click()}
           />
@@ -330,7 +308,6 @@ export default function CapturePage() {
             )}
           </div>
         )}
-      </main>
 
       {/* Hidden file inputs */}
       <input
@@ -356,9 +333,7 @@ export default function CapturePage() {
           e.target.value = "";
         }}
       />
-
-      <BottomNav />
-    </div>
+    </PageShell>
   );
 }
 

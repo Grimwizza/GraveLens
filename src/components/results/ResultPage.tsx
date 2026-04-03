@@ -1319,14 +1319,26 @@ function CemeteryCard({
           </p>
         )}
         {location.lat !== 0 && (
-          <a
-            href={`https://maps.google.com/?q=${location.lat},${location.lng}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-gold-500 text-sm mt-1 inline-flex items-center gap-1"
-          >
-            Open in Maps →
-          </a>
+          <div className="flex gap-2 mt-2">
+            <a
+              href={`https://maps.apple.com/?q=${encodeURIComponent(location.cemetery || "Grave Location")}&ll=${location.lat},${location.lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#007AFF"/><path d="M12 7l4 10-4-2-4 2 4-10z" fill="white"/></svg>
+              Apple Maps
+            </a>
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.cemetery || "Grave Location")}&center=${location.lat},${location.lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[11px] font-semibold text-stone-200 border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/><circle cx="12" cy="9" r="2.5" fill="#FBBC05"/></svg>
+              Google Maps
+            </a>
+          </div>
         )}
       </div>
     </div>

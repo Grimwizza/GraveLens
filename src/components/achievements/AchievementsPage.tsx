@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import BottomNav from "@/components/layout/BottomNav";
-import ProfileBadge from "@/components/auth/ProfileBadge";
+import PageShell from "@/components/layout/PageShell";
 import {
   ACHIEVEMENTS,
   ACHIEVEMENT_CATEGORIES,
@@ -376,28 +375,40 @@ export default function AchievementsPage() {
   const totalCount = ACHIEVEMENTS.length;
 
   return (
-    <div className="flex flex-col h-full bg-stone-900 overflow-hidden">
-      {/* Header */}
-      <header
-        className="bg-stone-900/95 backdrop-blur-sm sticky top-0 z-30 border-b border-stone-800"
-        style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
-      >
-        <div className="flex items-center justify-between px-5 py-3">
-          <div className="flex items-center gap-2">
-            <div className="flex flex-col">
-              <span className="font-serif font-semibold tracking-wide" style={{ fontSize: "1.75rem" }}>
-                <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
-              </span>
-              <span className="italic text-white text-[10px] leading-none -mt-0.5 opacity-60">
-                By <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer">LowHigh</a>
-              </span>
-            </div>
-          </div>
-          <ProfileBadge />
-        </div>
-      </header>
-
-      <main className="scroll-container max-w-lg mx-auto w-full px-4 pb-44 space-y-6 mt-5">
+    <PageShell
+      title="Explorer"
+      icon={
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+          <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+          <path d="M4 22h16" />
+          <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+          <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+          <path d="M18 2H6v7a6 6 0 0 0 12 0V2z" />
+        </svg>
+      }
+      customMainClasses="items-center w-full px-4 pb-44 space-y-6 mt-5 max-w-lg mx-auto scroll-container"
+      absoluteOverlays={
+        selectedId && (() => {
+          const achievement = ACHIEVEMENTS.find((a) => a.id === selectedId);
+          if (!achievement) return null;
+          const unlocked = isUnlocked(selectedId, unlocks);
+          const unlockRecord = unlocks.find((u) => u.id === selectedId);
+          const catStats = loaded ? stats : { sharesCount: 0, cemeteryNamesAdded: 0, daysActive: [] };
+          const { ratio, label } = loaded ? achievement.evaluate(graves, catStats) : { ratio: 0, label: "" };
+          return (
+            <AchievementDetailSheet
+              achievement={achievement}
+              unlocked={unlocked}
+              unlockedAt={unlockRecord?.unlockedAt}
+              progress={ratio}
+              label={label}
+              onClose={() => setSelectedId(null)}
+            />
+          );
+        })()
+      }
+    >
         {/* Rank card */}
         <div
           className="rounded-2xl p-5"
@@ -539,29 +550,6 @@ export default function AchievementsPage() {
             </section>
           );
         })}
-      </main>
-
-      {/* Achievement detail sheet */}
-      {selectedId && (() => {
-        const achievement = ACHIEVEMENTS.find((a) => a.id === selectedId);
-        if (!achievement) return null;
-        const unlocked = isUnlocked(selectedId, unlocks);
-        const unlockRecord = unlocks.find((u) => u.id === selectedId);
-        const catStats = loaded ? stats : { sharesCount: 0, cemeteryNamesAdded: 0, daysActive: [] };
-        const { ratio, label } = loaded ? achievement.evaluate(graves, catStats) : { ratio: 0, label: "" };
-        return (
-          <AchievementDetailSheet
-            achievement={achievement}
-            unlocked={unlocked}
-            unlockedAt={unlockRecord?.unlockedAt}
-            progress={ratio}
-            label={label}
-            onClose={() => setSelectedId(null)}
-          />
-        );
-      })()}
-
-      <BottomNav />
-    </div>
+    </PageShell>
   );
 }
