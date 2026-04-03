@@ -491,16 +491,15 @@ function IdleState({
             />
             {/* Headstone silhouette */}
             <path
-              d="M96 190 L96 120 Q96 96 128 96 Q160 96 160 120 L160 190 Z"
+              d="M96 175 L96 105 Q96 81 128 81 Q160 81 160 105 L160 175 Z"
               fill="none"
               stroke="#3a3633"
               strokeWidth="1.5"
             />
           </svg>
           <div className="absolute inset-0 pointer-events-none">
-            {/* Camera AF box centered on grave silhouette (y=142 of 256 -> 55.5%) */}
-            <div style={{ position: "absolute", left: "50%", top: "55.5%", transform: "translate(-50%, -50%)" }}
-              className="drop-shadow-[0_0_10px_rgba(201,168,76,0.4)] scale-75 sm:scale-100">
+            {/* Camera AF box perfectly centered on both grave silhouette and container */}
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_0_10px_rgba(201,168,76,0.4)] scale-75 sm:scale-100">
               <svg width="40" height="40" viewBox="0 0 100 100" fill="none">
                 {/* Top-left corner */}
                 <path d="M18 38 L18 18 L38 18" stroke="#c9a84c" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -515,7 +514,7 @@ function IdleState({
               </svg>
             </div>
             {/* Text centered below brackets (y=240 of 256 -> 94%) */}
-            <div style={{ position: "absolute", left: "50%", top: "94%", transform: "translate(-50%, -50%)" }}>
+            <div className="absolute left-1/2 top-[94%] -translate-x-1/2 -translate-y-1/2">
               <span className="text-stone-300 text-[11px] sm:text-[13px] font-bold tracking-[0.3em] whitespace-nowrap uppercase opacity-50">
                 Point & scan
               </span>
