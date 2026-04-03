@@ -5,7 +5,36 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/browser";
 import { syncLocalToCloud, pushExplorerPoints } from "@/lib/cloudSync";
+import { loadUnlocks, totalXP, getRank } from "@/lib/achievements";
 import SettingsPanel from "./SettingsPanel";
+
+function RankInsignia({ level }: { level: number }) {
+  const isMax = level === 10;
+  const isHigh = level >= 7;
+  const isMid = level >= 4;
+
+  const color = isMax ? "#f5d080" : isHigh ? "#c9a84c" : isMid ? "#a09890" : "#8a8580";
+  const glow = isMax ? "0 0 8px rgba(245,208,128,0.4)" : isHigh ? "0 0 6px rgba(201,168,76,0.25)" : "none";
+
+  return (
+    <div 
+      className="flex items-center justify-center w-4 h-4 rounded-sm border-[1.5px] shrink-0" 
+      style={{ 
+        borderColor: color, 
+        background: `linear-gradient(135deg, ${color}20, transparent)`,
+        boxShadow: glow,
+        transform: "rotate(45deg)",
+      }}
+    >
+      <div 
+        className="text-[9px] font-black -rotate-45 leading-none flex items-center justify-center translate-y-[0.5px]" 
+        style={{ color }}
+      >
+        {level}
+      </div>
+    </div>
+  );
+}
 
 export default function ProfileBadge() {
   const { user, loading } = useAuth();
@@ -14,7 +43,17 @@ export default function ProfileBadge() {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [rankLevel, setRankLevel] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Load explorer rank
+  useEffect(() => {
+    if (user) {
+      const unlocks = loadUnlocks();
+      const xp = totalXP(unlocks);
+      setRankLevel(getRank(xp).level);
+    }
+  }, [user]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -34,6 +73,10 @@ export default function ProfileBadge() {
   }
 
   const initials = user?.email ? user.email.slice(0, 2).toUpperCase() : null;
+  const displayName = user?.user_metadata?.full_name?.split(" ")[0] || 
+                      user?.user_metadata?.username || 
+                      user?.email?.split("@")[0] || 
+                      "Explorer";
 
   const handleSync = async () => {
     if (!user) return;
@@ -72,11 +115,25 @@ export default function ProfileBadge() {
 
   return (
     <>
-      <div ref={containerRef} className="relative">
+      <div ref={containerRef} className="relative flex items-center">
+        {user && (
+          <div className="flex flex-col items-end mr-3 pointer-events-none select-none">
+            <span className="text-stone-100 text-[0.8rem] font-bold tracking-tight leading-none mb-1">
+              {displayName}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-stone-500 text-[10px] uppercase font-black tracking-[0.1em] opacity-80">
+                Explorer
+              </span>
+              <RankInsignia level={rankLevel} />
+            </div>
+          </div>
+        )}
+
         {/* Avatar button */}
         <button
           onClick={() => { setOpen((o) => !o); setSyncResult(null); }}
-          className="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90"
+          className="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 shrink-0"
           style={
             user
               ? { background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }
