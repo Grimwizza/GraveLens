@@ -51,7 +51,7 @@ body {
    */
   background-color: #0a0908; /* fallback if image hasn't loaded */
   background-image:
-    linear-gradient(rgba(10, 9, 8, 0.84), rgba(10, 9, 8, 0.84)),
+    linear-gradient(rgba(10, 9, 8, 0.65), rgba(10, 9, 8, 0.65)),
     url('/memorial-bg.jpg');
   background-size: cover, cover;
   background-position: center 30%, center 30%;

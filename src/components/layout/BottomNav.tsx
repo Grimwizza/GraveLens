@@ -134,8 +134,9 @@ export default function BottomNav() {
   };
 
   return (
-    <div className="fixed bottom-4 sm:bottom-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none pb-safe">
-      <nav className="glass relative pointer-events-auto flex items-center justify-between w-full max-w-[400px] h-[72px] rounded-[36px] border border-stone-700/50 bg-[#121110]/85 backdrop-blur-2xl shadow-[0_20px_40px_-8px_rgba(0,0,0,0.8)] px-2">
+    <div className="fixed bottom-0 left-0 right-0 z-50 w-full pointer-events-none text-center flex justify-center">
+      <nav className="glass relative pointer-events-auto w-full border-t border-stone-800/60 bg-[#121110]/85 backdrop-blur-3xl shadow-[0_-10px_30px_rgba(0,0,0,0.5)] flex flex-col items-center">
+        <div className="flex items-center justify-between w-full max-w-[400px] h-[64px] sm:h-[72px] px-2 sm:px-4">
         
         {/* Left tabs */}
         <div className="flex items-center justify-around flex-1 h-full">
@@ -217,6 +218,8 @@ export default function BottomNav() {
             );
           })}
         </div>
+        </div>
+        <div className="pb-safe w-full flex-shrink-0" />
       </nav>
 
       {/* Hidden camera input — used when FAB is tapped from non-capture pages */}
