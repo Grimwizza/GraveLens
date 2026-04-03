@@ -26,6 +26,8 @@ interface PageShellProps {
   customMainClasses?: string;
   /** Add absolute-positioned components to the wrapper scope (e.g. Map Legends) */
   absoluteOverlays?: ReactNode;
+  /** Background class for the shell wrapper (defaults to bg-stone-900) */
+  backgroundClass?: string;
 }
 
 export default function PageShell({
@@ -40,9 +42,10 @@ export default function PageShell({
   noScroll = false,
   customMainClasses,
   absoluteOverlays,
+  backgroundClass = "bg-stone-900",
 }: PageShellProps) {
   return (
-    <div className="flex flex-col h-full bg-stone-900 overflow-hidden relative w-full">
+    <div className={`flex flex-col h-full ${backgroundClass} overflow-hidden relative w-full`}>
       {/* Header */}
       <header
         className="flex-shrink-0 z-30 bg-[#121110]/80 backdrop-blur-2xl border-b border-stone-800/50 shadow-sm"

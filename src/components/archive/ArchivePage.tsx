@@ -667,9 +667,9 @@ export default function ArchivePage() {
           <div className="flex items-center justify-center flex-1">
             <div className="w-6 h-6 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : graves.length === 0 ? (
+        ) : archiveTab === "markers" && graves.length === 0 ? (
           <EmptyState />
-        ) : (
+        ) : archiveTab === "markers" ? (
           <>
             {/* Assignment banner */}
             {showAssignBanner && (
@@ -732,7 +732,7 @@ export default function ArchivePage() {
               />
             )}
           </>
-        )}
+        ) : null}
 
         {/* ── Places tab ── */}
         {!loading && archiveTab === "places" && (

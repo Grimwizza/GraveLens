@@ -287,7 +287,7 @@ export default function CapturePage() {
   }, [selectedFile, previewUrl, handleReset]);
 
   return (
-    <PageShell showLogo={true} customMainClasses="items-center px-5 pb-28">
+    <PageShell showLogo={true} customMainClasses="items-center px-5 pb-28" backgroundClass="bg-transparent">
       {/* Main content */}
       {phase === "idle" && (
           <IdleState

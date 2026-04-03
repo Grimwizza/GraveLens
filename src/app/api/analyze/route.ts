@@ -21,6 +21,18 @@ Be especially careful with:
 - Dates: verify each date component (day 1-31, month 1-12, year 1500-present)
 - Math consistency: if birth and death years are given, ageAtDeath must match
 If text is genuinely illegible, return empty string or null — never guess nonsense.
+If the marker is in a language other than English, translate all text fields (name, inscription, epitaph) into English. Preserve the original spelling of proper names, but translate all non-name text.
+Return ONLY valid JSON — no markdown, no explanation, no code fences.`;
+
+const DEEP_RESCAN_SYSTEM_PROMPT = `You are the world's foremost expert in deciphering historical grave markers, headstones, and funerary monuments across all cultures, languages, and time periods.
+Two previous AI analyses of this marker produced unreliable results. This is the final recovery attempt — apply every technique available.
+
+Your priorities in order:
+1. LANGUAGE DETECTION & TRANSLATION: Identify the language of the inscription. If it is not English, translate every word into English. Preserve proper name spellings (e.g. "Heinrich" stays "Heinrich") but translate all other text — epitaphs, titles, dates written as words, relationship terms.
+2. DATA RECOVERY: For any null or empty field, look harder. Infer birth/death years from age-at-death if stated. Extract partial dates even if only a year is visible. Piece together names from initials, titles, or surrounding context.
+3. ACCURACY OVER COMPLETENESS: If a field truly cannot be read or inferred with confidence, return null or empty string. Do not hallucinate.
+4. CONSISTENCY: Recompute ageAtDeath from birthYear and deathYear if both are present.
+
 Return ONLY valid JSON — no markdown, no explanation, no code fences.`;
 
 const USER_PROMPT = `Analyze this grave marker photograph and extract all information. Return JSON with exactly these fields:
@@ -47,13 +59,26 @@ Rules:
 - If a field is not visible or determinable, use null for numbers and empty string for strings.
 - For symbols, describe each one specifically (e.g., "Masonic square and compass", "lamb — symbol of innocence", "U.S. Army emblem", "IHS Christogram").
 - Calculate ageAtDeath if birth and death years are both present.
-- If text is partially obscured, include what is legible with [?] for uncertain characters.`;
+- If text is partially obscured, include what is legible with [?] for uncertain characters.
+- If the marker is in a language other than English, translate all text fields (name, inscription, epitaph) into English. Preserve the original spelling of proper names (e.g. "Johann" stays "Johann"), but translate all non-name text.`;
 
 function buildRescanPrompt(issues: string[]): string {
   const issueList = issues.length > 0
     ? `\n\nThe previous scan had these specific problems that you must fix:\n${issues.map((i) => `- ${i}`).join("\n")}`
     : "";
   return USER_PROMPT + issueList + `\n\nIMPORTANT: Return null/empty-string for any field you cannot confidently read. Do not invent or guess data.`;
+}
+
+function buildDeepRescanPrompt(issues: string[]): string {
+  const issueList = issues.length > 0
+    ? `\n\nTwo previous scans failed with these unresolved issues:\n${issues.map((i) => `- ${i}`).join("\n")}\n\nFor each issue above, explicitly re-examine that part of the image before writing your answer.`
+    : "";
+  return USER_PROMPT + issueList + `
+
+DEEP RECOVERY INSTRUCTIONS:
+- If the inscription is not in English, state the detected language and provide full English translations for inscription and epitaph fields.
+- For every null or empty field: study the image again and attempt to infer the value from any visible clue (e.g. "aged 72 years" → infer deathYear - 72 = birthYear).
+- Return null/empty-string only when the field is genuinely unrecoverable after your best effort.`;
 }
 
 async function callClaude(
@@ -107,7 +132,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { imageBase64, mimeType, rescan, issues } = await req.json();
+    const { imageBase64, mimeType, rescan, deep, issues } = await req.json();
     if (!imageBase64) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
@@ -115,6 +140,25 @@ export async function POST(req: NextRequest) {
     const validMime = ["image/jpeg", "image/png", "image/webp", "image/gif"];
     const finalMime = validMime.includes(mimeType) ? mimeType : "image/jpeg";
     const client = new Anthropic({ apiKey });
+
+    // ── Deep rescan mode: maximum-effort recovery with translation focus ──────
+    if (rescan && deep) {
+      console.log("[Analyze] Deep rescan mode — using Sonnet with full recovery prompt");
+      const issueMessages: string[] = Array.isArray(issues) ? issues : [];
+      const extracted = await callClaude(
+        client,
+        MODEL_SONNET,
+        imageBase64,
+        finalMime,
+        DEEP_RESCAN_SYSTEM_PROMPT,
+        buildDeepRescanPrompt(issueMessages)
+      );
+      extracted.source = "claude";
+      extracted.analysisModel = MODEL_SONNET;
+      extracted.isRescan = true;
+      extracted.isDeepRescan = true;
+      return NextResponse.json({ extracted, _model: MODEL_SONNET });
+    }
 
     // ── Rescan mode: always uses Sonnet with sharpened forensic prompt ────────
     if (rescan) {

@@ -59,6 +59,8 @@ export default function ResultPage({ id }: { id: string }) {
     issues: QualityResult["issues"];
     photoDataUrl: string;
   } | null>(null);
+  const [deepRescanDone, setDeepRescanDone] = useState(false);
+  const [deepRescanning, setDeepRescanning] = useState(false);
 
   useEffect(() => {
     getPendingResult(id).then(async (raw) => {
@@ -288,6 +290,44 @@ export default function ResultPage({ id }: { id: string }) {
       if (user) await upsertGrave(supabase, user.id, updated, updated.photoDataUrl);
     } catch { /* non-fatal */ }
   }, [saved, pending]);
+
+  const handleDeepRescan = useCallback(async () => {
+    if (!pending || deepRescanDone) return;
+    setDeepRescanning(true);
+    const issueMessages = (qualityResult?.issues ?? []).map((i) => i.message);
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageBase64: pending.photoDataUrl.replace(/^data:[^;]+;base64,/, ""),
+          mimeType: pending.photoDataUrl.match(/^data:([^;]+);/)?.[1] ?? "image/jpeg",
+          rescan: true,
+          deep: true,
+          issues: issueMessages,
+        }),
+      });
+      const d = await res.json();
+      if (d.extracted) {
+        const newExtracted: ExtractedGraveData = { ...d.extracted };
+        const postQr = checkQuality(newExtracted);
+        setQualityResult(postQr);
+        if (postQr.pass || qualitySeverity(postQr) === "soft") {
+          setExtractedOverride(newExtracted);
+          const existing = await getGrave(pending.id);
+          if (existing) await saveGrave({ ...existing, extracted: newExtracted });
+          setQualityDialog(null);
+          return;
+        }
+        // Still has issues — update dialog issues but keep it open (no rescan button)
+        setQualityDialog({ issues: postQr.issues, photoDataUrl: pending.photoDataUrl });
+      }
+    } catch { /* network failure — keep dialog open */ }
+    finally {
+      setDeepRescanning(false);
+      setDeepRescanDone(true);
+    }
+  }, [pending, deepRescanDone, qualityResult]);
 
   const handleShare = useCallback(async () => {
     if (!pending) return;
@@ -945,6 +985,8 @@ export default function ResultPage({ id }: { id: string }) {
       {qualityDialog && (
         <QualityIssueSheet
           issues={qualityDialog.issues}
+          onRescan={deepRescanDone ? undefined : handleDeepRescan}
+          rescanBusy={deepRescanning}
           onEdit={() => {
             setQualityDialog(null);
             document.getElementById("primary-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -971,11 +1013,15 @@ export default function ResultPage({ id }: { id: string }) {
 
 function QualityIssueSheet({
   issues,
+  onRescan,
+  rescanBusy,
   onEdit,
   onDelete,
   onDismiss,
 }: {
   issues: { field: string; code: string; message: string }[];
+  onRescan?: () => void;
+  rescanBusy?: boolean;
   onEdit: () => void;
   onDelete: () => Promise<void>;
   onDismiss: () => void;
@@ -1044,10 +1090,32 @@ function QualityIssueSheet({
         <div className="flex flex-col gap-2 px-5">
           {!confirmDelete ? (
             <>
+              {onRescan && (
+                <button
+                  onClick={onRescan}
+                  disabled={rescanBusy}
+                  className="w-full py-3 rounded-2xl text-sm font-semibold text-stone-900 flex items-center justify-center gap-2 disabled:opacity-70"
+                  style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+                >
+                  {rescanBusy ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-stone-900/40 border-t-stone-900 rounded-full animate-spin" />
+                      Scanning…
+                    </>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                      </svg>
+                      Re-scan with Enhanced Analysis
+                    </>
+                  )}
+                </button>
+              )}
               <button
                 onClick={onEdit}
-                className="w-full py-3 rounded-2xl text-sm font-semibold text-stone-900"
-                style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+                className="w-full py-3 rounded-2xl text-sm font-semibold"
+                style={onRescan ? { background: "rgba(255,255,255,0.06)", color: "#e5e2de", border: "1px solid rgba(255,255,255,0.1)" } : { background: "linear-gradient(135deg, #c9a84c, #d4b76a)", color: "#1a1917" }}
               >
                 Edit Manually
               </button>

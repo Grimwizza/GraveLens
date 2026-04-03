@@ -78,7 +78,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="flex flex-col h-full bg-[#1a1917] text-[#f5f2ed] font-sans overflow-hidden">
+      <body className="flex flex-col h-full text-[#f5f2ed] font-sans overflow-hidden">
         <ServiceWorkerRegister />
         {children}
         <InstallPrompt />
