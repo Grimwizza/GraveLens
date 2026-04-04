@@ -1,33 +1,22 @@
 "use client";
 
-import React, { ReactNode } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
 import BottomNav from "@/components/layout/BottomNav";
 import ProfileBadge from "@/components/auth/ProfileBadge";
 import BrandLogo from "@/components/ui/BrandLogo";
 
 interface PageShellProps {
   children: ReactNode;
-  /** Page title to display in the header (if not showing logo) */
   title?: string;
-  /** Icon component to display next to the title */
   icon?: ReactNode;
-  /** Whether to show the GraveLens logo instead of title/icon */
   showLogo?: boolean;
-  /** Actions rendered on the right side of the main header row (next to ProfileBadge) */
   headerActions?: ReactNode;
-  /** Actions rendered inline next to the GraveLens logo */
   headerTitleActions?: ReactNode;
-  /** Optional bottom row for the header (e.g., segment controls, view modes) */
   headerBottomRow?: ReactNode;
-  /** Optional panels attached below the header (e.g., search/filter open states) */
   headerPanels?: ReactNode;
-  /** Disable scrolling on the main container (useful for maps) */
   noScroll?: boolean;
-  /** Override the standard pb-44 padding if you need custom bottom clearance */
   customMainClasses?: string;
-  /** Add absolute-positioned components to the wrapper scope (e.g. Map Legends) */
   absoluteOverlays?: ReactNode;
-  /** Background class for the shell wrapper (defaults to bg-stone-900) */
   backgroundClass?: string;
 }
 
@@ -45,8 +34,40 @@ export default function PageShell({
   absoluteOverlays,
   backgroundClass = "bg-stone-900",
 }: PageShellProps) {
+  const [offline, setOffline] = useState(false);
+
+  useEffect(() => {
+    setOffline(!navigator.onLine);
+    const onOnline  = () => setOffline(false);
+    const onOffline = () => setOffline(true);
+    window.addEventListener("online",  onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online",  onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
   return (
     <div className={`flex flex-col h-full ${backgroundClass} overflow-hidden relative w-full`}>
+      {/* Offline banner */}
+      {offline && (
+        <div
+          className="flex-shrink-0 flex items-center justify-center gap-2 py-1.5 text-xs font-medium z-40"
+          style={{
+            background: "rgba(180, 120, 20, 0.15)",
+            borderBottom: "1px solid rgba(201, 168, 76, 0.25)",
+            color: "#c9a84c",
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="1" y1="1" x2="23" y2="23" />
+            <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.56 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01" />
+          </svg>
+          No connection — scans will queue automatically
+        </div>
+      )}
+
       {/* Header */}
       <header
         className="flex-shrink-0 z-30 bg-[#121110]/80 backdrop-blur-2xl border-b border-stone-800/50 shadow-sm"

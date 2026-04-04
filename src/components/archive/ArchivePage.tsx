@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import PageShell from "@/components/layout/PageShell";
 import { getAllGraves, deleteGrave, saveGrave, getAllCemeteries, deleteCemetery } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/browser";
@@ -116,6 +116,26 @@ export default function ArchivePage() {
     persistViewed(id);
     setViewedIds((prev) => new Set([...prev, id]));
   };
+
+  // ── Scroll position restoration ──────────────────────────────────────────
+  // Saves position to sessionStorage on every scroll, restores it on mount
+  // so back-navigation from a result returns to the same list position.
+  const SCROLL_KEY = "gl_archive_scroll";
+  useEffect(() => {
+    const scrollEl = document.querySelector(".scroll-container") as HTMLElement | null;
+    if (!scrollEl) return;
+
+    // Restore saved position after content renders
+    const saved = sessionStorage.getItem(SCROLL_KEY);
+    if (saved) {
+      requestAnimationFrame(() => { scrollEl.scrollTop = parseInt(saved, 10); });
+      sessionStorage.removeItem(SCROLL_KEY);
+    }
+
+    const onScroll = () => sessionStorage.setItem(SCROLL_KEY, String(scrollEl.scrollTop));
+    scrollEl.addEventListener("scroll", onScroll, { passive: true });
+    return () => scrollEl.removeEventListener("scroll", onScroll);
+  }, []);
 
   // ── Load graves ──────────────────────────────────────────────────────────
   // Stale-while-revalidate: show local IndexedDB data immediately, then

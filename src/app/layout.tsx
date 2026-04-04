@@ -53,8 +53,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // Allow pinch-to-zoom — improves accessibility for low-vision users.
+  // iOS ignores userScalable:false anyway (removed in iOS 10).
   themeColor: "#1a1917",
   viewportFit: "cover",
 };

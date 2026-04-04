@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { haptic } from "@/lib/haptic";
 import { recordActiveDay } from "@/lib/achievements";
 import { getQueueCount } from "@/lib/storage";
 import { startQueueProcessor, QUEUE_CHANGED_EVENT } from "@/lib/queue";
@@ -116,11 +117,10 @@ export default function BottomNav() {
   }, []);
 
   const handleCameraClick = () => {
+    haptic("medium");
     if (pathname === "/") {
-      // Capture page is already mounted — dispatch event directly
       window.dispatchEvent(new Event("gravelens:open-camera"));
     } else {
-      // Open the camera picker immediately from here
       cameraInputRef.current?.click();
     }
   };
@@ -151,6 +151,8 @@ export default function BottomNav() {
               <Link
                 key={tab.href}
                 href={tab.href}
+                aria-label={tab.label}
+                aria-current={isActive ? "page" : undefined}
                 className={`relative flex flex-col items-center justify-center w-[64px] h-[64px] rounded-[32px] transition-all duration-300 active:scale-95 ${isActive ? 'bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/5'}`}
               >
                 {tab.icon(isActive)}
@@ -163,7 +165,7 @@ export default function BottomNav() {
                   </span>
                 )}
                 <span
-                  className="text-[0.65rem] font-bold tracking-wide uppercase mt-1"
+                  className="text-[0.75rem] font-bold tracking-wide uppercase mt-1"
                   style={{ color: isActive ? "#c9a84c" : "#8a8580", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
                 >
                   {tab.label}
@@ -204,11 +206,13 @@ export default function BottomNav() {
               <Link
                 key={tab.href}
                 href={tab.href}
+                aria-label={tab.label}
+                aria-current={isActive ? "page" : undefined}
                 className={`relative flex flex-col items-center justify-center w-[64px] h-[64px] rounded-[32px] transition-all duration-300 active:scale-95 ${isActive ? 'bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/5'}`}
               >
                 {tab.icon(isActive)}
                 <span
-                  className="text-[0.65rem] font-bold tracking-wide uppercase mt-1"
+                  className="text-[0.75rem] font-bold tracking-wide uppercase mt-1"
                   style={{ color: isActive ? "#c9a84c" : "#8a8580", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
                 >
                   {tab.label}

@@ -6,6 +6,8 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "GraveLens",
     description:
       "Bring the story behind every stone into focus. Photograph any headstone to uncover and preserve their legacy.",
+    // Explicit id prevents Chrome re-prompting install when start_url changes
+    id: "/",
     start_url: "/",
     display: "standalone",
     background_color: "#1a1917",

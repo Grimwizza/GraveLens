@@ -211,7 +211,7 @@ export default function LoginPage() {
             placeholder="Email address"
             required
             autoComplete="email"
-            className="w-full h-12 rounded-xl bg-stone-800 border border-stone-700 px-4 text-stone-100 text-sm placeholder-stone-500 focus:outline-none focus:border-stone-500"
+            className="w-full h-12 rounded-xl bg-stone-800 border border-stone-700 px-4 text-stone-100 text-base placeholder-stone-500 focus:outline-none focus:border-stone-500"
           />
           <input
             type="password"
@@ -220,7 +220,7 @@ export default function LoginPage() {
             placeholder="Password"
             required
             autoComplete={mode === "signin" ? "current-password" : "new-password"}
-            className="w-full h-12 rounded-xl bg-stone-800 border border-stone-700 px-4 text-stone-100 text-sm placeholder-stone-500 focus:outline-none focus:border-stone-500"
+            className="w-full h-12 rounded-xl bg-stone-800 border border-stone-700 px-4 text-stone-100 text-base placeholder-stone-500 focus:outline-none focus:border-stone-500"
           />
           <button
             type="submit"
