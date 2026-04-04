@@ -9,6 +9,7 @@ import { loadSettings } from "@/lib/settings";
 import { useAuth } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/browser";
 import { fetchCommunityGravesInBounds } from "@/lib/community";
+import { SHOW_COMMUNITY_FEATURES } from "@/lib/config";
 
 const ArchiveMap = dynamic(() => import("./ArchiveMap"), { ssr: false });
 
@@ -44,10 +45,9 @@ export default function MapPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Fetch community graves when the user is signed in.
-  // Uses a wide default bounding box (CONUS); the map layer filters client-side.
+  // Fetch community graves when the user is signed in and community features enabled.
   useEffect(() => {
-    if (!user) return;
+    if (!user || !SHOW_COMMUNITY_FEATURES) return;
     const supabase = createClient();
     fetchCommunityGravesInBounds(supabase, user.id, 24, -125, 50, -66)
       .then(setCommunityGraves)

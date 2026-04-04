@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { GraveRecord, NotableFigure, CommunityGraveRecord } from "@/types";
 import { getNotableFiguresInBounds } from "@/lib/apis/wikidata";
 import { formatOpeningHours } from "@/lib/apis/cemetery";
+import { SHOW_COMMUNITY_FEATURES } from "@/lib/config";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -474,7 +475,7 @@ export default function ArchiveMap({
 
     layer.clearLayers();
 
-    if (communityGraves.length === 0) return;
+    if (communityGraves.length === 0 || !SHOW_COMMUNITY_FEATURES) return;
 
     const friendIcon = L.divIcon({
       html: FRIEND_GRAVE_ICON_HTML,
@@ -797,7 +798,7 @@ export default function ArchiveMap({
       });
     }
 
-    if (communityGraves.length > 0) {
+    if (communityGraves.length > 0 && SHOW_COMMUNITY_FEATURES) {
       items.push({
         icon: (
           <svg width="14" height="18" viewBox="0 0 28 36" fill="none">

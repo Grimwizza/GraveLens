@@ -14,6 +14,7 @@ import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import { interpretSymbols } from "@/lib/apis/symbols";
 import { checkQuality, qualitySeverity, type QualityResult } from "@/lib/qualityCheck";
 import { loadSettings } from "@/lib/settings";
+import { SHOW_COMMUNITY_FEATURES } from "@/lib/config";
 import ProfileBadge from "@/components/auth/ProfileBadge";
 import type {
   GraveRecord,
@@ -816,31 +817,33 @@ export default function ResultPage({ id }: { id: string }) {
           <TagsCard tags={tags} onChange={handleTagsChange} />
 
           {/* Community sharing */}
-          <div
-            className="rounded-2xl px-4 py-3.5 flex items-center justify-between gap-3"
-            style={{ background: "rgba(26,25,23,0.7)", border: "1px solid rgba(255,255,255,0.07)" }}
-          >
-            <div className="flex-1 min-w-0">
-              <p className="text-stone-200 text-sm font-medium">Share with community</p>
-              <p className="text-stone-500 text-[0.8rem] mt-0.5 leading-relaxed">
-                {isPublic
-                  ? "Visible on the community map as a coral marker"
-                  : "Private — only you can see this on the map"}
-              </p>
-            </div>
-            <button
-              onClick={() => handleTogglePublic(!isPublic)}
-              className="shrink-0 w-11 h-6 rounded-full relative transition-colors duration-200"
-              style={{ background: isPublic ? "#c97c6b" : "#3a3733" }}
-              role="switch"
-              aria-checked={isPublic}
+          {SHOW_COMMUNITY_FEATURES && (
+            <div
+              className="rounded-2xl px-4 py-3.5 flex items-center justify-between gap-3"
+              style={{ background: "rgba(26,25,23,0.7)", border: "1px solid rgba(255,255,255,0.07)" }}
             >
-              <span
-                className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
-                style={{ transform: isPublic ? "translateX(1.25rem)" : "translateX(0.125rem)" }}
-              />
-            </button>
-          </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-stone-200 text-sm font-medium">Share with community</p>
+                <p className="text-stone-500 text-[0.8rem] mt-0.5 leading-relaxed">
+                  {isPublic
+                    ? "Visible on the community map as a coral marker"
+                    : "Private — only you can see this on the map"}
+                </p>
+              </div>
+              <button
+                onClick={() => handleTogglePublic(!isPublic)}
+                className="shrink-0 w-11 h-6 rounded-full relative transition-colors duration-200"
+                style={{ background: isPublic ? "#c97c6b" : "#3a3733" }}
+                role="switch"
+                aria-checked={isPublic}
+              >
+                <span
+                  className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
+                  style={{ transform: isPublic ? "translateX(1.25rem)" : "translateX(0.125rem)" }}
+                />
+              </button>
+            </div>
+          )}
 
           {/* Newspaper records */}
           {(research?.newspapers?.length || researchLoading) ? (

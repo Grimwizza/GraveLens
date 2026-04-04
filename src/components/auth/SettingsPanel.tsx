@@ -19,6 +19,7 @@ import {
   upsertUserProfile,
   bulkSetGravesPublic,
 } from "@/lib/community";
+import { SHOW_COMMUNITY_FEATURES } from "@/lib/config";
 
 interface Props {
   onClose: () => void;
@@ -420,7 +421,7 @@ export default function SettingsPanel({ onClose }: Props) {
           </div>
 
           {/* ── COMMUNITY ────────────────────────────────────────────── */}
-          {user && (
+          {user && SHOW_COMMUNITY_FEATURES && (
             <>
               <SectionHeader
                 title="Community"

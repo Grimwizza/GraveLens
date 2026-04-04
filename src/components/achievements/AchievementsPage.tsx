@@ -22,6 +22,7 @@ import type { GraveRecord, UserProfile } from "@/types";
 import { RankInsignia } from "@/components/ui/RankInsignia";
 import { useAuth } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/browser";
+import { SHOW_COMMUNITY_FEATURES } from "@/lib/config";
 
 const CATEGORY_ICONS: Record<AchievementCategory, string> = {
   "First Steps": "🪦",
@@ -645,8 +646,8 @@ export default function AchievementsPage() {
           </div>
         )}
 
-        {/* Friends section — only shown when signed in */}
-        {user && (
+        {/* Friends section — only shown when signed in and enabled */}
+        {user && SHOW_COMMUNITY_FEATURES && (
           <section>
             <div className="flex items-center gap-2 mb-3">
               <span className="text-lg">👥</span>
