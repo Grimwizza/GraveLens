@@ -46,11 +46,13 @@ export default function ProfileBadge() {
     return <div className="w-8 h-8 rounded-full bg-stone-800 animate-pulse" />;
   }
 
-  const initials = user?.email ? user.email.slice(0, 2).toUpperCase() : null;
-  const displayName = user?.user_metadata?.full_name?.split(" ")[0] || 
-                      user?.user_metadata?.username || 
-                      user?.email?.split("@")[0] || 
+  const displayName = user?.user_metadata?.username ||
+                      user?.user_metadata?.full_name?.split(" ")[0] ||
+                      user?.email?.split("@")[0] ||
                       "Explorer";
+  const initials = user
+    ? (user.user_metadata?.username || user.user_metadata?.full_name || user.email || "EX").slice(0, 2).toUpperCase()
+    : null;
 
   const handleSync = async () => {
     if (!user) return;
@@ -152,8 +154,8 @@ export default function ProfileBadge() {
                     {initials}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-stone-100 font-medium text-xs truncate">{user.email}</p>
-                    <p className="text-stone-500 text-[0.75rem] mt-0.5">Signed in</p>
+                    <p className="text-stone-100 font-medium text-xs truncate">{displayName}</p>
+                    <p className="text-stone-500 text-[0.7rem] mt-0.5 truncate">{user.email}</p>
                   </div>
                 </div>
 
