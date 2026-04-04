@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import BrandLogo from "./ui/BrandLogo";
 
 type InstallState = "hidden" | "android" | "ios";
 
@@ -85,17 +86,10 @@ export default function InstallPrompt() {
         <div className="flex items-center gap-3 glass-gold rounded-2xl p-3.5 shadow-2xl max-w-md mx-auto">
           {/* App icon */}
           <div
-            className="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center border border-stone-600"
+            className="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center border border-stone-800"
             style={{ background: "#1a1917" }}
           >
-            {/* Inline crosshair mark */}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="5" stroke="#c9a84c" strokeWidth="1.5" />
-              <line x1="12" y1="2" x2="12" y2="7" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="12" y1="17" x2="12" y2="22" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="2" y1="12" x2="7" y2="12" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="17" y1="12" x2="22" y2="12" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
+            <BrandLogo size={28} />
           </div>
 
           <div className="flex-1 min-w-0">
