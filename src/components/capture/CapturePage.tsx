@@ -580,9 +580,28 @@ function DegradedPrompt({ onManualEnter, onDelete }: { onManualEnter: () => void
   );
 }
 
+// Detect iOS once — Safari does not support the torch API
+const isIOSDevice =
+  typeof navigator !== "undefined" &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+
 // ── Pro Onboarding ─────────────────────────────────────────────────────────
 
 function ProOnboarding({ onStart, onCancel }: { onStart: () => void, onCancel: () => void }) {
+  // Step 2 differs by platform: Android auto-activates torch; iOS requires manual flashlight
+  const lightInstructions = isIOSDevice ? (
+    <>
+      <strong>Before tapping Start</strong>, enable your flashlight from Control Center.
+      Works best in shade or at dusk — avoid direct sunlight on the stone.
+    </>
+  ) : (
+    <>
+      We&apos;ll automatically activate your torch. <strong>Wait for nightfall or cast a shadow</strong> over
+      the stone with your body for best contrast.
+    </>
+  );
+
   return (
     <div className="flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 pt-12 pb-44 px-4 text-center">
       <div className="w-16 h-16 rounded-full bg-amber-500/20 border border-amber-500 flex items-center justify-center mb-6">
@@ -599,7 +618,7 @@ function ProOnboarding({ onStart, onCancel }: { onStart: () => void, onCancel: (
         </svg>
       </div>
       <h2 className="font-serif text-2xl font-semibold text-stone-100 mb-4">Relief Lens Pro</h2>
-      
+
       <div className="flex flex-col gap-6 text-stone-300 text-left bg-stone-800/50 p-6 rounded-2xl border border-stone-700 w-full mb-8">
         <div className="flex gap-4 items-start">
           <div className="mt-1 text-amber-500 font-bold">1</div>
@@ -607,14 +626,14 @@ function ProOnboarding({ onStart, onCancel }: { onStart: () => void, onCancel: (
         </div>
         <div className="flex gap-4 items-start">
           <div className="mt-1 text-amber-500 font-bold">2</div>
-          <p className="text-sm">We'll automatically activate your torch. <strong>Wait for nightfall or cast a shadow</strong> over the stone with your body for best contrast.</p>
+          <p className="text-sm">{lightInstructions}</p>
         </div>
         <div className="flex gap-4 items-start">
           <div className="mt-1 text-amber-500 font-bold">3</div>
           <p className="text-sm">Tap Start, then sweep the light back and forth for 3 seconds.</p>
         </div>
       </div>
-      
+
       <div className="flex gap-4 w-full">
         <button onClick={onCancel} className="flex-1 py-3 rounded-xl border border-stone-600 text-stone-300 font-medium">Cancel</button>
         <button onClick={onStart} className="flex-1 py-3 rounded-xl bg-amber-600 text-white font-medium shadow-lg shadow-amber-600/20">I Understand</button>
