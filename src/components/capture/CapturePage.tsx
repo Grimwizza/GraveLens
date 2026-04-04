@@ -457,70 +457,54 @@ function IdleState({
       <div className="flex flex-col items-center justify-center gap-4 pt-2">
         
         {/* Viewfinder graphic */}
-        <button onClick={onCapture} className="relative flex items-center justify-center w-[200px] h-[200px] sm:w-56 sm:h-56 flex-shrink-0 active:scale-95 transition-transform touch-none select-none">
+        <button onClick={onCapture} className="group relative flex items-center justify-center w-[200px] h-[200px] sm:w-64 sm:h-64 flex-shrink-0 active:scale-95 transition-transform touch-none select-none">
           <svg className="absolute inset-0 w-full h-full" viewBox="0 0 256 256">
-            {/* Corner brackets replaced with subtle scanning markers */}
-            <path
-              d="M32 80 L32 32 L80 32"
-              stroke="#c9a84c"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              fill="none"
-              opacity="0.2"
-            />
-            <path
-              d="M176 32 L224 32 L224 80"
-              stroke="#c9a84c"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              fill="none"
-              opacity="0.2"
-            />
-            <path
-              d="M32 176 L32 224 L80 224"
-              stroke="#c9a84c"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              fill="none"
-              opacity="0.2"
-            />
-            <path
-              d="M176 224 L224 224 L224 176"
-              stroke="#c9a84c"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              fill="none"
-              opacity="0.2"
-            />
-            {/* Headstone silhouette */}
+            {/* Animated corner brackets */}
+            <g className="animate-pulse-slow">
+              <path d="M32 80 L32 32 L80 32" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+              <path d="M176 32 L224 32 L224 80" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+              <path d="M32 176 L32 224 L80 224" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+              <path d="M176 224 L224 224 L224 176" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+            </g>
+            
+            {/* Headstone silhouette backdrop */}
             <path
               d="M96 175 L96 105 Q96 81 128 81 Q160 81 160 105 L160 175 Z"
-              fill="none"
+              fill="rgba(201,168,76,0.03)"
               stroke="#3a3633"
-              strokeWidth="1.5"
+              strokeWidth="2"
+              className="transition-colors group-hover:stroke-[#c9a84c]/30"
             />
           </svg>
-          <div className="absolute inset-0 pointer-events-none">
-            {/* Camera AF box perfectly centered on both grave silhouette and container */}
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_0_10px_rgba(201,168,76,0.4)] scale-75 sm:scale-100">
-              <BrandLogo size={90} color="#c9a84c" />
+          
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            {/* Central scanning focal point */}
+            <div className="relative translate-y-[1px]">
+              {/* Outer glow ring */}
+              <div className="absolute inset-0 -m-8 rounded-full bg-[#c9a84c]/5 blur-2xl animate-pulse" />
+              
+              {/* Logo with drop shadow for depth */}
+              <div className="relative drop-shadow-[0_0_15px_rgba(201,168,76,0.5)] scale-90 sm:scale-110">
+                <BrandLogo size={100} color="#c9a84c" />
+              </div>
             </div>
-            {/* Text centered below brackets (y=240 of 256 -> 94%) */}
-            <div className="absolute left-1/2 top-[94%] -translate-x-1/2 -translate-y-1/2">
-              <span className="text-stone-300 text-[0.75rem] sm:text-sm font-bold tracking-[0.3em] whitespace-nowrap uppercase opacity-50">
-                Point & scan
+
+            {/* Status text - precision positioned to ensure ~11px gap and ZERO overlap */}
+            <div className="absolute bottom-0 sm:bottom-2 left-1/2 -translate-x-1/2 animate-pulse-slow">
+              <span className="text-[#c9a84c]/80 text-[0.7rem] sm:text-xs font-bold tracking-[0.4em] whitespace-nowrap uppercase">
+                Ready to scan
               </span>
             </div>
           </div>
         </button>
 
         <div className="flex flex-col items-center gap-2 text-center px-2">
-           <h1 className="font-serif text-2xl sm:text-3xl font-semibold text-stone-100 leading-tight">
-             Bring the story behind every stone into focus.
-           </h1>
-           <p className="text-stone-400 text-sm sm:text-lg leading-relaxed">
-             Photograph any headstone and experience history like never before.
-           </p>
+          <h1 className="font-serif text-2xl sm:text-3xl font-semibold text-stone-100 leading-tight">
+            Bring the story behind every stone into focus.
+          </h1>
+          <p className="text-stone-400 text-sm sm:text-lg leading-relaxed">
+            Photograph any headstone and experience history like never before.
+          </p>
         </div>
       </div>
 
