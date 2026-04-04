@@ -378,6 +378,20 @@ export default function AchievementsPage() {
   const [unlocks, setUnlocks] = useState<UnlockRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<AchievementCategory | null>(null);
+
+  // Determine initial category: first incomplete one, or First Steps if all done
+  useEffect(() => {
+    if (loaded && !selectedCategory) {
+      const statsForLogic = loadStats();
+      const firstIncomplete = ACHIEVEMENT_CATEGORIES.find((cat) => {
+        const items = ACHIEVEMENTS.filter((a) => a.category === cat);
+        const unlockedCount = items.filter((a) => isUnlocked(a.id, unlocks)).length;
+        return unlockedCount < items.length;
+      });
+      setSelectedCategory(firstIncomplete || "First Steps");
+    }
+  }, [loaded, unlocks, selectedCategory]);
 
   // Friends state
   const [friends, setFriends] = useState<UserProfile[]>([]);
@@ -712,43 +726,60 @@ export default function AchievementsPage() {
           </section>
         )}
 
-        {/* Achievement categories */}
-        {ACHIEVEMENT_CATEGORIES.map((category) => {
-          const items = ACHIEVEMENTS.filter((a) => a.category === category);
-          const catUnlocked = items.filter((a) => isUnlocked(a.id, unlocks)).length;
-          const catStats = loaded ? stats : { sharesCount: 0, cemeteryNamesAdded: 0, daysActive: [] };
+        {/* Achievement Selector */}
+        <div className="w-full space-y-4">
+          <div className="relative">
+            <select
+              value={selectedCategory || "First Steps"}
+              onChange={(e) => setSelectedCategory(e.target.value as AchievementCategory)}
+              className="w-full appearance-none bg-stone-900/80 border border-stone-800 text-stone-200 text-sm font-semibold rounded-2xl px-5 py-4 focus:outline-none focus:border-stone-600 active:scale-[0.98] transition-all"
+              style={{
+                background: "linear-gradient(135deg, #1e1c18, #2a2520)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              }}
+            >
+              {ACHIEVEMENT_CATEGORIES.map((category) => {
+                const items = ACHIEVEMENTS.filter((a) => a.category === category);
+                const catUnlocked = items.filter((a) => isUnlocked(a.id, unlocks)).length;
+                const isComplete = catUnlocked === items.length;
+                return (
+                  <option key={category} value={category} className="bg-stone-900 py-2">
+                    {CATEGORY_ICONS[category]} {category} {isComplete ? "✓" : `(${catUnlocked}/${items.length})`}
+                  </option>
+                );
+              })}
+            </select>
+            {/* Custom dropdown arrow */}
+            <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6a6560" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+          </div>
 
-          return (
-            <section key={category}>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-lg">{CATEGORY_ICONS[category]}</span>
-                <h3 className="font-serif text-base font-semibold text-stone-200">{category}</h3>
-                <span className="ml-auto text-[0.8rem] text-stone-500">
-                  {catUnlocked}/{items.length}
-                </span>
-              </div>
-
-              <div className="space-y-2.5">
-                {items.map((achievement) => {
-                  const unlocked = isUnlocked(achievement.id, unlocks);
-                  const { ratio, label } = loaded
-                    ? achievement.evaluate(graves, catStats)
-                    : { ratio: 0, label: "" };
-                  return (
-                    <AchievementCard
-                      key={achievement.id}
-                      achievement={achievement}
-                      unlocked={unlocked}
-                      progress={ratio}
-                      label={label}
-                      onClick={() => setSelectedId(achievement.id)}
-                    />
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
+          {/* Achievement list for selected category */}
+          {selectedCategory && (
+            <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              {ACHIEVEMENTS.filter((a) => a.category === selectedCategory).map((achievement) => {
+                const unlocked = isUnlocked(achievement.id, unlocks);
+                const catStats = loaded ? stats : { sharesCount: 0, cemeteryNamesAdded: 0, daysActive: [] };
+                const { ratio, label } = loaded
+                  ? achievement.evaluate(graves, catStats)
+                  : { ratio: 0, label: "" };
+                return (
+                  <AchievementCard
+                    key={achievement.id}
+                    achievement={achievement}
+                    unlocked={unlocked}
+                    progress={ratio}
+                    label={label}
+                    onClick={() => setSelectedId(achievement.id)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
     </PageShell>
   );
 }
