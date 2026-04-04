@@ -104,7 +104,7 @@ export default function ProfileBadge() {
       <div ref={containerRef} className="relative flex items-center">
         <button 
           onClick={() => router.push("/explorer")}
-          className="flex flex-col items-end mr-3 select-none text-right transition-all hover:opacity-80 active:scale-95"
+          className="flex flex-col items-start mr-3 select-none transition-all hover:opacity-80 active:scale-95"
           aria-label="View Achievements"
         >
           <span className="text-stone-100 text-[0.8rem] font-bold tracking-tight leading-none mb-1">
