@@ -121,13 +121,13 @@ export default function SettingsPanel({ onClose }: Props) {
   const [exporting, setExporting] = useState(false);
   const [clearDone, setClearDone] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
 
   // Community profile state
   const [username, setUsername] = useState("");
   const [showUsername, setShowUsername] = useState(true);
   const [shareAll, setShareAll] = useState(false);
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [profileSaving, setProfileSaving] = useState(false);
   const [shareAllConfirm, setShareAllConfirm] = useState(false);
 
   // Keep settings in sync with any changes from this session
@@ -139,7 +139,6 @@ export default function SettingsPanel({ onClose }: Props) {
   // Load community profile when signed in
   useEffect(() => {
     if (!user) return;
-    setProfileLoading(true);
     const supabase = createClient();
     fetchOwnProfile(supabase, user.id)
       .then((p) => {
@@ -149,22 +148,25 @@ export default function SettingsPanel({ onClose }: Props) {
           setShareAll(p.shareAllByDefault);
         }
       })
-      .catch(() => {})
-      .finally(() => setProfileLoading(false));
+      .catch(() => {});
   }, [user]);
 
-  const handleSaveProfile = async () => {
-    if (!user) return;
-    setProfileSaving(true);
+  const handleSaveAll = async () => {
+    setSaving(true);
     try {
-      const supabase = createClient();
-      await upsertUserProfile(supabase, user.id, {
-        username: username.trim() || undefined,
-        showUsername,
-        shareAllByDefault: shareAll,
-      });
+      patchSettings(settings);
+      if (user) {
+        const supabase = createClient();
+        await upsertUserProfile(supabase, user.id, {
+          username: username.trim() || undefined,
+          showUsername,
+          shareAllByDefault: shareAll,
+        });
+      }
+      setSavedOk(true);
+      setTimeout(() => setSavedOk(false), 3000);
     } catch { /* non-fatal */ }
-    finally { setProfileSaving(false); }
+    finally { setSaving(false); }
   };
 
   const handleShareAllToggle = async (next: boolean) => {
@@ -185,8 +187,7 @@ export default function SettingsPanel({ onClose }: Props) {
   };
 
   function update<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
-    const next = patchSettings({ [key]: value } as Partial<AppSettings>);
-    setSettings(next);
+    setSettings((prev) => ({ ...prev, [key]: value }));
   }
 
   // ── Privacy actions ───────────────────────────────────────────────────────
@@ -422,24 +423,13 @@ export default function SettingsPanel({ onClose }: Props) {
                       maxLength={30}
                       className="flex-1 bg-stone-800 text-stone-200 text-sm rounded-lg px-3 py-2 border border-stone-700 focus:outline-none focus:border-stone-500 placeholder:text-stone-600"
                     />
-                    <button
-                      onClick={handleSaveProfile}
-                      disabled={profileSaving || profileLoading}
-                      className="px-3.5 py-2 rounded-lg text-xs font-semibold transition-all active:scale-95 disabled:opacity-50"
-                      style={{ background: "rgba(201,168,76,0.15)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.3)" }}
-                    >
-                      {profileSaving ? "…" : "Save"}
-                    </button>
                   </div>
                 </div>
 
                 {/* Show username toggle */}
                 <Row>
                   <Label title="Show username publicly" sub="When off, you appear as 'Community Member'" />
-                  <Toggle
-                    on={showUsername}
-                    onChange={(v) => { setShowUsername(v); handleSaveProfile(); }}
-                  />
+                  <Toggle on={showUsername} onChange={setShowUsername} />
                 </Row>
 
                 {/* Share all graves */}
@@ -558,9 +548,29 @@ export default function SettingsPanel({ onClose }: Props) {
           </div>
 
           {/* App version */}
-          <p className="text-center text-[0.75rem] text-stone-700 pb-6">
+          <p className="text-center text-[0.75rem] text-stone-700 pb-2">
             GraveLens · Build {process.env.NEXT_PUBLIC_BUILD_TIME ?? "dev"}
           </p>
+
+          {/* ── Save button ──────────────────────────────────────────── */}
+          <div className="px-5 pb-8 pt-2">
+            {savedOk && (
+              <div className="flex items-center justify-center gap-2 mb-3 py-2.5 rounded-xl text-sm font-medium text-green-400 border border-green-500/20 bg-green-500/8">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                Settings saved
+              </div>
+            )}
+            <button
+              onClick={handleSaveAll}
+              disabled={saving}
+              className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50"
+              style={{ background: "#c9a84c", color: "#1a1510" }}
+            >
+              {saving ? "Saving…" : "Save Settings"}
+            </button>
+          </div>
         </div>
       </div>
     </div>,
