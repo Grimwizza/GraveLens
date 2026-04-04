@@ -64,14 +64,14 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   return (
     <button
       onClick={() => onChange(!on)}
-      className="shrink-0 w-11 h-6 rounded-full relative transition-colors duration-200"
+      className="shrink-0 w-11 h-6 rounded-full relative transition-all duration-200 overflow-hidden"
       style={{ background: on ? "#c9a84c" : "#3a3733" }}
       role="switch"
       aria-checked={on}
     >
       <span
-        className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
-        style={{ transform: on ? "translateX(1.25rem)" : "translateX(0.125rem)" }}
+        className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
+        style={{ transform: on ? "translateX(1.25rem)" : "translateX(0)" }}
       />
     </button>
   );
