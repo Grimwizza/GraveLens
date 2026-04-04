@@ -136,11 +136,13 @@ export default function SettingsPanel({ onClose }: Props) {
     setMounted(true);
   }, []);
 
-  // Load community profile when signed in
+  // Load community profile when signed in — depend on user.id only to avoid
+  // re-fetching (and overwriting edits) when the auth object re-references.
+  const userId = user?.id;
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
     const supabase = createClient();
-    fetchOwnProfile(supabase, user.id)
+    fetchOwnProfile(supabase, userId)
       .then((p) => {
         if (p) {
           setUsername(p.username ?? "");
@@ -149,7 +151,7 @@ export default function SettingsPanel({ onClose }: Props) {
         }
       })
       .catch(() => {});
-  }, [user]);
+  }, [userId]);
 
   const handleSaveAll = async () => {
     setSaving(true);
@@ -163,10 +165,12 @@ export default function SettingsPanel({ onClose }: Props) {
           shareAllByDefault: shareAll,
         });
       }
+    } catch { /* non-fatal */ }
+    finally {
+      setSaving(false);
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 3000);
-    } catch { /* non-fatal */ }
-    finally { setSaving(false); }
+    }
   };
 
   const handleShareAllToggle = async (next: boolean) => {
