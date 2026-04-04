@@ -29,6 +29,7 @@ export default function CapturePage() {
   const [showProOnboarding, setShowProOnboarding] = useState(false);
   const [isReliefActive, setIsReliefActive] = useState(false);
   const isCurrentScanProRef = useRef(false);
+  const isUploadRef = useRef(false);
   const analysisDataRef = useRef<{ extracted: ExtractedGraveData | null, location: GeoLocation | null } | null>(null);
 
   // Prevents stale analyses from saving and cancels in-flight fetches
@@ -107,8 +108,9 @@ export default function CapturePage() {
     };
   }, []);
 
-  const handleFileChosen = useCallback(async (file: File) => {
+  const handleFileChosen = useCallback(async (file: File, source: "capture" | "upload" = "capture") => {
     isCurrentScanProRef.current = false;
+    isUploadRef.current = source === "upload";
     // Invalidate any in-flight analysis for the previous photo
     analysisNonceRef.current += 1;
     abortControllerRef.current?.abort();
@@ -126,6 +128,7 @@ export default function CapturePage() {
   const handleReliefComplete = useCallback((dataUrl: string) => {
     setIsReliefActive(false);
     isCurrentScanProRef.current = true;
+    isUploadRef.current = false;
     
     // Convert dataUrl to a File object so our standard pipeline works
     const arr = dataUrl.split(',');
@@ -229,12 +232,11 @@ export default function CapturePage() {
       setProgressLabel("Finding location…");
       const location = await geocodePromise;
 
-      const isPoorQuality = !extracted || extracted.confidence === "low" || 
-        extracted.condition === "illegible" || extracted.condition === "weathered" || !extracted.name;
+      const isPoorQuality = !extracted || extracted.confidence === "low" || !extracted.name;
 
       if (isPoorQuality) {
         analysisDataRef.current = { extracted, location };
-        if (isCurrentScanProRef.current) {
+        if (isCurrentScanProRef.current || isUploadRef.current) {
           setPhase("degraded_prompt");
         } else {
           setPhase("pro_prompt");
@@ -421,7 +423,7 @@ export default function CapturePage() {
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) handleFileChosen(file);
+          if (file) handleFileChosen(file, "capture");
           e.target.value = "";
         }}
       />
@@ -432,7 +434,7 @@ export default function CapturePage() {
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) handleFileChosen(file);
+          if (file) handleFileChosen(file, "upload");
           e.target.value = "";
         }}
       />
