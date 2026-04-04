@@ -35,8 +35,11 @@ export default function ServiceWorkerRegister() {
       .catch((err) => console.error("SW registration failed:", err));
 
     // ── 2. SW-based update notification ────────────────────────────────────
-    // When a new SW takes control, reload immediately.
+    // When a new SW takes control, reload immediately — but only if there was
+    // already a controller (i.e. this is a SW swap/update, not a first install).
+    const hadController = !!navigator.serviceWorker.controller;
     const onControllerChange = () => {
+      if (!hadController) return;
       sessionStorage.setItem(RELOADED_KEY, "1");
       window.location.reload();
     };
