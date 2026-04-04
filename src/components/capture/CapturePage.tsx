@@ -456,10 +456,6 @@ function IdleState({
         
         {/* Viewfinder graphic */}
         <button onClick={onCapture} className="relative flex items-center justify-center w-[200px] h-[200px] sm:w-56 sm:h-56 flex-shrink-0 active:scale-95 transition-transform touch-none select-none">
-          {/* Corner brackets */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-[0.08] pointer-events-none">
-            <BrandLogo size={220} color="#c9a84c" />
-          </div>
           <svg className="absolute inset-0 w-full h-full" viewBox="0 0 256 256">
             {/* Corner brackets replaced with subtle scanning markers */}
             <path
@@ -505,7 +501,7 @@ function IdleState({
           <div className="absolute inset-0 pointer-events-none">
             {/* Camera AF box perfectly centered on both grave silhouette and container */}
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_0_10px_rgba(201,168,76,0.4)] scale-75 sm:scale-100">
-              <BrandLogo size={40} color="#c9a84c" />
+              <BrandLogo size={90} color="#c9a84c" />
             </div>
             {/* Text centered below brackets (y=240 of 256 -> 94%) */}
             <div className="absolute left-1/2 top-[94%] -translate-x-1/2 -translate-y-1/2">
