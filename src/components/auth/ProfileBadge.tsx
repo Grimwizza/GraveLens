@@ -102,26 +102,6 @@ export default function ProfileBadge() {
   return (
     <>
       <div ref={containerRef} className="relative flex items-center">
-        <button
-          onClick={() => router.push("/explorer")}
-          className="flex items-center gap-2 mr-3 select-none transition-all hover:opacity-80 active:scale-95"
-          aria-label="View Achievements"
-        >
-          <div className="shrink-0 pointer-events-none">
-            <RankInsignia level={rankLevel} size={30} />
-          </div>
-          <div className="flex flex-col items-start">
-            <span className="text-stone-100 text-[0.8rem] font-bold tracking-tight leading-none mb-0.5">
-              {displayName}
-            </span>
-            <span
-              className="text-[10px] uppercase font-black tracking-[0.1em] opacity-90"
-              style={{ color: getRankColor(rankLevel) }}
-            >
-              {rankTitle}
-            </span>
-          </div>
-        </button>
 
         {/* Avatar button */}
         <button
