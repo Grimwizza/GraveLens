@@ -130,10 +130,26 @@ export default function SettingsPanel({ onClose }: Props) {
   const [shareAll, setShareAll] = useState(false);
   const [shareAllConfirm, setShareAllConfirm] = useState(false);
 
-  // Keep settings in sync with any changes from this session
+  // Keep settings in sync with any changes from this session and lock scroll
   useEffect(() => {
     setSettings(loadSettings());
     setMounted(true);
+    
+    // Prevent background scrolling while open
+    const scrollLocked = document.body.style.overflow === "hidden";
+    // In our specific app architecture, the .scroll-container is what scrolls.
+    // We add a global style override to the head.
+    const style = document.createElement("style");
+    style.innerHTML = `
+      .scroll-container:not(.settings-scroll) { overflow-y: hidden !important; }
+      body { position: fixed; inset: 0; pointer-events: none; }
+      .settings-portal { pointer-events: auto; }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      document.head.removeChild(style);
+    };
   }, []);
 
   // Load community profile when signed in — depend on user.id only to avoid
@@ -242,20 +258,23 @@ export default function SettingsPanel({ onClose }: Props) {
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[2000] flex items-end justify-center">
+    <div className="settings-portal fixed inset-0 z-[2000] flex items-end sm:items-center justify-center p-0 sm:p-6 pb-0">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-stone-950/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-stone-950/80 backdrop-blur-md"
+        style={{ backfaceVisibility: "hidden", transform: "translateZ(0)" }}
         onClick={onClose}
       />
 
-      {/* Sheet */}
+      {/* Sheet / Modal */}
       <div
-        className="relative w-full max-w-lg flex flex-col rounded-t-3xl overflow-hidden"
+        className="relative w-full max-w-lg flex flex-col rounded-t-[32px] sm:rounded-[32px] overflow-hidden shadow-2xl"
         style={{
           background: "linear-gradient(180deg, #1e1c1a, #161412)",
-          border: "1px solid rgba(255,255,255,0.07)",
+          border: "1px solid rgba(255,255,255,0.08)",
           maxHeight: "92dvh",
+          backfaceVisibility: "hidden",
+          transform: "translateZ(0)",
         }}
       >
         {/* Handle + header */}
@@ -283,7 +302,7 @@ export default function SettingsPanel({ onClose }: Props) {
         </div>
 
         {/* Scrollable content */}
-        <div className="scroll-container flex-1 pb-safe">
+        <div className="scroll-container settings-scroll flex-1 pb-safe overflow-y-auto">
 
           {/* ── DISPLAY ─────────────────────────────────────────────────── */}
           <SectionHeader
