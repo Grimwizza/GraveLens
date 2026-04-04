@@ -8,6 +8,7 @@ import { syncLocalToCloud, pushExplorerPoints } from "@/lib/cloudSync";
 import { loadUnlocks, totalXP, getRank } from "@/lib/achievements";
 import SettingsPanel from "./SettingsPanel";
 import { RankInsignia, getRankColor } from "@/components/ui/RankInsignia";
+import { fetchOwnProfile } from "@/lib/community";
 
 export default function ProfileBadge() {
   const { user, loading } = useAuth();
@@ -18,6 +19,7 @@ export default function ProfileBadge() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [rankLevel, setRankLevel] = useState(1);
   const [rankTitle, setRankTitle] = useState("The Wanderer");
+  const [profileUsername, setProfileUsername] = useState<string | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Load explorer rank (both offline and online)
@@ -28,6 +30,15 @@ export default function ProfileBadge() {
     setRankLevel(rank.level);
     setRankTitle(rank.title);
   }, [user]);
+
+  // Load username from profile
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+    fetchOwnProfile(supabase, user.id)
+      .then((p) => { if (p?.username) setProfileUsername(p.username); })
+      .catch(() => {});
+  }, [user?.id]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -46,12 +57,11 @@ export default function ProfileBadge() {
     return <div className="w-8 h-8 rounded-full bg-stone-800 animate-pulse" />;
   }
 
-  const displayName = user?.user_metadata?.username ||
-                      user?.user_metadata?.full_name?.split(" ")[0] ||
+  const displayName = profileUsername ||
                       user?.email?.split("@")[0] ||
                       "Explorer";
   const initials = user
-    ? (user.user_metadata?.username || user.user_metadata?.full_name || user.email || "EX").slice(0, 2).toUpperCase()
+    ? (profileUsername || user.email || "EX").slice(0, 2).toUpperCase()
     : null;
 
   const handleSync = async () => {
