@@ -16,6 +16,7 @@ type SortDir = "asc" | "desc";
 type ViewMode = "list" | "tile" | "cover";
 type ArchiveTab = "markers" | "places";
 
+const PLACE_MARKER_TYPES = new Set(["cemetery", "graveyard", "mausoleum"]);
 
 // ── Viewed-item tracking (dismisses "Recently Added" badge) ───────────────
 const VIEWED_KEY = "gl_viewed_ids";
@@ -388,9 +389,50 @@ export default function ArchivePage() {
     return [...new Set(vals)].sort();
   }, [graves, filterState, filterCity]);
 
+  // ── Derived places: merge IDB CemeteryRecords with cemeteries from graves ──
+  const derivedPlaces = useMemo(() => {
+    const map = new Map<string, CemeteryRecord>();
+    // IDB records take priority
+    cemeteries.forEach((c) => map.set(c.name.toLowerCase().trim(), c));
+    // Backfill from graves for any cemetery not yet in IDB
+    graves.forEach((g) => {
+      const name = g.location?.cemetery;
+      if (!name || !g.location?.lat || !g.location?.lng) return;
+      const key = name.toLowerCase().trim();
+      if (!map.has(key)) {
+        map.set(key, {
+          id: `gl_derived_${key}`,
+          name,
+          lat: g.location.lat,
+          lng: g.location.lng,
+          visitCount: 1,
+          firstVisited: g.timestamp,
+          lastVisited: g.timestamp,
+        });
+      } else {
+        // Update visit tracking on the derived entry
+        const existing = map.get(key)!;
+        if (existing.id.startsWith("gl_derived_")) {
+          map.set(key, {
+            ...existing,
+            visitCount: existing.visitCount + 1,
+            lastVisited: Math.max(existing.lastVisited, g.timestamp),
+            firstVisited: Math.min(existing.firstVisited, g.timestamp),
+          });
+        }
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.lastVisited - a.lastVisited);
+  }, [graves, cemeteries]);
+
   // ── Filtered + sorted graves ──────────────────────────────────────────────
   const filteredGraves = useMemo(() => {
     let result = graves.filter((g) => {
+      // Exclude records that represent a place (cemetery/graveyard), not an individual marker
+      const mType = g.extracted?.markerType?.toLowerCase() ?? "";
+      if (PLACE_MARKER_TYPES.has(mType)) return false;
+      const hasPlaceTag = g.tags?.some((t) => PLACE_MARKER_TYPES.has(t.toLowerCase()));
+      if (hasPlaceTag) return false;
       // Text search
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -737,9 +779,11 @@ export default function ArchivePage() {
         {/* ── Places tab ── */}
         {!loading && archiveTab === "places" && (
           <CemeterySection
-            cemeteries={cemeteries}
+            cemeteries={derivedPlaces}
             onDelete={async (id) => {
-              await deleteCemetery(id);
+              if (!id.startsWith("gl_derived_")) {
+                await deleteCemetery(id);
+              }
               setCemeteries((prev) => prev.filter((c) => c.id !== id));
             }}
           />
@@ -1082,7 +1126,6 @@ function GraveCoverFlow({
       }}
     >
       {graves.map((grave) => {
-        const hasCemetery = Boolean(grave.location?.cemetery);
         const hasGps = Boolean(grave.location?.lat && grave.location?.lng);
         const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" — ");
         const locationLine = [grave.location?.cemetery, grave.location?.city, grave.location?.state]
@@ -1424,18 +1467,20 @@ function CemeterySection({
                   <span className="text-xs font-bold" style={{ color: "#c9a84c" }}>{c.visitCount}</span>
                   <span className="text-[0.65rem] text-stone-500 uppercase tracking-wide">{c.visitCount === 1 ? "visit" : "visits"}</span>
                 </div>
-                {/* Delete */}
-                {deleteId === c.id ? (
-                  <div className="flex gap-1">
-                    <button onClick={() => onDelete(c.id).then(() => setDeleteId(null))} className="text-xs text-red-400 px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20">Delete</button>
-                    <button onClick={() => setDeleteId(null)} className="text-xs text-stone-500">Cancel</button>
-                  </div>
-                ) : (
-                  <button onClick={() => setDeleteId(c.id)} className="w-8 h-8 flex items-center justify-center text-stone-700 active:text-red-400 rounded-lg">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                    </svg>
-                  </button>
+                {/* Delete — only for IDB-backed records, not derived entries */}
+                {!c.id.startsWith("gl_derived_") && (
+                  deleteId === c.id ? (
+                    <div className="flex gap-1">
+                      <button onClick={() => onDelete(c.id).then(() => setDeleteId(null))} className="text-xs text-red-400 px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/20">Delete</button>
+                      <button onClick={() => setDeleteId(null)} className="text-xs text-stone-500">Cancel</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setDeleteId(c.id)} className="w-8 h-8 flex items-center justify-center text-stone-700 active:text-red-400 rounded-lg">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                      </svg>
+                    </button>
+                  )
                 )}
               </div>
             </div>
