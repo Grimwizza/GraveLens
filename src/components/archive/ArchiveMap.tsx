@@ -53,21 +53,21 @@ const GRAVE_ICON_HTML = `
   <rect x="10" y="20" width="8" height="9" rx="1" fill="#1a1917" opacity="0.3"/>
 </svg>`.trim();
 
-// Friend tier: warm coral/rose
+// Friend tier: Vibrant Purple
 const FRIEND_GRAVE_ICON_HTML = `
 <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6))">
-  <rect x="2" y="14" width="24" height="18" rx="2" fill="#c97c6b"/>
-  <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#c97c6b"/>
+  <rect x="2" y="14" width="24" height="18" rx="2" fill="#a855f7"/>
+  <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#a855f7"/>
   <line x1="14" y1="6" x2="14" y2="12" stroke="#1a1917" stroke-width="2" stroke-linecap="round"/>
   <line x1="10" y1="9" x2="18" y2="9" stroke="#1a1917" stroke-width="2" stroke-linecap="round"/>
   <rect x="10" y="20" width="8" height="9" rx="1" fill="#1a1917" opacity="0.3"/>
 </svg>`.trim();
 
-// Community tier: muted slate-blue
+// Community tier: Same Vibrant Purple for unified "Shared" identity
 const COMMUNITY_GRAVE_ICON_HTML = `
 <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6))">
-  <rect x="2" y="14" width="24" height="18" rx="2" fill="#6b89b5"/>
-  <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#6b89b5"/>
+  <rect x="2" y="14" width="24" height="18" rx="2" fill="#a855f7"/>
+  <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#a855f7"/>
   <line x1="14" y1="6" x2="14" y2="12" stroke="#1a1917" stroke-width="2" stroke-linecap="round"/>
   <line x1="10" y1="9" x2="18" y2="9" stroke="#1a1917" stroke-width="2" stroke-linecap="round"/>
   <rect x="10" y="20" width="8" height="9" rx="1" fill="#1a1917" opacity="0.3"/>
@@ -499,7 +499,7 @@ export default function ArchiveMap({
       const popup = `
         <div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
           <p style="font-family:Georgia,serif;font-size:1rem;font-weight:600;color:#f5f2ed;margin:0 0 2px;">${g.name}</p>
-          ${dates ? `<p style="font-size:0.75rem;color:${g.tier === "friend" ? "#c97c6b" : "#6b89b5"};margin:0 0 4px;">${dates}</p>` : ""}
+          ${dates ? `<p style="font-size:0.75rem;color:#a855f7;margin:0 0 4px;">${dates}</p>` : ""}
           ${g.cemetery ? `<p style="font-size:0.7rem;color:#8a8580;margin:0 0 4px;">${g.cemetery}</p>` : ""}
           <img src="${g.photoUrl}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px;" />
           <p style="font-size:0.7rem;color:#8a8580;margin:0;">${g.contributorLabel} · ${rankLabel}</p>
@@ -797,34 +797,17 @@ export default function ArchiveMap({
       });
     }
 
-    const hasFriendGraves = communityGraves.some((g) => g.tier === "friend");
-    const hasCommunityGraves = communityGraves.some((g) => g.tier === "community");
-
-    if (hasFriendGraves) {
+    if (communityGraves.length > 0) {
       items.push({
         icon: (
           <svg width="14" height="18" viewBox="0 0 28 36" fill="none">
-            <rect x="2" y="14" width="24" height="18" rx="2" fill="#c97c6b"/>
-            <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#c97c6b"/>
+            <rect x="2" y="14" width="24" height="18" rx="2" fill="#a855f7"/>
+            <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#a855f7"/>
             <line x1="14" y1="6" x2="14" y2="12" stroke="#1a1917" strokeWidth="2" strokeLinecap="round"/>
             <line x1="10" y1="9" x2="18" y2="9" stroke="#1a1917" strokeWidth="2" strokeLinecap="round"/>
           </svg>
         ),
-        label: "Friend discoveries",
-      });
-    }
-
-    if (hasCommunityGraves) {
-      items.push({
-        icon: (
-          <svg width="14" height="18" viewBox="0 0 28 36" fill="none">
-            <rect x="2" y="14" width="24" height="18" rx="2" fill="#6b89b5"/>
-            <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#6b89b5"/>
-            <line x1="14" y1="6" x2="14" y2="12" stroke="#1a1917" strokeWidth="2" strokeLinecap="round"/>
-            <line x1="10" y1="9" x2="18" y2="9" stroke="#1a1917" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-        ),
-        label: "Community graves",
+        label: "Shared markers",
       });
     }
 

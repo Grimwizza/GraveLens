@@ -135,7 +135,7 @@ export default function ArchivePage() {
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) return;
 
-          const cloud = await fetchAllFromCloud(supabase);
+          const cloud = await fetchAllFromCloud(supabase, user.id);
           if (cloud.length === 0) return;
 
           // Merge: cloud wins on conflict (handles edits from other devices)

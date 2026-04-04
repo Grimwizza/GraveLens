@@ -108,11 +108,13 @@ export async function deleteFromCloud(
  * Maps the DB row shape back to GraveRecord.
  */
 export async function fetchAllFromCloud(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  userId: string
 ): Promise<GraveRecord[]> {
   const { data, error } = await supabase
     .from("graves")
     .select("*")
+    .eq("user_id", userId)
     .order("timestamp", { ascending: false });
 
   if (error) throw error;
