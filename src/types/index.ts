@@ -186,6 +186,81 @@ export interface CulturalContext {
   categories: CulturalCategory[];
 }
 
+// ── FamilySearch hints ────────────────────────────────────────────────────────
+
+export interface FamilySearchHint {
+  /** Human-readable collection or record title */
+  title: string;
+  /** Collection date range, e.g. "1880–1940" */
+  dateRange?: string;
+  /** Record type label, e.g. "Death", "Census", "Military" */
+  recordType?: string;
+  /** Direct link to the record or collection search on FamilySearch */
+  url: string;
+  /** Whether the date range aligns with the person's known dates */
+  dateConfident: boolean;
+}
+
+// ── SSDI ─────────────────────────────────────────────────────────────────────
+
+export interface SSDIRecord {
+  name: string;
+  birthDate?: string;
+  deathDate?: string;
+  lastResidenceState?: string;
+  matchConfidence: "high" | "medium" | "low";
+  url: string;
+}
+
+// ── Immigration ──────────────────────────────────────────────────────────────
+
+export interface ImmigrationRecord {
+  collection: string;
+  name: string;
+  arrivalYear?: string;
+  arrivalDate?: string;
+  departurePort?: string;
+  arrivalPort?: string;
+  ageAtArrival?: string;
+  origin?: string;
+  url: string;
+}
+
+// ── Historical Census ───────────────────────────────────────────────────────
+
+export interface CensusHouseholdMember {
+  name: string;
+  relationship?: string;
+  age?: string;
+  birthplace?: string;
+}
+
+export interface HistoricalCensusRecord {
+  year: number;
+  name: string;
+  state?: string;
+  county?: string;
+  occupation?: string;
+  birthplace?: string;
+  fatherBirthplace?: string;
+  motherBirthplace?: string;
+  household?: CensusHouseholdMember[];
+  url: string;
+}
+
+// ── Research checklist ────────────────────────────────────────────────────────
+
+export interface ResearchChecklistItem {
+  priority: 1 | 2 | 3;  // 1 = do first, 3 = nice to have
+  action: string;        // Human-readable next step
+  source: string;        // Record type / institution
+  url?: string;          // Optional deep link
+}
+
+export interface ResearchChecklist {
+  items: ResearchChecklistItem[];
+}
+
 export interface ResearchData {
   military?: MilitaryRecord[];
   militaryContext?: MilitaryContext;
@@ -200,6 +275,16 @@ export interface ResearchData {
   narratives?: LifeNarrative[];
   localHistory?: LocalHistoryContext;
   culturalContext?: CulturalContext;
+  /** FamilySearch public record collection hints */
+  familySearchHints?: FamilySearchHint[];
+  /** Social Security Death Index matches (1936–2014) */
+  ssdi?: SSDIRecord[];
+  /** Immigration & passenger record hits */
+  immigration?: ImmigrationRecord[];
+  /** Historical U.S. Census records (1880–1940) */
+  historicalCensus?: HistoricalCensusRecord[];
+  /** Deterministic next-step checklist derived from all research results */
+  researchChecklist?: ResearchChecklist;
 }
 
 export interface GraveRecord {

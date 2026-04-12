@@ -198,6 +198,8 @@ export default function ResultPage({ id }: { id: string }) {
             historical: d.historical ?? {},
             militaryContext: d.militaryContext ?? undefined,
             localHistory: d.localHistory ?? undefined,
+            familySearchHints: d.familySearchHints ?? undefined,
+            researchChecklist: d.researchChecklist ?? undefined,
             cemetery: data.location?.cemetery
               ? {
                   name: data.location.cemetery,
@@ -601,6 +603,8 @@ export default function ResultPage({ id }: { id: string }) {
           historical: d.historical ?? {},
           militaryContext: d.militaryContext ?? undefined,
           localHistory: d.localHistory ?? undefined,
+          familySearchHints: d.familySearchHints ?? undefined,
+          researchChecklist: d.researchChecklist ?? undefined,
           cemetery: currentLocation?.cemetery
             ? { name: currentLocation.cemetery, wikipediaUrl: d.cemeteryWikiUrl, location: currentLocation ?? undefined }
             : undefined,
@@ -890,6 +894,19 @@ export default function ResultPage({ id }: { id: string }) {
                 url: l.documentUrl,
               }))}
             />
+          ) : null}
+
+          {/* FamilySearch record hints */}
+          {(research?.familySearchHints?.length || researchLoading) ? (
+            <FamilySearchCard
+              hints={research?.familySearchHints}
+              loading={researchLoading}
+            />
+          ) : null}
+
+          {/* Research Checklist */}
+          {research?.researchChecklist?.items?.length ? (
+            <ResearchChecklistCard checklist={research.researchChecklist} />
           ) : null}
         </div>
 
@@ -1891,6 +1908,155 @@ function RecordItem({
         <p className="text-gold-500 text-xs mt-1">View record →</p>
       )}
     </>
+  );
+}
+
+// ── FamilySearch Hints Card ───────────────────────────────────────────────────
+
+function FamilySearchCard({
+  hints,
+  loading,
+}: {
+  hints?: import("@/types").FamilySearchHint[];
+  loading: boolean;
+}) {
+  if (loading && !hints) {
+    return (
+      <div className="py-5 animate-fade-up">
+        <SectionHeader icon="🌳" title="FamilySearch Records" />
+        <div className="mt-3 space-y-2">
+          <div className="h-14 shimmer rounded-xl" />
+          <div className="h-14 shimmer rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+  if (!hints || hints.length === 0) return null;
+
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="🌳" title="FamilySearch Records" />
+      <p className="text-stone-500 text-xs mt-1 mb-3">
+        Free indexed records — 9 billion entries. Tap any result to view on FamilySearch.
+      </p>
+      <ul className="space-y-2">
+        {hints.map((hint, i) => (
+          <li key={i}>
+            <a
+              href={hint.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-start gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
+            >
+              {/* Record type badge */}
+              <div
+                className="shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[0.65rem] font-semibold uppercase tracking-wide"
+                style={{ background: "rgba(201,168,76,0.15)", color: "#c9a84c" }}
+              >
+                {hint.recordType ?? "Record"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-stone-200 text-sm font-medium leading-snug line-clamp-2">
+                  {hint.title}
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  {hint.dateRange && (
+                    <span className="text-stone-500 text-xs">{hint.dateRange}</span>
+                  )}
+                  {!hint.dateConfident && (
+                    <span
+                      className="text-[0.65rem] px-1.5 py-0.5 rounded"
+                      style={{ background: "rgba(180,80,60,0.18)", color: "#c07060" }}
+                    >
+                      Date mismatch — verify
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs mt-1" style={{ color: "#c9a84c" }}>
+                  View on FamilySearch →
+                </p>
+              </div>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ── Research Checklist Card ───────────────────────────────────────────────────
+
+const PRIORITY_LABEL: Record<1 | 2 | 3, { label: string; color: string; bg: string }> = {
+  1: { label: "Do First",   color: "#e8a87c", bg: "rgba(180,90,40,0.2)" },
+  2: { label: "High Value", color: "#c9a84c", bg: "rgba(150,100,20,0.2)" },
+  3: { label: "Supplement", color: "#7a9a7a", bg: "rgba(50,90,50,0.2)" },
+};
+
+function ResearchChecklistCard({
+  checklist,
+}: {
+  checklist: import("@/types").ResearchChecklist;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const { items } = checklist;
+  if (!items.length) return null;
+  const shown = expanded ? items : items.slice(0, 3);
+
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="🔍" title="What to Research Next" />
+      <p className="text-stone-500 text-xs mt-1 mb-3">
+        Prioritized next steps based on available evidence. Tap any step to open the source.
+      </p>
+      <ol className="space-y-2">
+        {shown.map((item, i) => {
+          const badge = PRIORITY_LABEL[item.priority];
+          const content = (
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 transition-colors">
+              {/* Step number */}
+              <span className="shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[0.65rem] font-bold text-stone-900" style={{ background: badge.color }}>
+                {i + 1}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-stone-200 text-sm leading-snug">{item.action}</p>
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                  <span
+                    className="text-[0.65rem] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide"
+                    style={{ background: badge.bg, color: badge.color }}
+                  >
+                    {badge.label}
+                  </span>
+                  <span className="text-stone-500 text-xs">{item.source}</span>
+                </div>
+                {item.url && (
+                  <p className="text-xs mt-1" style={{ color: "#c9a84c" }}>
+                    Open source →
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+
+          return (
+            <li key={i}>
+              {item.url ? (
+                <a href={item.url} target="_blank" rel="noopener noreferrer" className="block active:opacity-80">
+                  {content}
+                </a>
+              ) : content}
+            </li>
+          );
+        })}
+      </ol>
+      {items.length > 3 && (
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="mt-3 text-xs text-stone-400 underline"
+        >
+          {expanded ? "Show fewer" : `Show ${items.length - 3} more steps`}
+        </button>
+      )}
+    </div>
   );
 }
 

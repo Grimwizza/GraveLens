@@ -160,7 +160,7 @@ export default function ProfileBadge() {
                     <p className="text-stone-100 font-semibold text-sm truncate">{displayName}</p>
                     <p className="text-stone-500 text-xs mt-0.5 truncate">{user.email}</p>
                     <div className="flex items-center gap-1.5 mt-1">
-                      <RankInsignia level={rankLevel} size={14} color={getRankColor(rankLevel)} />
+                      <RankInsignia level={rankLevel} size={14} />
                       <span className="text-[0.7rem] font-medium" style={{ color: getRankColor(rankLevel) }}>
                         {rankTitle}
                       </span>
