@@ -9,6 +9,11 @@ const isIOS =
   (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
 
+// Minimum standard deviation of per-frame mean luminance required to accept a
+// capture. Below this threshold the torch was almost certainly never activated
+// and all frames are too similar to produce a useful composite.
+const MIN_VARIANCE_THRESHOLD = 8; // out of 255
+
 interface ReliefCaptureProps {
   onCaptureComplete: (dataUrl: string) => void;
   onCancel: () => void;
@@ -24,6 +29,8 @@ export default function ReliefCapture({
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [torchFailed, setTorchFailed] = useState(isIOS); // iOS never has torch API
+  const [torchActive, setTorchActive] = useState(false);   // Android confirmed-on
+  const [torchConfirmed, setTorchConfirmed] = useState(false); // iOS manual confirmation
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Initialize camera
@@ -67,6 +74,7 @@ export default function ReliefCapture({
                 await track.applyConstraints({
                   advanced: [{ torch: true } as MediaTrackConstraintSet],
                 });
+                setTorchActive(true);
               } catch (e) {
                 console.warn("Could not enable torch programmatically", e);
                 setTorchFailed(true);
@@ -132,10 +140,11 @@ export default function ReliefCapture({
       return;
     }
 
-    const durationMs = 3000;
-    const framesCount = 20;
+    const durationMs = 6000;  // extended: 3s → 6s
+    const framesCount = 30;   // extended: 20 → 30
     const intervalMs = durationMs / framesCount;
     const frames: ImageData[] = [];
+    const frameLumas: number[] = []; // per-frame mean luminance for variance gate
 
     const startTime = Date.now();
 
@@ -152,13 +161,42 @@ export default function ReliefCapture({
       ctx.clearRect(0, 0, w, h);
       ctx.drawImage(video, 0, 0, w, h);
       try {
-        frames.push(ctx.getImageData(0, 0, w, h));
+        const frame = ctx.getImageData(0, 0, w, h);
+        frames.push(frame);
+
+        // Compute mean luminance for this frame (used in variance gate)
+        let lumaSum = 0;
+        const numPixels = w * h;
+        for (let i = 0; i < numPixels * 4; i += 4) {
+          lumaSum += 0.299 * frame.data[i] + 0.587 * frame.data[i + 1] + 0.114 * frame.data[i + 2];
+        }
+        frameLumas.push(lumaSum / numPixels);
       } catch (e) {
         console.error("Failed to extract frame", e);
       }
     }, intervalMs);
 
+    function computeVariance(values: number[]): number {
+      if (values.length < 2) return 0;
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      const sq = values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length;
+      return Math.sqrt(sq);
+    }
+
     function finishCapture() {
+      // ── Variance gate ─────────────────────────────────────────────────────
+      // If all frames have nearly identical brightness, the light never moved.
+      // Reject the capture immediately — don't waste worker time on bad frames.
+      const variance = computeVariance(frameLumas);
+      if (variance < MIN_VARIANCE_THRESHOLD) {
+        setIsRecording(false);
+        setProgress(0);
+        setErrorMessage(
+          "No light movement detected. Make sure your flashlight is active and sweep it slowly across the stone, then try again."
+        );
+        return;
+      }
+
       setIsProcessing(true);
 
       // Let React paint the "Enhancing…" state before spawning the worker
@@ -204,10 +242,8 @@ export default function ReliefCapture({
     }
   }, [onCaptureComplete, stream]);
 
-  // Torch fallback copy — platform-specific
-  const torchFallbackCopy = isIOS
-    ? "Enable your flashlight from Control Center before tapping Start."
-    : "Your browser doesn't support automatic torch control. Enable your device flashlight manually before tapping Start.";
+  // Whether the user can start — iOS requires manual torch confirmation
+  const canStart = !!stream && (!isIOS || torchConfirmed);
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
@@ -233,10 +269,22 @@ export default function ReliefCapture({
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
-            <div className="flex flex-col items-end">
+            <div className="flex flex-col items-end gap-1.5">
               <span className="bg-amber-500/90 text-black font-bold text-xs uppercase px-2 py-1 rounded">
                 Pro Scan
               </span>
+              {/* Android torch status indicator */}
+              {!isIOS && (
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  torchActive
+                    ? "bg-green-500/80 text-white"
+                    : torchFailed
+                      ? "bg-red-500/80 text-white"
+                      : "bg-white/20 text-white/60"
+                }`}>
+                  {torchActive ? "Torch ON" : torchFailed ? "Torch OFF" : "…"}
+                </span>
+              )}
             </div>
           </div>
 
@@ -245,26 +293,57 @@ export default function ReliefCapture({
             <div className="mx-4 bg-red-900/80 backdrop-blur rounded-xl p-4 border border-red-500/50 text-center">
               <p className="text-red-300 font-medium text-sm">{errorMessage}</p>
               <button
-                onClick={onCancel}
+                onClick={() => {
+                  setErrorMessage(null);
+                  setIsRecording(false);
+                  setIsProcessing(false);
+                  setProgress(0);
+                }}
                 className="mt-3 px-4 py-2 rounded-lg bg-red-700/60 text-white text-sm font-medium"
               >
-                Go Back
+                Try Again
               </button>
             </div>
           )}
 
           {/* Center instructions */}
           {!isRecording && !isProcessing && !errorMessage && (
-            <div className="flex flex-col items-center gap-4 text-center animate-fade-in shadow-black drop-shadow-md">
-              <p className="text-white font-medium text-lg px-6">
+            <div className="flex flex-col items-center gap-4 text-center animate-fade-in shadow-black drop-shadow-md px-6">
+              <p className="text-white font-medium text-lg">
                 Position stone in frame.
                 <br />
-                When you tap start, sweep your light across the surface for 3s.
+                Tap start, then sweep your light slowly across the surface for 6 seconds.
               </p>
-              {torchFailed && (
-                <div className="bg-black/60 backdrop-blur rounded-lg p-3 mx-4 border border-white/20 mt-4">
+
+              {/* iOS — blocking torch confirmation gate */}
+              {isIOS && (
+                <label className="flex items-center gap-3 bg-black/60 backdrop-blur rounded-xl px-4 py-3 border border-amber-500/50 cursor-pointer">
+                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                    torchConfirmed ? "bg-amber-500 border-amber-500" : "border-white/50"
+                  }`}>
+                    {torchConfirmed && (
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 6l3 3 5-5" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={torchConfirmed}
+                    onChange={(e) => setTorchConfirmed(e.target.checked)}
+                  />
+                  <span className="text-amber-300 font-semibold text-sm text-left">
+                    My flashlight is ON (open Control Center to enable it)
+                  </span>
+                </label>
+              )}
+
+              {/* Android — torch failed, manual instruction */}
+              {!isIOS && torchFailed && (
+                <div className="bg-black/60 backdrop-blur rounded-lg p-3 border border-white/20">
                   <p className="text-amber-400 font-semibold text-sm">
-                    💡 {torchFallbackCopy}
+                    💡 Enable your device flashlight manually before tapping Start.
                   </p>
                 </div>
               )}
@@ -274,7 +353,7 @@ export default function ReliefCapture({
           {isRecording && !isProcessing && (
             <div className="flex flex-col items-center gap-2">
               <p className="text-white font-bold text-xl drop-shadow-md animate-pulse text-center">
-                Moving light...
+                Sweep light slowly...
               </p>
             </div>
           )}
@@ -319,8 +398,8 @@ export default function ReliefCapture({
                 ) : (
                   <button
                     onClick={startCapture}
-                    disabled={!stream}
-                    className="w-20 h-20 rounded-full border-4 border-white/50 flex items-center justify-center p-1 active:scale-95 transition-transform"
+                    disabled={!canStart}
+                    className="w-20 h-20 rounded-full border-4 border-white/50 flex items-center justify-center p-1 active:scale-95 transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <div className="w-full h-full rounded-full bg-white" />
                   </button>

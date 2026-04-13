@@ -364,8 +364,8 @@ export default function CapturePage() {
           )}
           {phase === "idle" && showProOnboarding && (
             <ProOnboarding
-              onStart={() => {
-                localStorage.setItem("gravelens_seen_pro_tutorial", "true");
+              onStart={(skipInFuture) => {
+                if (skipInFuture) localStorage.setItem("gravelens_seen_pro_tutorial", "true");
                 setShowProOnboarding(false);
                 setIsReliefActive(true);
               }}
@@ -588,55 +588,137 @@ const isIOSDevice =
 
 // ── Pro Onboarding ─────────────────────────────────────────────────────────
 
-function ProOnboarding({ onStart, onCancel }: { onStart: () => void, onCancel: () => void }) {
-  // Step 2 differs by platform: Android auto-activates torch; iOS requires manual flashlight
+function ProOnboarding({ onStart, onCancel }: { onStart: (skipInFuture: boolean) => void, onCancel: () => void }) {
+  const [skipInFuture, setSkipInFuture] = useState(false);
+
   const lightInstructions = isIOSDevice ? (
-    <>
-      <strong>Before tapping Start</strong>, enable your flashlight from Control Center.
-      Works best in shade or at dusk — avoid direct sunlight on the stone.
-    </>
+    <>Enable your flashlight from <strong>Control Center</strong> before tapping Start.</>
   ) : (
-    <>
-      We&apos;ll automatically activate your torch. <strong>Wait for nightfall or cast a shadow</strong> over
-      the stone with your body for best contrast.
-    </>
+    <>We&apos;ll activate your torch automatically. Works best in shade or at dusk.</>
   );
 
   return (
-    <div className="flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 pt-12 pb-44 px-4 text-center">
-      <div className="w-16 h-16 rounded-full bg-amber-500/20 border border-amber-500 flex items-center justify-center mb-6">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="5" />
-          <line x1="12" y1="1" x2="12" y2="3" />
-          <line x1="12" y1="21" x2="12" y2="23" />
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-          <line x1="1" y1="12" x2="3" y2="12" />
-          <line x1="21" y1="12" x2="23" y2="12" />
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-        </svg>
-      </div>
-      <h2 className="font-serif text-2xl font-semibold text-stone-100 mb-4">Relief Lens Pro</h2>
+    <div className="flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 pt-8 pb-44 px-4">
+      <h2 className="font-serif text-2xl font-semibold text-stone-100 mb-1 text-center">Relief Lens Pro</h2>
+      <p className="text-stone-500 text-sm mb-6 text-center">Reveals faded engravings using raking light</p>
 
-      <div className="flex flex-col gap-6 text-stone-300 text-left bg-stone-800/50 p-6 rounded-2xl border border-stone-700 w-full mb-8">
-        <div className="flex gap-4 items-start">
-          <div className="mt-1 text-amber-500 font-bold">1</div>
-          <p className="text-sm">Position your camera squarely over the faded headstone engraving.</p>
+      {/* Sweep illustration */}
+      <div className="w-full bg-stone-900 border border-stone-700 rounded-2xl p-4 mb-6 overflow-hidden">
+        <svg
+          viewBox="0 0 280 140"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className="w-full"
+          aria-label="Diagram: sweep flashlight across gravestone"
+        >
+          {/* Ground line */}
+          <line x1="20" y1="128" x2="260" y2="128" stroke="#44403c" strokeWidth="1.5" />
+
+          {/* Gravestone body */}
+          <rect x="100" y="30" width="80" height="98" rx="3" fill="#292524" stroke="#57534e" strokeWidth="1.5" />
+          {/* Arched top */}
+          <path d="M100 50 Q100 28 140 28 Q180 28 180 50" fill="#292524" stroke="#57534e" strokeWidth="1.5" />
+
+          {/* Faint engraving lines on stone */}
+          <line x1="115" y1="65" x2="165" y2="65" stroke="#57534e" strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="120" y1="78" x2="160" y2="78" stroke="#57534e" strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="118" y1="91" x2="162" y2="91" stroke="#57534e" strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="125" y1="104" x2="155" y2="104" stroke="#44403c" strokeWidth="1" strokeLinecap="round" />
+
+          {/* Phone — positioned to left of stone, angled toward it */}
+          <g className="phone-sweep" style={{ transformOrigin: "50px 80px" }}>
+            {/* Phone body */}
+            <rect x="30" y="62" width="28" height="48" rx="4" fill="#1c1917" stroke="#78716c" strokeWidth="1.5" />
+            {/* Screen */}
+            <rect x="33" y="66" width="22" height="36" rx="2" fill="#292524" />
+            {/* Camera dot */}
+            <circle cx="44" cy="98" r="2" fill="#57534e" />
+            {/* Flash — small rectangle at top edge of phone */}
+            <rect x="40" y="62" width="6" height="3" rx="1" fill="#f59e0b" />
+
+            {/* Light beam cone from flash toward stone */}
+            <path
+              d="M43 62 L96 42 L96 90 Z"
+              fill="#f59e0b"
+              fillOpacity="0.12"
+              stroke="#f59e0b"
+              strokeWidth="0.5"
+              strokeOpacity="0.4"
+            />
+            {/* Highlight where beam hits stone */}
+            <rect x="100" y="50" width="12" height="40" rx="2" fill="#f59e0b" fillOpacity="0.08" />
+          </g>
+
+          {/* Sweep arc arrow — shows the motion across the stone face */}
+          <path
+            d="M 58 74 Q 140 30 222 74"
+            stroke="#f59e0b"
+            strokeWidth="1.5"
+            strokeDasharray="5 3"
+            fill="none"
+            strokeLinecap="round"
+          />
+          {/* Arrowhead at end of sweep path */}
+          <polyline
+            points="216,68 222,74 215,78"
+            stroke="#f59e0b"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+          {/* Arrow label */}
+          <text x="112" y="24" fill="#a8a29e" fontSize="9" fontFamily="sans-serif" textAnchor="middle">sweep slowly</text>
+        </svg>
+
+        {/* Caption below illustration */}
+        <p className="text-stone-500 text-xs text-center mt-2">
+          Keep the stone in frame and arc your light source across its face.
+        </p>
+      </div>
+
+      {/* Steps */}
+      <div className="flex flex-col gap-4 text-stone-300 text-left w-full mb-6">
+        <div className="flex gap-3 items-start">
+          <span className="text-amber-500 font-bold text-sm shrink-0 mt-0.5">1</span>
+          <p className="text-sm">Point your camera at the faded engraving and hold steady.</p>
         </div>
-        <div className="flex gap-4 items-start">
-          <div className="mt-1 text-amber-500 font-bold">2</div>
+        <div className="flex gap-3 items-start">
+          <span className="text-amber-500 font-bold text-sm shrink-0 mt-0.5">2</span>
           <p className="text-sm">{lightInstructions}</p>
         </div>
-        <div className="flex gap-4 items-start">
-          <div className="mt-1 text-amber-500 font-bold">3</div>
-          <p className="text-sm">Tap Start, then sweep the light back and forth for 3 seconds.</p>
+        <div className="flex gap-3 items-start">
+          <span className="text-amber-500 font-bold text-sm shrink-0 mt-0.5">3</span>
+          <p className="text-sm">Tap Start, then <strong>slowly arc your light</strong> from one side of the stone to the other over 6 seconds.</p>
         </div>
       </div>
 
-      <div className="flex gap-4 w-full">
-        <button onClick={onCancel} className="flex-1 py-3 rounded-xl border border-stone-600 text-stone-300 font-medium">Cancel</button>
-        <button onClick={onStart} className="flex-1 py-3 rounded-xl bg-amber-600 text-white font-medium shadow-lg shadow-amber-600/20">I Understand</button>
+      {/* Don't show again */}
+      <label className="flex items-center gap-2.5 mb-6 cursor-pointer self-start">
+        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+          skipInFuture ? "bg-stone-500 border-stone-500" : "border-stone-600"
+        }`}>
+          {skipInFuture && (
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M2 5l2.5 2.5 3.5-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </div>
+        <input type="checkbox" className="sr-only" checked={skipInFuture} onChange={(e) => setSkipInFuture(e.target.checked)} />
+        <span className="text-stone-500 text-sm">Don&apos;t show this again</span>
+      </label>
+
+      <div className="flex gap-3 w-full">
+        <button onClick={onCancel} className="flex-1 py-3 rounded-xl border border-stone-700 text-stone-400 text-sm font-medium">
+          Cancel
+        </button>
+        <button
+          onClick={() => onStart(skipInFuture)}
+          className="flex-1 py-3 rounded-xl text-white text-sm font-semibold"
+          style={{ background: "#c9a84c" }}
+        >
+          Got it — Start
+        </button>
       </div>
     </div>
   );
