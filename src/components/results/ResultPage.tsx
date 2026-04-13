@@ -54,6 +54,7 @@ export default function ResultPage({ id }: { id: string }) {
   const [photoFullscreen, setPhotoFullscreen] = useState(false);
   const [extractedOverride, setExtractedOverride] = useState<Partial<ExtractedGraveData> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const refreshingRef = useRef(false);
   const [isPublic, setIsPublic] = useState(false);
   // Abort controller for the initial fresh-scan research fetch.
   // Cancelled the moment a user-triggered refresh starts so the old-name
@@ -578,10 +579,11 @@ export default function ResultPage({ id }: { id: string }) {
   }, [nearbyPrompt]);
 
   const handleRefreshData = useCallback(async (extractedData?: ExtractedGraveData) => {
-    if (!pending || refreshing) return;
+    if (!pending || refreshingRef.current) return;
     // Cancel any in-flight initial scan fetch so it can't overwrite this refresh
     initialFetchAbortRef.current?.abort();
     initialFetchAbortRef.current = null;
+    refreshingRef.current = true;
     setRefreshing(true);
     const current = extractedData ?? { ...pending.extracted, ...(extractedOverride ?? {}) };
     try {
@@ -633,9 +635,10 @@ export default function ResultPage({ id }: { id: string }) {
       }
     } catch { /* non-fatal */ } finally {
       setResearchLoading(false);
+      refreshingRef.current = false;
       setRefreshing(false);
     }
-  }, [pending, extractedOverride, currentLocation, refreshing]);
+  }, [pending, extractedOverride, currentLocation]);
 
   const handleExtractedEdit = useCallback(async (patch: Partial<ExtractedGraveData>) => {
     if (!pending) return;
