@@ -565,19 +565,10 @@ export default function ResultPage({ id }: { id: string }) {
     setNearbyPrompt(null);
   }, [nearbyPrompt]);
 
-  const handleExtractedEdit = useCallback(async (patch: Partial<ExtractedGraveData>) => {
-    if (!pending) return;
-    const next = { ...pending.extracted, ...(extractedOverride ?? {}), ...patch };
-    setExtractedOverride(next);
-    const existing = await getGrave(pending.id);
-    if (!existing) return;
-    await saveGrave({ ...existing, extracted: next });
-  }, [pending, extractedOverride]);
-
-  const handleRefreshData = useCallback(async () => {
+  const handleRefreshData = useCallback(async (extractedData?: ExtractedGraveData) => {
     if (!pending || refreshing) return;
     setRefreshing(true);
-    const current = { ...pending.extracted, ...(extractedOverride ?? {}) };
+    const current = extractedData ?? { ...pending.extracted, ...(extractedOverride ?? {}) };
     try {
       setResearchLoading(true);
       const res = await fetch("/api/lookup", {
@@ -631,6 +622,44 @@ export default function ResultPage({ id }: { id: string }) {
     }
   }, [pending, extractedOverride, currentLocation, refreshing]);
 
+  const handleExtractedEdit = useCallback(async (patch: Partial<ExtractedGraveData>) => {
+    if (!pending) return;
+
+    // Derive firstName/lastName when full name is edited
+    let enriched: Partial<ExtractedGraveData> = patch;
+    if (patch.name !== undefined) {
+      const parts = patch.name.trim().split(/\s+/).filter(Boolean);
+      enriched = {
+        ...enriched,
+        firstName: parts[0] ?? "",
+        lastName: parts.length > 1 ? parts[parts.length - 1] : "",
+      };
+    }
+    // Derive year numbers when date strings are edited
+    if (patch.birthDate !== undefined) {
+      const m = patch.birthDate.match(/\b(1[5-9]\d\d|20[0-2]\d)\b/);
+      enriched = { ...enriched, birthYear: m ? parseInt(m[1], 10) : null };
+    }
+    if (patch.deathDate !== undefined) {
+      const m = patch.deathDate.match(/\b(1[5-9]\d\d|20[0-2]\d)\b/);
+      enriched = { ...enriched, deathYear: m ? parseInt(m[1], 10) : null };
+    }
+
+    const next = { ...pending.extracted, ...(extractedOverride ?? {}), ...enriched };
+    setExtractedOverride(next);
+    const existing = await getGrave(pending.id);
+    if (!existing) return;
+    await saveGrave({ ...existing, extracted: next });
+
+    // Re-run research when fields that affect the lookup change
+    const RESEARCH_KEYS: (keyof ExtractedGraveData)[] = [
+      "name", "firstName", "lastName", "birthYear", "deathYear", "inscription", "symbols",
+    ];
+    if (RESEARCH_KEYS.some((k) => k in enriched)) {
+      handleRefreshData(next);
+    }
+  }, [pending, extractedOverride, handleRefreshData]);
+
   if (!pending) {
     return (
       <div className="flex items-center justify-center min-h-full bg-stone-900">
@@ -677,7 +706,7 @@ export default function ResultPage({ id }: { id: string }) {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={handleRefreshData}
+            onClick={() => handleRefreshData()}
             disabled={refreshing || researchLoading}
             aria-label="Refresh data"
             className="text-stone-400 active:text-stone-200 disabled:opacity-40"
