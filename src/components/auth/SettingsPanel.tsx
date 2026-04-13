@@ -136,16 +136,10 @@ export default function SettingsPanel({ onClose }: Props) {
     setSettings(loadSettings());
     setMounted(true);
     
-    // Prevent background scrolling while open
-    const scrollLocked = document.body.style.overflow === "hidden";
-    // In our specific app architecture, the .scroll-container is what scrolls.
-    // We add a global style override to the head.
+    // Lock the scroll container while the panel is open.
+    // Avoid touching body position — it breaks fixed-portal placement on iOS PWA.
     const style = document.createElement("style");
-    style.innerHTML = `
-      .scroll-container:not(.settings-scroll) { overflow-y: hidden !important; }
-      body { position: fixed; inset: 0; pointer-events: none; }
-      .settings-portal { pointer-events: auto; }
-    `;
+    style.innerHTML = `.scroll-container:not(.settings-scroll) { overflow-y: hidden !important; }`;
     document.head.appendChild(style);
 
     return () => {

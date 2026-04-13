@@ -684,6 +684,18 @@ export default function ResultPage({ id }: { id: string }) {
     const existing = await getGrave(pending.id);
     if (existing) {
       await saveGrave({ ...existing, extracted: next });
+
+      // Push to cloud so the manual edit overwrites stale cloud data on other devices
+      (async () => {
+        try {
+          const supabase = createClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+          const photoUrl = await uploadPhoto(supabase, user.id, existing.id, existing.photoDataUrl);
+          await upsertGrave(supabase, user.id, { ...existing, extracted: next }, photoUrl);
+          await saveGrave({ ...existing, extracted: next, photoDataUrl: photoUrl, syncedAt: Date.now() });
+        } catch { /* offline or not logged in — local save stands */ }
+      })();
     }
 
     // Re-run research when fields that affect the lookup change

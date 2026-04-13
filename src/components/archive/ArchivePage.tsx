@@ -160,20 +160,17 @@ export default function ArchivePage() {
           const cloud = await fetchAllFromCloud(supabase, user.id);
           if (cloud.length === 0) return;
 
-          // Merge: cloud wins on conflict (handles edits from other devices)
-          const byId = new Map(local.map((r) => [r.id, r]));
-          cloud.forEach((r) => byId.set(r.id, r));
-          const merged = Array.from(byId.values()).sort(
+          // Merge: local wins on conflict — local edits are never pushed to the
+          // cloud on save, so the local copy is always more current. Cloud only
+          // contributes records the local device doesn't have yet (cross-device adds).
+          const localIds = new Set(local.map((r) => r.id));
+          const cloudOnly = cloud.filter((r) => !localIds.has(r.id));
+          const merged = [...local, ...cloudOnly].sort(
             (a, b) => b.timestamp - a.timestamp
           );
 
-          // Warm the local cache with any new cloud records
-          const localIds = new Set(local.map((r) => r.id));
-          await Promise.all(
-            cloud
-              .filter((r) => !localIds.has(r.id))
-              .map((r) => saveGrave(r).catch(() => {}))
-          );
+          // Warm the local cache with cross-device records
+          await Promise.all(cloudOnly.map((r) => saveGrave(r).catch(() => {})));
 
           setGraves(merged);
         } catch { /* offline or not logged in — local data stands */ }
