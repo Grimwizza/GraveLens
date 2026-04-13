@@ -80,6 +80,14 @@ export interface NaraRecord {
   thumbnailUrl?: string;
 }
 
+/** Item-level NARA or partner record with direct link and record-specific fields. */
+export interface NaraItemRecord extends NaraRecord {
+  pdfUrl?: string;
+  rank?: string;
+  occupation?: string;
+  birthplace?: string;
+}
+
 export interface CemeteryInfo {
   name: string;
   established?: string;
@@ -248,6 +256,18 @@ export interface HistoricalCensusRecord {
   url: string;
 }
 
+// ── USGenWeb ──────────────────────────────────────────────────────────────────
+
+export interface UsGenWebRecord {
+  /** Link title / record section heading */
+  title: string;
+  county: string;
+  state: string;
+  /** Genealogical record category */
+  recordType: "probate" | "deed" | "will" | "directory" | "general";
+  url: string;
+}
+
 // ── Research checklist ────────────────────────────────────────────────────────
 
 export interface ResearchChecklistItem {
@@ -285,6 +305,10 @@ export interface ResearchData {
   historicalCensus?: HistoricalCensusRecord[];
   /** Deterministic next-step checklist derived from all research results */
   researchChecklist?: ResearchChecklist;
+  /** F6: Item-level military enlistment, pension, and casualty records */
+  naraItemRecords?: NaraItemRecord[];
+  /** F7: USGenWeb county probate, deed, and will transcriptions */
+  usGenWebRecords?: UsGenWebRecord[];
 }
 
 export interface GraveRecord {

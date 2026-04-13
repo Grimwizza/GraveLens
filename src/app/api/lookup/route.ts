@@ -17,10 +17,12 @@ import { searchFamilySearchHints } from "@/lib/apis/familysearch";
 import { searchSSdI } from "@/lib/apis/ssdi";
 import { searchImmigrationRecords, isLikelyImmigrant } from "@/lib/apis/immigration";
 import { searchHistoricalCensus } from "@/lib/apis/historicalCensus";
+import { searchEnlistmentRecords } from "@/lib/apis/nara";
+import { searchUsGenWebRecords } from "@/lib/apis/usgenweb";
 
 import { getSoundex } from "@/lib/phonetic";
 import { buildResearchChecklist } from "@/lib/researchChecklist";
-import type { ResearchData, GeoLocation } from "@/types";
+import type { ResearchData, GeoLocation, NaraItemRecord, UsGenWebRecord } from "@/types";
 
 export async function POST(req: NextRequest) {
   try {
@@ -45,12 +47,6 @@ export async function POST(req: NextRequest) {
 
     // ── Phonetic normalization ──────────────────────────────────────────────
     const surnameSoundex = lastName ? getSoundex(lastName) : "";
-
-    // ── Immigration gate ────────────────────────────────────────────────────
-    // Only search passenger/immigration collections when the available data
-    // suggests a non-US-born subject. This avoids burning FamilySearch quota
-    // on searches that have near-zero chance of returning useful results.
-    const runImmigration = isLikelyImmigrant(inscription, undefined, birthYear, undefined);
 
     // ── Tier 1: All free-API lookups in parallel ────────────────────────────
     const [
@@ -129,6 +125,23 @@ export async function POST(req: NextRequest) {
       ...(wikiEvents.length  > 0 ? { wikidataEvents:  wikiEvents  } : {}),
     };
 
+    // ── Tier 3: Conditional lookups requiring Tier 1/2 results ─────────────
+    // Run F6 (enlistment) and F7 (USGenWeb) in parallel.
+    // F6 needs militaryContext.likelyConflict; F7 needs land records + pre-1920 death.
+    const landCount = (landRecords.status === "fulfilled" ? landRecords.value : []).length;
+    const [enlistmentResult, usGenWebResult] = await Promise.allSettled([
+      // F6: Item-level military records
+      militaryContext?.likelyConflict
+        ? searchEnlistmentRecords(firstName, lastName, birthYear, militaryContext.likelyConflict)
+        : Promise.resolve([] as NaraItemRecord[]),
+      // F7: USGenWeb probate/deed/will — only for pre-1920 deaths with known land records
+      landCount > 0 && deathYear && deathYear < 1920 && county && state
+        ? searchUsGenWebRecords(county, state, deathYear)
+        : Promise.resolve([] as UsGenWebRecord[]),
+    ]);
+    const naraItemRecords = enlistmentResult.status === "fulfilled" ? enlistmentResult.value : [];
+    const usGenWebRecords = usGenWebResult.status   === "fulfilled" ? usGenWebResult.value  : [];
+
     // ── F8: Research Checklist — deterministic, zero-cost ──────────────────
     const partialResearch: ResearchData = {
       newspapers:       newspapers.status    === "fulfilled" ? newspapers.value    : [],
@@ -158,7 +171,9 @@ export async function POST(req: NextRequest) {
       familySearchHints:  fsHints.length    > 0 ? fsHints    : undefined,
       ssdi:               ssdi.length       > 0 ? ssdi       : undefined,
       immigration:        immigration.length > 0 ? immigration : undefined,
-      historicalCensus:   histCensus.length > 0 ? histCensus : undefined,
+      historicalCensus:   histCensus.length      > 0 ? histCensus      : undefined,
+      naraItemRecords:    naraItemRecords.length > 0 ? naraItemRecords : undefined,
+      usGenWebRecords:    usGenWebRecords.length > 0 ? usGenWebRecords : undefined,
       researchChecklist,
       surnameSoundex:     surnameSoundex || undefined,
     });

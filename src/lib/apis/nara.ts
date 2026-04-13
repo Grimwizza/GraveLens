@@ -1,4 +1,4 @@
-import type { NaraRecord } from "@/types";
+import type { NaraRecord, NaraItemRecord } from "@/types";
 
 // NARA Catalog API v2 — Elasticsearch-backed catalog of holdings.
 // DEMO_KEY: 40 req/hour per IP — sufficient for single-user PWA use.
@@ -90,6 +90,118 @@ function hitsFromResponse(data: unknown): NaraHit[] {
     (d.results as NaraHit[]) ||
     []
   );
+}
+
+// ── F6: Item-level military record search ─────────────────────────────────────
+
+const FS_SEARCH = "https://api.familysearch.org/platform/records/search";
+const FS_HEADERS = { Accept: "application/x-gedcomx-atom+json" };
+const CIVIL_WAR_PENSION_COLLECTION = "1932460";
+
+interface FsEntry {
+  title?: string;
+  links?: Record<string, { href?: string }>;
+}
+
+async function searchCivilWarPension(
+  firstName: string,
+  lastName: string,
+  birthYear: number | null,
+): Promise<NaraItemRecord[]> {
+  const params = new URLSearchParams({
+    "q.givenName": firstName ?? "",
+    "q.surname": lastName,
+    "f.collectionId": CIVIL_WAR_PENSION_COLLECTION,
+    count: "4",
+  });
+  if (birthYear) {
+    params.set("q.birthLikeDate.from", String(birthYear - 5));
+    params.set("q.birthLikeDate.to", String(birthYear + 5));
+  }
+  try {
+    const res = await fetch(`${FS_SEARCH}?${params}`, {
+      headers: FS_HEADERS,
+      signal: AbortSignal.timeout(9000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const entries: FsEntry[] = data?.entries ?? [];
+    return entries.slice(0, 3).map((entry) => ({
+      title: entry.title?.trim() || `Civil War Pension — ${firstName} ${lastName}`,
+      recordGroup: "RG 15",
+      description:
+        "Civil War pension application — service history, wounds/disabilities, marriage, and family details.",
+      url:
+        entry.links?.["person"]?.href ??
+        entry.links?.["self"]?.href ??
+        `https://www.familysearch.org/search/record/results?f.collectionId=${CIVIL_WAR_PENSION_COLLECTION}&q.surname=${encodeURIComponent(lastName)}`,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Returns item-level military records for the given conflict.
+ * Civil War → FamilySearch Pension Index (real query).
+ * WWII → NARA AAD deep-link search.
+ * Vietnam → VVMF Wall database deep-link.
+ */
+export async function searchEnlistmentRecords(
+  firstName: string,
+  lastName: string,
+  birthYear: number | null,
+  conflict: string,
+): Promise<NaraItemRecord[]> {
+  if (!lastName || lastName.length < 2 || !conflict) return [];
+
+  if (conflict === "Civil War") {
+    return searchCivilWarPension(firstName, lastName, birthYear);
+  }
+
+  if (conflict === "World War II") {
+    const aadUrl =
+      `https://aad.archives.gov/aad/fielded-search.jsp?dt=893` +
+      `&q_2415=${encodeURIComponent(lastName)}` +
+      `&q_2416=${encodeURIComponent(firstName ?? "")}` +
+      (birthYear ? `&q_2418=${birthYear}` : "") +
+      `&buttonsub=Search`;
+    return [
+      {
+        title: `WWII Army Enlistment Records — ${firstName} ${lastName}`,
+        recordGroup: "RG 407",
+        description:
+          "9 million WWII Army enlistment records with rank, civilian occupation, education level, and birthplace.",
+        url: aadUrl,
+      },
+    ];
+  }
+
+  if (conflict === "Vietnam War") {
+    return [
+      {
+        title: `Vietnam Veterans Memorial Wall — ${firstName} ${lastName}`,
+        recordGroup: "VVMF",
+        description:
+          "Vietnam Veterans Memorial Fund database — confirms KIA/MIA status, panel/line number, and unit assignment.",
+        url: `https://www.vvmf.org/database/?name=${encodeURIComponent(lastName + ", " + firstName)}`,
+      },
+    ];
+  }
+
+  if (conflict === "World War I") {
+    return [
+      {
+        title: `WWI Draft Registration Cards — ${firstName} ${lastName}`,
+        recordGroup: "RG 163",
+        description:
+          "WWI draft registration cards (1917–1918) — birthplace, occupation, employer, and physical description.",
+        url: `https://www.familysearch.org/search/record/results?q.surname=${encodeURIComponent(lastName)}&q.givenName=${encodeURIComponent(firstName ?? "")}&f.collectionId=1968530`,
+      },
+    ];
+  }
+
+  return [];
 }
 
 export async function searchNaraRecords(

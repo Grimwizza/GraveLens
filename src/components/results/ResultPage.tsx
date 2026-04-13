@@ -192,13 +192,18 @@ export default function ResultPage({ id }: { id: string }) {
         .then((r) => r.json())
         .then((d) => {
           const researchData: ResearchData = {
-            newspapers: d.newspapers ?? [],
-            naraRecords: d.naraRecords ?? [],
-            landRecords: d.landRecords ?? [],
-            historical: d.historical ?? {},
-            militaryContext: d.militaryContext ?? undefined,
-            localHistory: d.localHistory ?? undefined,
+            newspapers:        d.newspapers ?? [],
+            naraRecords:       d.naraRecords ?? [],
+            landRecords:       d.landRecords ?? [],
+            historical:        d.historical ?? {},
+            militaryContext:   d.militaryContext ?? undefined,
+            localHistory:      d.localHistory ?? undefined,
             familySearchHints: d.familySearchHints ?? undefined,
+            ssdi:              d.ssdi ?? undefined,
+            immigration:       d.immigration ?? undefined,
+            historicalCensus:  d.historicalCensus ?? undefined,
+            naraItemRecords:   d.naraItemRecords ?? undefined,
+            usGenWebRecords:   d.usGenWebRecords ?? undefined,
             researchChecklist: d.researchChecklist ?? undefined,
             cemetery: data.location?.cemetery
               ? {
@@ -597,13 +602,18 @@ export default function ResultPage({ id }: { id: string }) {
       if (res.ok) {
         const d = await res.json();
         const researchData: ResearchData = {
-          newspapers: d.newspapers ?? [],
-          naraRecords: d.naraRecords ?? [],
-          landRecords: d.landRecords ?? [],
-          historical: d.historical ?? {},
-          militaryContext: d.militaryContext ?? undefined,
-          localHistory: d.localHistory ?? undefined,
+          newspapers:        d.newspapers ?? [],
+          naraRecords:       d.naraRecords ?? [],
+          landRecords:       d.landRecords ?? [],
+          historical:        d.historical ?? {},
+          militaryContext:   d.militaryContext ?? undefined,
+          localHistory:      d.localHistory ?? undefined,
           familySearchHints: d.familySearchHints ?? undefined,
+          ssdi:              d.ssdi ?? undefined,
+          immigration:       d.immigration ?? undefined,
+          historicalCensus:  d.historicalCensus ?? undefined,
+          naraItemRecords:   d.naraItemRecords ?? undefined,
+          usGenWebRecords:   d.usGenWebRecords ?? undefined,
           researchChecklist: d.researchChecklist ?? undefined,
           cemetery: currentLocation?.cemetery
             ? { name: currentLocation.cemetery, wikipediaUrl: d.cemeteryWikiUrl, location: currentLocation ?? undefined }
@@ -904,7 +914,32 @@ export default function ResultPage({ id }: { id: string }) {
             />
           ) : null}
 
-          {/* Research Checklist */}
+          {/* F3: SSDI */}
+          {research?.ssdi?.length ? (
+            <SSDICard records={research.ssdi} />
+          ) : null}
+
+          {/* F4: Historical Census */}
+          {research?.historicalCensus?.length ? (
+            <HistoricalCensusCard records={research.historicalCensus} />
+          ) : null}
+
+          {/* F5: Immigration records */}
+          {research?.immigration?.length ? (
+            <ImmigrationCard records={research.immigration} />
+          ) : null}
+
+          {/* F6: Item-level military/enlistment records */}
+          {research?.naraItemRecords?.length ? (
+            <NaraItemCard records={research.naraItemRecords} />
+          ) : null}
+
+          {/* F7: USGenWeb probate/deed/will */}
+          {research?.usGenWebRecords?.length ? (
+            <UsGenWebCard records={research.usGenWebRecords} />
+          ) : null}
+
+          {/* F8: Research Checklist */}
           {research?.researchChecklist?.items?.length ? (
             <ResearchChecklistCard checklist={research.researchChecklist} />
           ) : null}
@@ -1975,6 +2010,248 @@ function FamilySearchCard({
                 <p className="text-xs mt-1" style={{ color: "#c9a84c" }}>
                   View on FamilySearch →
                 </p>
+              </div>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ── SSDI Card (F3) ───────────────────────────────────────────────────────────
+
+const CONFIDENCE_STYLE: Record<string, { color: string; bg: string; label: string }> = {
+  high:   { color: "#7ab87a", bg: "rgba(50,120,50,0.18)",  label: "High match"   },
+  medium: { color: "#c9a84c", bg: "rgba(150,100,20,0.18)", label: "Possible match" },
+  low:    { color: "#a07060", bg: "rgba(120,60,40,0.18)",  label: "Low confidence" },
+};
+
+function SSDICard({ records }: { records: import("@/types").SSDIRecord[] }) {
+  if (!records.length) return null;
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="📋" title="Social Security Death Index" />
+      <p className="text-stone-500 text-xs mt-1 mb-3">
+        SSDI records (1936–2014) — confirms death date and last known state.
+      </p>
+      <ul className="space-y-2">
+        {records.map((r, i) => {
+          const conf = CONFIDENCE_STYLE[r.matchConfidence] ?? CONFIDENCE_STYLE.low;
+          return (
+            <li key={i}>
+              <a
+                href={r.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
+              >
+                <div
+                  className="shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[0.65rem] font-semibold uppercase tracking-wide whitespace-nowrap"
+                  style={{ background: conf.bg, color: conf.color }}
+                >
+                  {conf.label}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-stone-200 text-sm font-medium leading-snug">{r.name}</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                    {r.birthDate && <span className="text-stone-400 text-xs">b. {r.birthDate}</span>}
+                    {r.deathDate && <span className="text-stone-400 text-xs">d. {r.deathDate}</span>}
+                    {r.lastResidenceState && (
+                      <span className="text-stone-400 text-xs">Last residence: {r.lastResidenceState}</span>
+                    )}
+                  </div>
+                  <p className="text-xs mt-1.5" style={{ color: "#c9a84c" }}>View SSDI record →</p>
+                </div>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+// ── Historical Census Card (F4) ───────────────────────────────────────────────
+
+function HistoricalCensusCard({ records }: { records: import("@/types").HistoricalCensusRecord[] }) {
+  if (!records.length) return null;
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="📊" title="Historical Census Records" />
+      <p className="text-stone-500 text-xs mt-1 mb-3">
+        1880–1940 U.S. Census — household, occupation, and birthplace data.
+      </p>
+      <ul className="space-y-2">
+        {records.map((r, i) => (
+          <li key={i}>
+            <a
+              href={r.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-start gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
+            >
+              <div
+                className="shrink-0 mt-0.5 px-2 py-0.5 rounded text-[0.7rem] font-bold tabular-nums"
+                style={{ background: "rgba(201,168,76,0.15)", color: "#c9a84c" }}
+              >
+                {r.year}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-stone-200 text-sm font-medium leading-snug">{r.name}</p>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                  {(r.state || r.county) && (
+                    <span className="text-stone-400 text-xs">
+                      {[r.county, r.state].filter(Boolean).join(", ")}
+                    </span>
+                  )}
+                  {r.occupation && <span className="text-stone-400 text-xs">{r.occupation}</span>}
+                  {r.birthplace && <span className="text-stone-400 text-xs">b. {r.birthplace}</span>}
+                </div>
+                {r.household && r.household.length > 0 && (
+                  <p className="text-stone-500 text-xs mt-1 truncate">
+                    Household: {r.household.map((m) => m.name).join(", ")}
+                  </p>
+                )}
+                <p className="text-xs mt-1.5" style={{ color: "#c9a84c" }}>View census record →</p>
+              </div>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ── Immigration Card (F5) ─────────────────────────────────────────────────────
+
+function ImmigrationCard({ records }: { records: import("@/types").ImmigrationRecord[] }) {
+  if (!records.length) return null;
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="⚓" title="Immigration & Passenger Records" />
+      <p className="text-stone-500 text-xs mt-1 mb-3">
+        Ship passenger lists and naturalization records — homeland, contact, and arrival details.
+      </p>
+      <ul className="space-y-2">
+        {records.map((r, i) => (
+          <li key={i}>
+            <a
+              href={r.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-start gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
+            >
+              <div
+                className="shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[0.65rem] font-semibold uppercase tracking-wide"
+                style={{ background: "rgba(92,122,92,0.2)", color: "#8ab47a" }}
+              >
+                {r.arrivalYear ?? "Arrival"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-stone-200 text-sm font-medium leading-snug">{r.name}</p>
+                <p className="text-stone-500 text-xs mt-0.5">{r.collection}</p>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                  {r.origin && <span className="text-stone-400 text-xs">From: {r.origin}</span>}
+                  {r.arrivalPort && <span className="text-stone-400 text-xs">Arrived: {r.arrivalPort}</span>}
+                  {r.departurePort && <span className="text-stone-400 text-xs">Departed: {r.departurePort}</span>}
+                </div>
+                <p className="text-xs mt-1.5" style={{ color: "#c9a84c" }}>View passenger record →</p>
+              </div>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ── NARA Item-Level Card (F6) ─────────────────────────────────────────────────
+
+function NaraItemCard({ records }: { records: import("@/types").NaraItemRecord[] }) {
+  if (!records.length) return null;
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="🎖" title="Military Item-Level Records" />
+      <p className="text-stone-500 text-xs mt-1 mb-3">
+        Enlistment, pension, and casualty records — direct links to digitized files.
+      </p>
+      <ul className="space-y-2">
+        {records.map((r, i) => (
+          <li key={i}>
+            <a
+              href={r.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-start gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
+            >
+              <div
+                className="shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[0.65rem] font-semibold uppercase tracking-wide whitespace-nowrap"
+                style={{ background: "rgba(201,168,76,0.12)", color: "#c9a84c" }}
+              >
+                {r.recordGroup || "NARA"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-stone-200 text-sm font-medium leading-snug">{r.title}</p>
+                {r.description && (
+                  <p className="text-stone-500 text-xs mt-0.5 line-clamp-2">{r.description}</p>
+                )}
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                  {r.rank       && <span className="text-stone-400 text-xs">Rank: {r.rank}</span>}
+                  {r.occupation && <span className="text-stone-400 text-xs">Occ: {r.occupation}</span>}
+                  {r.birthplace && <span className="text-stone-400 text-xs">b. {r.birthplace}</span>}
+                </div>
+                <p className="text-xs mt-1.5" style={{ color: "#c9a84c" }}>
+                  {r.pdfUrl ? "View PDF →" : "Search records →"}
+                </p>
+              </div>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ── USGenWeb Card (F7) ────────────────────────────────────────────────────────
+
+const RECORD_TYPE_LABEL: Record<string, string> = {
+  probate:   "Probate",
+  deed:      "Deed",
+  will:      "Will",
+  directory: "Directory",
+  general:   "County Archive",
+};
+
+function UsGenWebCard({ records }: { records: import("@/types").UsGenWebRecord[] }) {
+  if (!records.length) return null;
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="📜" title="Probate & Deed Records (USGenWeb)" />
+      <p className="text-stone-500 text-xs mt-1 mb-3">
+        Volunteer-transcribed county probate, deed, and will records — names heirs and land transfers.
+      </p>
+      <ul className="space-y-2">
+        {records.map((r, i) => (
+          <li key={i}>
+            <a
+              href={r.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-start gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
+            >
+              <div
+                className="shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[0.65rem] font-semibold uppercase tracking-wide whitespace-nowrap"
+                style={{ background: "rgba(92,122,92,0.2)", color: "#8ab47a" }}
+              >
+                {RECORD_TYPE_LABEL[r.recordType] ?? r.recordType}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-stone-200 text-sm font-medium leading-snug">{r.title}</p>
+                <p className="text-stone-500 text-xs mt-0.5">
+                  {r.county}, {r.state}
+                </p>
+                <p className="text-xs mt-1.5" style={{ color: "#c9a84c" }}>View on USGenWeb →</p>
               </div>
             </a>
           </li>
