@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BottomNav from "@/components/layout/BottomNav";
@@ -55,6 +55,10 @@ export default function ResultPage({ id }: { id: string }) {
   const [extractedOverride, setExtractedOverride] = useState<Partial<ExtractedGraveData> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
+  // Abort controller for the initial fresh-scan research fetch.
+  // Cancelled the moment a user-triggered refresh starts so the old-name
+  // response can never overwrite a corrected refresh that resolves first.
+  const initialFetchAbortRef = useRef<AbortController | null>(null);
 
   // Quality check state
   type RescanStatus = "idle" | "checking" | "rescanning" | "done";
@@ -170,9 +174,12 @@ export default function ResultPage({ id }: { id: string }) {
 
       if (!data.extracted?.name) return;
       setResearchLoading(true);
+      const initialAbort = new AbortController();
+      initialFetchAbortRef.current = initialAbort;
       fetch("/api/lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: initialAbort.signal,
         body: JSON.stringify({
           name: data.extracted.name,
           firstName: data.extracted.firstName,
@@ -217,8 +224,13 @@ export default function ResultPage({ id }: { id: string }) {
           // Patch research into the already-saved record
           saveGrave({ ...autoRecord, research: researchData }).catch(() => {});
         })
-        .catch(() => setResearch({}))
-        .finally(() => setResearchLoading(false));
+        .catch((err) => {
+          // Ignore aborts — a user-triggered refresh took over
+          if (err?.name !== "AbortError") setResearch({});
+        })
+        .finally(() => {
+          if (!initialAbort.signal.aborted) setResearchLoading(false);
+        });
     });
   }, [id, router]);
 
@@ -567,6 +579,9 @@ export default function ResultPage({ id }: { id: string }) {
 
   const handleRefreshData = useCallback(async (extractedData?: ExtractedGraveData) => {
     if (!pending || refreshing) return;
+    // Cancel any in-flight initial scan fetch so it can't overwrite this refresh
+    initialFetchAbortRef.current?.abort();
+    initialFetchAbortRef.current = null;
     setRefreshing(true);
     const current = extractedData ?? { ...pending.extracted, ...(extractedOverride ?? {}) };
     try {
@@ -645,11 +660,31 @@ export default function ResultPage({ id }: { id: string }) {
       enriched = { ...enriched, deathYear: m ? parseInt(m[1], 10) : null };
     }
 
+    // Substitute edited name/dates into the inscription text so it stays in sync.
+    const currentExtracted = { ...pending.extracted, ...(extractedOverride ?? {}) };
+    const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    let inscriptionText = currentExtracted.inscription ?? "";
+    if (patch.name !== undefined && currentExtracted.name?.trim()) {
+      inscriptionText = inscriptionText.replace(new RegExp(esc(currentExtracted.name.trim()), "gi"), patch.name);
+    }
+    if (patch.birthDate !== undefined && currentExtracted.birthDate?.trim()) {
+      inscriptionText = inscriptionText.replace(new RegExp(esc(currentExtracted.birthDate.trim()), "gi"), patch.birthDate);
+    }
+    if (patch.deathDate !== undefined && currentExtracted.deathDate?.trim()) {
+      inscriptionText = inscriptionText.replace(new RegExp(esc(currentExtracted.deathDate.trim()), "gi"), patch.deathDate);
+    }
+    if (inscriptionText !== (currentExtracted.inscription ?? "")) {
+      enriched = { ...enriched, inscription: inscriptionText };
+    }
+
     const next = { ...pending.extracted, ...(extractedOverride ?? {}), ...enriched };
     setExtractedOverride(next);
+
+    // Persist to DB — don't let a missing record block the research refresh
     const existing = await getGrave(pending.id);
-    if (!existing) return;
-    await saveGrave({ ...existing, extracted: next });
+    if (existing) {
+      await saveGrave({ ...existing, extracted: next });
+    }
 
     // Re-run research when fields that affect the lookup change
     const RESEARCH_KEYS: (keyof ExtractedGraveData)[] = [
