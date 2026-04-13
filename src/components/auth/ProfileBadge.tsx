@@ -127,60 +127,53 @@ export default function ProfileBadge() {
         )}
       </button>
 
-      {/* Bottom sheet */}
       {mounted && open && createPortal(
-        <>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6">
           {/* Backdrop — pointerdown closes immediately on first touch */}
           <div
-            className="fixed inset-0 z-[190] bg-stone-950/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-stone-950/70 backdrop-blur-sm transition-opacity"
             onPointerDown={close}
             aria-hidden="true"
           />
 
-          {/* Sheet */}
+          {/* Modal Box */}
           <div
             role="dialog"
             aria-label="Account"
-            className="fixed bottom-0 left-0 right-0 z-[200] flex flex-col rounded-t-3xl overflow-hidden animate-slide-up"
+            className="relative w-full max-w-sm flex flex-col rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200"
             style={{
               background: "linear-gradient(180deg, #242220, #1a1917)",
               border: "1px solid rgba(255,255,255,0.08)",
-              paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))",
               maxHeight: "90dvh",
             }}
           >
-            {/* Drag handle */}
-            <div className="flex justify-center pt-3 pb-2 shrink-0">
-              <div className="w-9 h-1 rounded-full bg-stone-700" />
-            </div>
-
-            <div className="overflow-y-auto flex-1">
+            <div className="overflow-y-auto flex-1 p-5">
               {user ? (
-                <div className="px-5 pb-2 flex flex-col gap-3">
+                <div className="flex flex-col gap-3">
                   {/* User info */}
                   <div className="flex items-center gap-3 py-2">
                     <div
-                      className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold text-stone-900 shrink-0"
+                      className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-stone-900 shrink-0"
                       style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
                     >
                       {initials}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-stone-100 font-semibold text-sm truncate">{displayName}</p>
+                      <p className="text-stone-100 font-semibold text-base truncate">{displayName}</p>
                       <p className="text-stone-500 text-xs mt-0.5 truncate">{user.email}</p>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <RankInsignia level={rankLevel} size={14} />
-                        <span className="text-[0.7rem] font-medium" style={{ color: getRankColor(rankLevel) }}>
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <RankInsignia level={rankLevel} size={15} />
+                        <span className="text-[0.75rem] font-medium" style={{ color: getRankColor(rankLevel) }}>
                           {rankTitle}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="h-px bg-stone-800" />
+                  <div className="h-px bg-stone-800 my-1" />
 
                   {syncResult && (
-                    <div className="px-3 py-2 rounded-xl bg-stone-800 text-stone-300 text-sm">
+                    <div className="px-3 py-2.5 rounded-xl bg-stone-800/80 text-stone-300 text-center text-sm border border-stone-700/50">
                       {syncResult}
                     </div>
                   )}
@@ -224,24 +217,24 @@ export default function ProfileBadge() {
                     Sign Out
                   </button>
 
-                  <p className="text-center text-xs text-stone-600 pt-1">
+                  <p className="text-center text-xs text-stone-600 pt-2">
                     © 2026{" "}
-                    <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                    <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-stone-400 transition-colors">
                       LowHigh LLC
                     </a>
                   </p>
                 </div>
               ) : (
-                <div className="px-5 pb-2 flex flex-col gap-3">
-                  <div className="py-2">
-                    <p className="font-serif text-stone-100 font-semibold text-base mb-1">Back up your archive</p>
-                    <p className="text-stone-400 text-sm leading-relaxed">
+                <div className="flex flex-col gap-3">
+                  <div className="py-2 text-center">
+                    <p className="font-serif text-stone-100 font-semibold text-lg mb-2">Back up your archive</p>
+                    <p className="text-stone-400 text-sm leading-relaxed px-2">
                       Sign in to sync your grave records across devices and keep them safe in the cloud.
                     </p>
                   </div>
                   <button
                     onClick={() => { close(); router.push("/login"); }}
-                    className="w-full h-12 rounded-2xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.97]"
+                    className="w-full h-12 rounded-2xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.97] mt-2"
                     style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
                   >
                     Sign In or Create Account
@@ -257,9 +250,9 @@ export default function ProfileBadge() {
                     Settings
                   </button>
 
-                  <p className="text-center text-xs text-stone-600 pt-1">
+                  <p className="text-center text-xs text-stone-600 pt-2">
                     © 2026{" "}
-                    <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                    <a href="https://www.lowhigh.ai" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-stone-400 transition-colors">
                       LowHigh LLC
                     </a>
                   </p>
@@ -267,7 +260,7 @@ export default function ProfileBadge() {
               )}
             </div>
           </div>
-        </>,
+        </div>,
         document.body
       )}
 
