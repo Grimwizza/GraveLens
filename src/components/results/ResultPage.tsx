@@ -663,15 +663,33 @@ export default function ResultPage({ id }: { id: string }) {
     // Substitute edited name/dates into the inscription text so it stays in sync.
     const currentExtracted = { ...pending.extracted, ...(extractedOverride ?? {}) };
     const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const YEAR_RE = /\b(1[5-9]\d\d|20[0-2]\d)\b/;
+
+    // Replace oldVal with newVal in text. Strategy:
+    //   1. Case-insensitive exact match (handles "JOHN" → "John", "MARCH 15, 1890" → etc.)
+    //   2. Year-only fallback — the AI normalises dates so the extracted string rarely
+    //      matches the raw inscription verbatim (e.g. "March 15, 1890" vs "MAR. 15, 1890").
+    //      If the full string misses, replace just the year token so "1890" → "1891" still lands.
+    function replaceInText(text: string, oldVal: string, newVal: string): string {
+      const direct = text.replace(new RegExp(esc(oldVal.trim()), "gi"), newVal);
+      if (direct !== text) return direct;
+      const oldYear = oldVal.match(YEAR_RE)?.[0];
+      const newYear = newVal.match(YEAR_RE)?.[0];
+      if (oldYear && newYear && oldYear !== newYear) {
+        return text.replace(new RegExp(`\\b${oldYear}\\b`, "g"), newYear);
+      }
+      return text;
+    }
+
     let inscriptionText = currentExtracted.inscription ?? "";
     if (patch.name !== undefined && currentExtracted.name?.trim()) {
-      inscriptionText = inscriptionText.replace(new RegExp(esc(currentExtracted.name.trim()), "gi"), patch.name);
+      inscriptionText = replaceInText(inscriptionText, currentExtracted.name, patch.name);
     }
     if (patch.birthDate !== undefined && currentExtracted.birthDate?.trim()) {
-      inscriptionText = inscriptionText.replace(new RegExp(esc(currentExtracted.birthDate.trim()), "gi"), patch.birthDate);
+      inscriptionText = replaceInText(inscriptionText, currentExtracted.birthDate, patch.birthDate);
     }
     if (patch.deathDate !== undefined && currentExtracted.deathDate?.trim()) {
-      inscriptionText = inscriptionText.replace(new RegExp(esc(currentExtracted.deathDate.trim()), "gi"), patch.deathDate);
+      inscriptionText = replaceInText(inscriptionText, currentExtracted.deathDate, patch.deathDate);
     }
     if (inscriptionText !== (currentExtracted.inscription ?? "")) {
       enriched = { ...enriched, inscription: inscriptionText };
