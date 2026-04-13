@@ -10,6 +10,8 @@ import SettingsPanel from "./SettingsPanel";
 import { RankInsignia, getRankColor } from "@/components/ui/RankInsignia";
 import { fetchOwnProfile } from "@/lib/community";
 
+import { createPortal } from "react-dom";
+
 export default function ProfileBadge() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -20,6 +22,11 @@ export default function ProfileBadge() {
   const [rankLevel, setRankLevel] = useState(1);
   const [rankTitle, setRankTitle] = useState("The Wanderer");
   const [profileUsername, setProfileUsername] = useState<string | undefined>(undefined);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const unlocks = loadUnlocks();
@@ -121,7 +128,7 @@ export default function ProfileBadge() {
       </button>
 
       {/* Bottom sheet */}
-      {open && (
+      {mounted && open && createPortal(
         <>
           {/* Backdrop — pointerdown closes immediately on first touch */}
           <div
@@ -260,7 +267,8 @@ export default function ProfileBadge() {
               )}
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
 
       {/* Settings panel — rendered at root level so it overlays everything */}
