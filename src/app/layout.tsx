@@ -17,6 +17,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  manifest: "/manifest.json",
   title: "GraveLens — Bring the story behind every stone into focus",
   description:
     "Photograph any headstone to travel through history and reveal a lifetime of memories. Discover the unique stories and legacies within every stone.",
