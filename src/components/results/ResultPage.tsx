@@ -2338,10 +2338,8 @@ function ResearchChecklistCard({
 }: {
   checklist: import("@/types").ResearchChecklist;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const { items } = checklist;
   if (!items.length) return null;
-  const shown = expanded ? items : items.slice(0, 3);
 
   return (
     <div className="py-5 animate-fade-up">
@@ -2350,7 +2348,7 @@ function ResearchChecklistCard({
         Prioritized next steps based on available evidence. Tap any step to open the source.
       </p>
       <ol className="space-y-2">
-        {shown.map((item, i) => {
+        {items.map((item: import("@/types").ResearchChecklistItem, i: number) => {
           const badge = PRIORITY_LABEL[item.priority];
           const content = (
             <div className="flex items-start gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 transition-colors">
@@ -2389,14 +2387,6 @@ function ResearchChecklistCard({
           );
         })}
       </ol>
-      {items.length > 3 && (
-        <button
-          onClick={() => setExpanded((e) => !e)}
-          className="mt-3 text-xs text-stone-400 underline"
-        >
-          {expanded ? "Show fewer" : `Show ${items.length - 3} more steps`}
-        </button>
-      )}
     </div>
   );
 }
