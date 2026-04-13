@@ -1562,9 +1562,9 @@ function CemeterySection({
               </div>
             </div>
 
-            {/* Hours & phone */}
-            {(c.openingHours || c.phone) && (
-              <div className="flex flex-col gap-1">
+            {/* Hours, phone, website, Wikipedia */}
+            {(c.openingHours || c.phone || c.website || c.wikipediaUrl) && (
+              <div className="flex flex-col gap-1.5">
                 {c.openingHours && (
                   <div className="flex items-start gap-2">
                     <span className="text-stone-500 text-xs mt-0.5 shrink-0">🕐</span>
@@ -1574,7 +1574,23 @@ function CemeterySection({
                 {c.phone && (
                   <div className="flex items-center gap-2">
                     <span className="text-stone-500 text-xs shrink-0">📞</span>
-                    <a href={`tel:${c.phone}`} className="text-gold-400 text-xs">{c.phone}</a>
+                    <a href={`tel:${c.phone}`} className="text-xs" style={{ color: "#c9a84c" }}>{c.phone}</a>
+                  </div>
+                )}
+                {c.website && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-stone-500 text-xs shrink-0">🌐</span>
+                    <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-xs truncate" style={{ color: "#c9a84c" }}>
+                      {c.website.replace(/^https?:\/\/(www\.)?/, "")}
+                    </a>
+                  </div>
+                )}
+                {c.wikipediaUrl && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-stone-500 text-xs shrink-0">📖</span>
+                    <a href={c.wikipediaUrl} target="_blank" rel="noopener noreferrer" className="text-xs" style={{ color: "#c9a84c" }}>
+                      Wikipedia article
+                    </a>
                   </div>
                 )}
               </div>
@@ -1623,13 +1639,6 @@ function CemeterySection({
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/><circle cx="12" cy="9" r="2.5" fill="#FBBC05"/></svg>
                 Google Maps
               </a>
-              {c.wikipediaUrl && (
-                <a href={c.wikipediaUrl} target="_blank" rel="noopener noreferrer"
-                  className="px-3 py-2 rounded-xl text-xs font-semibold border border-stone-700 bg-stone-800 active:bg-stone-700 transition-colors"
-                  style={{ color: "#c9a84c" }}>
-                  Wiki
-                </a>
-              )}
             </div>
 
             {/* Visit metadata */}
