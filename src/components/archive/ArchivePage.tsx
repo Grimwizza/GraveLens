@@ -186,6 +186,18 @@ export default function ArchivePage() {
     return () => clearTimeout(timer);
   }, []);
 
+  // ── Refresh graves from IDB when the user returns to this page ───────────
+  // Catches name/date edits made on the result page before navigating back.
+  useEffect(() => {
+    const onVisible = () => {
+      if (!document.hidden) {
+        getAllGraves().then(setGraves).catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   // ── Load cemeteries from IDB ──────────────────────────────────────────────
   useEffect(() => {
     getAllCemeteries().then(setCemeteries).catch(() => {});
