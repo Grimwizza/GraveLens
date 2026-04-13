@@ -11,8 +11,9 @@ import ThematicIllustration from "@/components/ui/ThematicIllustration";
 import { reverseGeocode } from "@/lib/apis/nominatim";
 import { formatOpeningHours } from "@/lib/apis/cemetery";
 
-type SortField = "birthYear" | "deathYear";
+type SortField = "birthYear" | "deathYear" | "name" | "dateAdded";
 type SortDir = "asc" | "desc";
+type ConfidenceFilter = "" | "high" | "medium" | "low" | "needs_review";
 type ViewMode = "list" | "tile" | "cover";
 type ArchiveTab = "markers" | "places";
 
@@ -96,6 +97,7 @@ export default function ArchivePage() {
   const [filterCity, setFilterCity] = useState("");
   const [filterCemetery, setFilterCemetery] = useState("");
   const [filterTag, setFilterTag] = useState("");
+  const [filterConfidence, setFilterConfidence] = useState<ConfidenceFilter>("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -479,9 +481,26 @@ export default function ArchivePage() {
       if (filterCity && g.location?.city !== filterCity) return false;
       if (filterCemetery && g.location?.cemetery !== filterCemetery) return false;
       if (filterTag && !g.tags?.includes(filterTag)) return false;
+      if (filterConfidence) {
+        const conf = g.extracted?.confidence;
+        if (filterConfidence === "needs_review") {
+          if (conf !== "medium" && conf !== "low") return false;
+        } else {
+          if (conf !== filterConfidence) return false;
+        }
+      }
       return true;
     });
     result = [...result].sort((a, b) => {
+      if (sortField === "name") {
+        const aName = (a.extracted.name ?? "").toLowerCase();
+        const bName = (b.extracted.name ?? "").toLowerCase();
+        const cmp = aName.localeCompare(bName);
+        return sortDir === "asc" ? cmp : -cmp;
+      }
+      if (sortField === "dateAdded") {
+        return sortDir === "asc" ? a.timestamp - b.timestamp : b.timestamp - a.timestamp;
+      }
       const aVal = a.extracted[sortField] ?? null;
       const bVal = b.extracted[sortField] ?? null;
       if (aVal === null && bVal === null) return 0;
@@ -490,7 +509,7 @@ export default function ArchivePage() {
       return sortDir === "asc" ? aVal - bVal : bVal - aVal;
     });
     return result;
-  }, [graves, filterState, filterCity, filterCemetery, filterTag, searchQuery, sortField, sortDir]);
+  }, [graves, filterState, filterCity, filterCemetery, filterTag, filterConfidence, searchQuery, sortField, sortDir]);
 
   const handleDelete = async (id: string) => {
     await deleteGrave(id);
@@ -508,7 +527,7 @@ export default function ArchivePage() {
   const handleFilterCity = (val: string) => { setFilterCity(val); setFilterCemetery(""); };
 
   const hasActiveFilters =
-    filterState || filterCity || filterCemetery || filterTag ||
+    filterState || filterCity || filterCemetery || filterTag || filterConfidence ||
     sortField !== "deathYear" || sortDir !== "asc";
 
   const showAssignBanner = assignmentQueue.length > 0 && !enriching && !activeAssignmentId && !nearbyConfirm;
@@ -646,26 +665,38 @@ export default function ArchivePage() {
           )}
           {filtersOpen && graves.length > 0 && (
             <div className="px-4 pb-3 border-t border-stone-800 pt-3 flex flex-col gap-2">
+              {/* Sort row */}
               <div className="flex gap-2">
                 <select
                   value={sortField}
                   onChange={(e) => setSortField(e.target.value as SortField)}
                   className="flex-1 bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none"
                 >
-                  <option value="deathYear">Sort by death year</option>
-                  <option value="birthYear">Sort by birth year</option>
+                  <option value="name">Name</option>
+                  <option value="deathYear">Death year</option>
+                  <option value="birthYear">Birth year</option>
+                  <option value="dateAdded">Date added</option>
                 </select>
                 <button
                   onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-                  className="flex items-center gap-1 px-3 py-2 bg-stone-800 border border-stone-700 text-stone-300 text-xs rounded-lg shrink-0"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-stone-800 border border-stone-700 text-stone-300 text-xs rounded-lg shrink-0"
                 >
-                  {sortDir === "asc" ? (
-                    <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v8M3 7l3 3 3-3" /></svg>Oldest first</>
+                  {sortField === "name" ? (
+                    sortDir === "asc" ? (
+                      <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v8M3 7l3 3 3-3" /></svg>A → Z</>
+                    ) : (
+                      <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 10V2M3 5l3-3 3 3" /></svg>Z → A</>
+                    )
                   ) : (
-                    <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 10V2M3 5l3-3 3 3" /></svg>Newest first</>
+                    sortDir === "asc" ? (
+                      <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v8M3 7l3 3 3-3" /></svg>Oldest first</>
+                    ) : (
+                      <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 10V2M3 5l3-3 3 3" /></svg>Newest first</>
+                    )
                   )}
                 </button>
               </div>
+              {/* Location filters */}
               <div className="flex gap-2">
                 <select value={filterState} onChange={(e) => handleFilterState(e.target.value)} className="flex-1 bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none">
                   <option value="">All states</option>
@@ -680,13 +711,27 @@ export default function ArchivePage() {
                 <option value="">All cemeteries</option>
                 {uniqueCemeteries.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-              <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)} disabled={uniqueTags.length === 0} className="w-full bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none disabled:opacity-40">
-                <option value="">All tags</option>
-                {uniqueTags.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
+              {/* Tag + confidence filters */}
+              <div className="flex gap-2">
+                <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)} disabled={uniqueTags.length === 0} className="flex-1 bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none disabled:opacity-40">
+                  <option value="">All tags</option>
+                  {uniqueTags.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <select
+                  value={filterConfidence}
+                  onChange={(e) => setFilterConfidence(e.target.value as ConfidenceFilter)}
+                  className="flex-1 bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none"
+                >
+                  <option value="">All confidence</option>
+                  <option value="needs_review">Needs review</option>
+                  <option value="high">High only</option>
+                  <option value="medium">Medium only</option>
+                  <option value="low">Low only</option>
+                </select>
+              </div>
               {hasActiveFilters && (
                 <button
-                  onClick={() => { setFilterState(""); setFilterCity(""); setFilterCemetery(""); setFilterTag(""); setSortField("deathYear"); setSortDir("asc"); }}
+                  onClick={() => { setFilterState(""); setFilterCity(""); setFilterCemetery(""); setFilterTag(""); setFilterConfidence(""); setSortField("deathYear"); setSortDir("asc"); }}
                   className="text-xs text-gold-400 text-left"
                 >
                   Clear all filters
