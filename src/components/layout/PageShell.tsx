@@ -70,7 +70,7 @@ export default function PageShell({
 
       {/* Header */}
       <header
-        className="flex-shrink-0 z-30 bg-[#121110]/80 backdrop-blur-2xl border-b border-stone-800/50 shadow-sm"
+        className="flex-shrink-0 z-30 bg-stone-950/80 backdrop-blur-2xl border-b border-stone-800/50 shadow-sm"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
       >
         <div className="flex flex-col gap-3 px-4 pb-3 pt-1">

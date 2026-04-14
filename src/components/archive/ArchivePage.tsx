@@ -564,7 +564,7 @@ export default function ArchivePage() {
               }`}
               aria-label="Toggle search"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={searchQuery || searchOpen ? "#c9a84c" : "#8a8580"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={searchQuery || searchOpen ? "#c9a84c" : "var(--t-stone-500)"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
               </svg>
             </button>
@@ -578,7 +578,7 @@ export default function ArchivePage() {
               }`}
               aria-label="Toggle filters"
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={hasActiveFilters || filtersOpen ? "#c9a84c" : "#8a8580"} strokeWidth="2" strokeLinecap="round">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={hasActiveFilters || filtersOpen ? "#c9a84c" : "var(--t-stone-500)"} strokeWidth="2" strokeLinecap="round">
                 <path d="M1 3h14M3 8h10M6 13h4" />
               </svg>
               {hasActiveFilters && (
@@ -590,7 +590,7 @@ export default function ArchivePage() {
       }
       headerBottomRow={
         <>
-          <div className="flex bg-[#1a1917]/80 rounded-[14px] p-1 border border-stone-800 shadow-[inset_0_1px_4px_rgba(0,0,0,0.5)]">
+          <div className="flex bg-[var(--t-stone-900)]/80 rounded-[14px] p-1 border border-stone-800 shadow-[inset_0_1px_4px_rgba(0,0,0,0.5)]">
             {(["markers", "places"] as ArchiveTab[]).map((tab) => (
               <button
                 key={tab}
@@ -1416,7 +1416,7 @@ function GraveList({
                         if (name && onCemeteryEdit) onCemeteryEdit(grave.id, name).then(() => setEditingId(null));
                       }}
                       className="text-[0.75rem] font-semibold px-2 py-1 rounded"
-                      style={{ background: "#c9a84c", color: "#1a1917" }}
+                      style={{ background: "#c9a84c", color: "var(--t-stone-900)" }}
                     >
                       Save
                     </button>

@@ -19,7 +19,7 @@ const leftTabs = [
         height="28"
         viewBox="0 0 24 24"
         fill="none"
-        stroke={active ? "#c9a84c" : "#8a8580"}
+        stroke={active ? "#c9a84c" : "var(--t-stone-500)"}
         strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -38,7 +38,7 @@ const leftTabs = [
         height="28"
         viewBox="0 0 24 24"
         fill="none"
-        stroke={active ? "#c9a84c" : "#8a8580"}
+        stroke={active ? "#c9a84c" : "var(--t-stone-500)"}
         strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -60,7 +60,7 @@ const rightTabs = [
         height="28"
         viewBox="0 0 24 24"
         fill="none"
-        stroke={active ? "#c9a84c" : "#8a8580"}
+        stroke={active ? "#c9a84c" : "var(--t-stone-500)"}
         strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -79,7 +79,7 @@ const rightTabs = [
         height="28"
         viewBox="0 0 24 24"
         fill="none"
-        stroke={active ? "#c9a84c" : "#8a8580"}
+        stroke={active ? "#c9a84c" : "var(--t-stone-500)"}
         strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -135,7 +135,7 @@ export default function BottomNav() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none" style={{ paddingBottom: "max(calc(env(safe-area-inset-bottom) + 0.5rem), 1rem)" }}>
-      <nav className="glass relative pointer-events-auto flex items-center justify-between w-full max-w-[400px] h-[72px] rounded-[36px] border border-stone-700/50 bg-[#121110]/85 backdrop-blur-2xl shadow-[0_20px_40px_-8px_rgba(0,0,0,0.8)] px-2">
+      <nav className="glass relative pointer-events-auto flex items-center justify-between w-full max-w-[400px] h-[72px] rounded-[36px] border border-stone-700/50 bg-stone-950/85 backdrop-blur-2xl shadow-[0_20px_40px_-8px_rgba(0,0,0,0.8)] px-2">
         
         {/* Left tabs */}
         <div className="flex items-center justify-around flex-1 h-full">
@@ -159,14 +159,14 @@ export default function BottomNav() {
                 {showBadge && (
                   <span
                     className="absolute top-1 right-1 min-w-[16px] h-4 rounded-full text-[0.75rem] font-bold flex items-center justify-center px-1"
-                    style={{ background: "#c9a84c", color: "#1a1917" }}
+                    style={{ background: "#c9a84c", color: "var(--t-stone-900)" }}
                   >
                     {queueCount > 9 ? "9+" : queueCount}
                   </span>
                 )}
                 <span
-                  className="text-[0.75rem] font-bold tracking-wide uppercase mt-1"
-                  style={{ color: isActive ? "#c9a84c" : "#8a8580", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
+                  className="text-[0.75rem] font-bold tracking-wide uppercase mt-1 transition-colors"
+                  style={{ color: isActive ? "#c9a84c" : "var(--t-stone-500)", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
                 >
                   {tab.label}
                 </span>
@@ -177,7 +177,7 @@ export default function BottomNav() {
 
         {/* Center Action FAB */}
         <div className="flex-shrink-0 mx-1 -mt-8 relative z-10 transition-transform active:scale-[0.92]">
-          <div className="p-1.5 rounded-full bg-[#121110]/60 backdrop-blur-md shadow-[0_8px_16px_rgba(0,0,0,0.4)]">
+          <div className="p-1.5 rounded-full bg-stone-950/60 backdrop-blur-md shadow-[0_8px_16px_rgba(0,0,0,0.4)]">
             <button
               onClick={handleCameraClick}
               className="relative w-[64px] h-[64px] rounded-full flex items-center justify-center overflow-hidden"
@@ -188,7 +188,7 @@ export default function BottomNav() {
               aria-label="Take a photo"
             >
               <div className="absolute inset-[1px] rounded-full border border-white/30 pointer-events-none" />
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#1a1917" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 2px 2px rgba(255,255,255,0.4))" }}>
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--t-stone-900)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 2px 2px rgba(255,255,255,0.4))" }}>
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                 <circle cx="12" cy="13" r="4"/>
               </svg>
@@ -212,8 +212,8 @@ export default function BottomNav() {
               >
                 {tab.icon(isActive)}
                 <span
-                  className="text-[0.75rem] font-bold tracking-wide uppercase mt-1"
-                  style={{ color: isActive ? "#c9a84c" : "#8a8580", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
+                  className="text-[0.75rem] font-bold tracking-wide uppercase mt-1 transition-colors"
+                  style={{ color: isActive ? "#c9a84c" : "var(--t-stone-500)", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
                 >
                   {tab.label}
                 </span>

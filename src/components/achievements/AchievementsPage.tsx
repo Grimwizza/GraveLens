@@ -224,7 +224,7 @@ function AchievementDetailSheet({
                 className="text-xs font-medium px-2 py-1 rounded-full"
                 style={{
                   background: "rgba(255,255,255,0.06)",
-                  color: "#8a8580",
+                  color: "var(--t-stone-500)",
                 }}
               >
                 {achievement.category}

@@ -192,7 +192,7 @@ body {
 }
 html[data-theme="light"] .leaflet-tile-pane {
   /* No harsh sepia/brightness shift on light mode */
-  filter: sepia(0.0) hue-rotate(0deg) brightness(1.0) contrast(1.0);
+  filter: invert(1) hue-rotate(180deg) brightness(0.95);
 }
 
 /* Dim Leaflet attribution / zoom controls to blend with the dark map */
@@ -210,12 +210,12 @@ html[data-theme="light"] .leaflet-tile-pane {
 
 /* Overwrite Leaflet popup default styling to match the GraveLens dark theme */
 .leaflet-popup-content-wrapper, .leaflet-popup-tip {
-  background: #1a1917 !important;
-  color: #f5f2ed !important;
+  background: var(--t-stone-900) !important;
+  color: var(--t-stone-50) !important;
   box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.7) !important;
   border-radius: 12px !important;
   padding: 0 !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(var(--glass-bg-rgb), 0.12) !important;
 }
 
 .leaflet-popup-content {
@@ -231,7 +231,7 @@ html[data-theme="light"] .leaflet-tile-pane {
 .leaflet-popup-close-button {
   top: 4px !important;
   right: 4px !important;
-  color: #8a8580 !important;
+  color: var(--t-stone-500) !important;
   font-size: 14px !important;
   width: 20px !important;
   height: 20px !important;
@@ -241,6 +241,6 @@ html[data-theme="light"] .leaflet-tile-pane {
 }
 
 .leaflet-popup-close-button:hover {
-  color: #f5f2ed !important;
+  color: var(--t-stone-50) !important;
   background: transparent !important;
 }

@@ -87,7 +87,7 @@ export default function InstallPrompt() {
           {/* App icon */}
           <div
             className="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center border border-stone-800"
-            style={{ background: "#1a1917" }}
+            style={{ background: "var(--t-stone-900)" }}
           >
             <BrandLogo size={28} />
           </div>

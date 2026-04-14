@@ -120,7 +120,7 @@ export default function ProfileBadge() {
         {user && initials ? (
           <span className="text-[0.8rem] font-bold text-stone-900">{initials}</span>
         ) : (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a8580" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--t-stone-500)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="8" r="4" />
             <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
           </svg>

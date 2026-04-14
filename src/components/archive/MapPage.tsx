@@ -86,7 +86,7 @@ export default function MapPage() {
           }`}
           aria-label="Discovery and Search"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={menuOpen ? "#c9a84c" : "#8a8580"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={menuOpen ? "#c9a84c" : "var(--t-stone-500)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.3-4.3" />
           </svg>
@@ -138,7 +138,7 @@ export default function MapPage() {
                   setMenuOpen(false);
                 }}
                 className="flex-1 py-2 rounded-lg font-semibold text-sm active:scale-[0.97] transition-all"
-                style={{ background: "#c9a84c", color: "#1a1917" }}
+                style={{ background: "#c9a84c", color: "var(--t-stone-900)" }}
               >
                 Search
               </button>
