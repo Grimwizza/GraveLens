@@ -1,21 +1,59 @@
 @import "tailwindcss";
 
+:root {
+  --t-stone-950: #0f0e0d;
+  --t-stone-900: #1a1917;
+  --t-stone-800: #242220;
+  --t-stone-700: #2e2b28;
+  --t-stone-600: #5c5854;
+  --t-stone-500: #8a8580;
+  --t-stone-400: #b0aba6;
+  --t-stone-300: #d0cbc5;
+  --t-stone-200: #e5e1dc;
+  --t-stone-100: #eae7e2;
+  --t-stone-50:  #f5f2ed;
+
+  --bg-fallback: #0f0e0d;
+  --bg-gradient-rgb: 10, 9, 8;
+  --bg-gradient-opacity: 0.50;
+  --glass-bg-rgb: 20, 19, 17;
+}
+
+html[data-theme="light"] {
+  --t-stone-950: #f5f2ed;
+  --t-stone-900: #eae7e2;
+  --t-stone-800: #e5e1dc;
+  --t-stone-700: #d0cbc5;
+  --t-stone-600: #b0aba6;
+  --t-stone-500: #8a8580;
+  --t-stone-400: #5c5854;
+  --t-stone-300: #2e2b28;
+  --t-stone-200: #242220;
+  --t-stone-100: #1a1917;
+  --t-stone-50:  #0f0e0d;
+
+  --bg-fallback: #eae7e2;
+  --bg-gradient-rgb: 245, 242, 237;
+  --bg-gradient-opacity: 0.70;
+  --glass-bg-rgb: 245, 242, 237;
+}
+
 @theme {
-  --color-stone-950: #0f0e0d;
-  --color-stone-900: #1a1917;
-  --color-stone-800: #242220;
-  --color-stone-700: #2e2b28;
-  --color-stone-600: #5c5854;
-  --color-stone-500: #8a8580;
-  --color-stone-400: #b0aba6;
-  --color-stone-300: #d0cbc5;
-  --color-stone-200: #e5e1dc;
-  --color-stone-100: #eae7e2;
-  --color-stone-50:  #f5f2ed;
+  --color-stone-950: var(--t-stone-950);
+  --color-stone-900: var(--t-stone-900);
+  --color-stone-800: var(--t-stone-800);
+  --color-stone-700: var(--t-stone-700);
+  --color-stone-600: var(--t-stone-600);
+  --color-stone-500: var(--t-stone-500);
+  --color-stone-400: var(--t-stone-400);
+  --color-stone-300: var(--t-stone-300);
+  --color-stone-200: var(--t-stone-200);
+  --color-stone-100: var(--t-stone-100);
+  --color-stone-50:  var(--t-stone-50);
 }
 
 html {
-  background-color: #0a0908;
+  background-color: var(--bg-fallback);
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
@@ -31,27 +69,33 @@ html {
 html[data-high-contrast="true"] body {
   color: #ffffff;
 }
+html[data-theme="light"][data-high-contrast="true"] body {
+  color: #000000;
+}
 html[data-high-contrast="true"] .text-stone-400,
 html[data-high-contrast="true"] .text-stone-500,
 html[data-high-contrast="true"] .text-stone-600 {
   color: #d0cbc5 !important;
 }
+html[data-theme="light"][data-high-contrast="true"] .text-stone-400,
+html[data-theme="light"][data-high-contrast="true"] .text-stone-500,
+html[data-theme="light"][data-high-contrast="true"] .text-stone-600 {
+  color: #242220 !important;
+}
 
-/* Light theme (data-theme="light") */
+/* Light theme general override */
 html[data-theme="light"] body {
-  color: #1a1917;
+  color: var(--t-stone-50);
 }
 
 body {
   /*
    * Background image + dark overlay both live on body, which is position:fixed;inset:0
    * so it covers the full physical screen edge-to-edge (including iOS safe areas).
-   * Two-layer background: overlay on top, image underneath.
-   * Adjust the rgba opacity to taste (0.62 = brighter, 0.82 = darker).
    */
-  background-color: #0a0908; /* fallback if image hasn't loaded */
+  background-color: var(--bg-fallback);
   background-image:
-    linear-gradient(rgba(10, 9, 8, 0.50), rgba(10, 9, 8, 0.50)),
+    linear-gradient(rgba(var(--bg-gradient-rgb), var(--bg-gradient-opacity)), rgba(var(--bg-gradient-rgb), var(--bg-gradient-opacity))),
     url('/memorial-bg.jpg');
   background-size: cover, cover;
   background-position: center 30%, center 30%;
@@ -91,7 +135,7 @@ body {
 
 /* Frosted glass background — used by BottomNav and modal overlays */
 @utility glass {
-  background-color: rgb(20 19 17 / 0.72);
+  background-color: rgba(var(--glass-bg-rgb), 0.72);
   backdrop-filter: blur(24px) saturate(1.6);
   -webkit-backdrop-filter: blur(24px) saturate(1.6);
 }
@@ -139,19 +183,23 @@ body {
 
 /* Force leaflet map container to match the PageShell bg-stone-900 instead of default gray */
 .leaflet-container {
-  background-color: var(--color-stone-900) !important;
+  background-color: var(--t-stone-900) !important;
 }
 
 /* Tint Carto tiles to match warm stone aesthetics; brightness lifts roads without crushing darks */
 .leaflet-tile-pane {
   filter: sepia(0.1) hue-rotate(330deg) brightness(2.2) contrast(0.95);
 }
+html[data-theme="light"] .leaflet-tile-pane {
+  /* No harsh sepia/brightness shift on light mode */
+  filter: sepia(0.0) hue-rotate(0deg) brightness(1.0) contrast(1.0);
+}
 
 /* Dim Leaflet attribution / zoom controls to blend with the dark map */
 .leaflet-control-attribution {
   background: transparent !important;
   box-shadow: none !important;
-  color: rgba(138, 133, 128, 0.5) !important;
+  color: rgba(var(--t-stone-500), 0.5) !important;
   font-size: 9px !important;
 }
 

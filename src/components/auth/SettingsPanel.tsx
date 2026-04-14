@@ -45,7 +45,7 @@ function Row({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="flex items-center justify-between px-5 py-3.5 border-b border-stone-800/60 last:border-0"
-      style={{ background: "rgba(26,25,23,0.6)" }}
+      style={{ background: "rgba(var(--glass-bg-rgb), 0.6)" }}
     >
       {children}
     </div>
@@ -66,7 +66,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
     <button
       onClick={() => onChange(!on)}
       className="shrink-0 w-11 h-6 rounded-full relative transition-all duration-200 overflow-hidden"
-      style={{ background: on ? "#c9a84c" : "#3a3733" }}
+      style={{ background: on ? "#c9a84c" : "var(--t-stone-800)" }}
       role="switch"
       aria-checked={on}
     >
@@ -90,7 +90,7 @@ function SegmentControl<T extends string>({
   return (
     <div
       className="flex rounded-xl overflow-hidden shrink-0"
-      style={{ background: "#1a1917", border: "1px solid #2e2b28" }}
+      style={{ background: "var(--t-stone-900)", border: "1px solid var(--t-stone-700)" }}
     >
       {options.map((opt) => (
         <button
@@ -99,8 +99,8 @@ function SegmentControl<T extends string>({
           className="px-3 py-1.5 text-xs font-semibold transition-colors"
           style={
             value === opt.value
-              ? { background: "#c9a84c", color: "#1a1510" }
-              : { color: "#6a6560" }
+              ? { background: "#c9a84c", color: "var(--t-stone-900)" }
+              : { color: "var(--t-stone-500)" }
           }
         >
           {opt.label}
@@ -265,8 +265,8 @@ export default function SettingsPanel({ onClose }: Props) {
       <div
         className="relative w-full max-w-lg flex flex-col rounded-t-[32px] sm:rounded-[32px] overflow-hidden shadow-2xl"
         style={{
-          background: "linear-gradient(180deg, #1e1c1a, #161412)",
-          border: "1px solid rgba(255,255,255,0.08)",
+          background: "linear-gradient(180deg, var(--t-stone-800), var(--t-stone-900))",
+          border: "1px solid rgba(var(--glass-bg-rgb), 0.08)",
           maxHeight: "92dvh",
           backfaceVisibility: "hidden",
           transform: "translateZ(0)",
@@ -430,7 +430,7 @@ export default function SettingsPanel({ onClose }: Props) {
               />
               <div className="mx-5 rounded-2xl overflow-hidden border border-stone-800/80 mb-1">
                 {/* Username */}
-                <div className="px-5 py-3.5 border-b border-stone-800/60" style={{ background: "rgba(26,25,23,0.6)" }}>
+                <div className="px-5 py-3.5 border-b border-stone-800/60" style={{ background: "rgba(var(--glass-bg-rgb), 0.6)" }}>
                   <Label title="Username" sub="Your @handle visible to other explorers (optional)" />
                   <div className="flex gap-2 mt-2.5">
                     <input
@@ -460,7 +460,7 @@ export default function SettingsPanel({ onClose }: Props) {
                     <Toggle on={shareAll} onChange={handleShareAllToggle} />
                   </Row>
                   {shareAllConfirm && (
-                    <div className="px-5 pb-4 pt-1" style={{ background: "rgba(26,25,23,0.6)" }}>
+                    <div className="px-5 pb-4 pt-1" style={{ background: "rgba(var(--glass-bg-rgb), 0.6)" }}>
                       <p className="text-stone-300 text-sm mb-3">
                         This will make <strong>all your existing graves</strong> visible on the community map. You can hide individual graves from their detail page.
                       </p>
@@ -524,7 +524,7 @@ export default function SettingsPanel({ onClose }: Props) {
             {/* Clear data */}
             <div
               className="px-5 py-4"
-              style={{ background: "rgba(26,25,23,0.6)" }}
+              style={{ background: "rgba(var(--glass-bg-rgb), 0.6)" }}
             >
               {clearDone ? (
                 <div className="flex items-center gap-2 text-green-400 text-sm">
@@ -584,7 +584,7 @@ export default function SettingsPanel({ onClose }: Props) {
               onClick={handleSaveAll}
               disabled={saving}
               className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50"
-              style={{ background: "#c9a84c", color: "#1a1510" }}
+              style={{ background: "#c9a84c", color: "var(--t-stone-900)" }}
             >
               {saving ? "Saving…" : "Save Settings"}
             </button>

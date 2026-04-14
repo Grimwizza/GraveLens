@@ -111,7 +111,7 @@ export default function ProfileBadge() {
         style={
           user
             ? { background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }
-            : { background: "#2e2b28", border: "1px solid #3a3733" }
+            : { background: "var(--t-stone-700)", border: "1px solid var(--t-stone-600)" }
         }
         aria-label={user ? "Account" : "Sign in"}
         aria-expanded={open}
@@ -142,8 +142,8 @@ export default function ProfileBadge() {
             aria-label="Account"
             className="relative w-full max-w-sm flex flex-col rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200"
             style={{
-              background: "linear-gradient(180deg, #242220, #1a1917)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: "linear-gradient(180deg, var(--t-stone-800), var(--t-stone-900))",
+              border: "1px solid rgba(var(--glass-bg-rgb), 0.08)",
               maxHeight: "90dvh",
             }}
           >
