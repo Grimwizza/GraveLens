@@ -96,7 +96,7 @@ export default function ServiceWorkerRegister() {
         left: "50%",
         transform: "translateX(-50%)",
         whiteSpace: "nowrap",
-        background: "linear-gradient(135deg, #2a2515, #1e1c18)",
+        background: "linear-gradient(135deg, var(--t-stone-800), var(--t-stone-900))",
         border: "1px solid rgba(201,168,76,0.4)",
         boxShadow: "0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(201,168,76,0.1)",
       }}

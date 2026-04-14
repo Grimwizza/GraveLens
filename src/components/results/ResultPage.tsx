@@ -932,7 +932,7 @@ export default function ResultPage({ id }: { id: string }) {
           {SHOW_COMMUNITY_FEATURES && (
             <div
               className="rounded-2xl px-4 py-3.5 flex items-center justify-between gap-3"
-              style={{ background: "rgba(26,25,23,0.7)", border: "1px solid rgba(255,255,255,0.07)" }}
+              style={{ background: "rgba(var(--glass-bg-rgb), 0.7)", border: "1px solid var(--t-stone-700)" }}
             >
               <div className="flex-1 min-w-0">
                 <p className="text-stone-200 text-sm font-medium">Share with community</p>
@@ -1068,7 +1068,7 @@ export default function ResultPage({ id }: { id: string }) {
               key={a.id}
               className="w-full max-w-sm rounded-2xl px-4 py-3 flex items-center gap-3 animate-fade-up"
               style={{
-                background: "linear-gradient(135deg, #2a2515, #1e1c18)",
+                background: "linear-gradient(135deg, var(--t-stone-800), var(--t-stone-900))",
                 border: "1px solid rgba(201,168,76,0.5)",
                 boxShadow: "0 4px 24px rgba(201,168,76,0.2)",
               }}
@@ -1206,7 +1206,7 @@ export default function ResultPage({ id }: { id: string }) {
           className="fixed left-1/2 -translate-x-1/2 z-[70] flex items-center gap-2.5 px-4 py-2.5 rounded-2xl shadow-xl"
           style={{
             top: "calc(env(safe-area-inset-top, 0px) + 3.5rem)",
-            background: "rgba(26,25,23,0.96)",
+            background: "rgba(var(--glass-bg-rgb), 0.96)",
             border: "1px solid rgba(201,168,76,0.3)",
             backdropFilter: "blur(12px)",
           }}
@@ -1275,8 +1275,8 @@ function QualityIssueSheet({
       <div
         className="relative w-full max-w-sm rounded-t-3xl flex flex-col gap-0 overflow-hidden"
         style={{
-          background: "rgb(22 20 18)",
-          border: "1px solid rgba(255,255,255,0.08)",
+          background: "rgba(var(--glass-bg-rgb), 0.98)",
+          border: "1px solid var(--t-stone-700)",
           paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))",
         }}
       >
@@ -1311,14 +1311,14 @@ function QualityIssueSheet({
             <div
               key={i}
               className="flex items-start gap-2.5 px-3 py-2.5 border-b border-stone-800 last:border-0"
-              style={{ background: "rgb(26 24 22)" }}
+              style={{ background: "rgba(var(--glass-bg-rgb), 0.5)" }}
             >
               <span className="text-[0.8rem] mt-0.5 shrink-0">⚠️</span>
               <span className="text-stone-400 text-xs leading-relaxed">{issue.message}</span>
             </div>
           ))}
           {issues.length > 4 && (
-            <div className="px-3 py-2 text-xs text-stone-600 text-center" style={{ background: "rgb(26 24 22)" }}>
+            <div className="px-3 py-2 text-xs text-stone-600 text-center" style={{ background: "rgba(var(--glass-bg-rgb), 0.5)" }}>
               +{issues.length - 4} more issue{issues.length - 4 !== 1 ? "s" : ""}
             </div>
           )}
@@ -1353,7 +1353,7 @@ function QualityIssueSheet({
               <button
                 onClick={onEdit}
                 className="w-full py-3 rounded-2xl text-sm font-semibold"
-                style={onRescan ? { background: "rgba(255,255,255,0.06)", color: "#e5e2de", border: "1px solid rgba(255,255,255,0.1)" } : { background: "linear-gradient(135deg, #c9a84c, #d4b76a)", color: "#1a1917" }}
+                style={onRescan ? { background: "rgba(var(--glass-bg-rgb), 0.06)", color: "var(--t-stone-200)", border: "1px solid var(--t-stone-700)" } : { background: "linear-gradient(135deg, #c9a84c, #d4b76a)", color: "var(--t-stone-900)" }}
               >
                 Edit Manually
               </button>

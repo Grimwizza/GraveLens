@@ -895,8 +895,8 @@ export default function ArchiveMap({
           className="absolute left-4 z-[1000] rounded-xl px-3 py-2 flex flex-col gap-1.5"
           style={{
             bottom: "calc(6.5rem + env(safe-area-inset-bottom, 0px))",
-            background: "rgba(26,25,23,0.88)",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: "rgba(var(--glass-bg-rgb), 0.88)",
+            border: "1px solid var(--t-stone-700)",
             backdropFilter: "blur(8px)",
           }}
         >
@@ -923,7 +923,7 @@ export default function ArchiveMap({
 
         {filterMenuOpen && (
           <div className="absolute top-14 right-0 w-56 rounded-2xl shadow-2xl overflow-hidden p-3 flex flex-col gap-2"
-               style={{ background: "rgba(26,25,23,0.95)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(12px)" }}>
+               style={{ background: "rgba(var(--glass-bg-rgb), 0.95)", border: "1px solid var(--t-stone-700)", backdropFilter: "blur(12px)" }}>
             <div className="flex items-center justify-between px-2 pb-2 border-b border-stone-800">
               <span className="text-stone-200 font-serif font-semibold text-sm">Map Filters</span>
               <button

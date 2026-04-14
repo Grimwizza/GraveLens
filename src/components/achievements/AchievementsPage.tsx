@@ -43,7 +43,7 @@ function RankBadge({ level, title: _title }: { level: number; title: string }) {
       style={{
         background: isMax
           ? "radial-gradient(circle at 40% 35%, #f5d080, #c9a84c 55%, #8a6820)"
-          : "radial-gradient(circle at 40% 35%, #3a3530, #2a2520)",
+          : "radial-gradient(circle at 40% 35%, var(--t-stone-700), var(--t-stone-800))",
         borderColor: isMax ? "#f5d080" : "#c9a84c",
         boxShadow: isMax ? "0 0 20px rgba(201,168,76,0.45)" : "0 0 8px rgba(201,168,76,0.2)",
       }}
@@ -89,11 +89,11 @@ function AchievementCard({
       className="w-full text-left rounded-xl p-4 flex gap-3 items-start transition-all active:scale-[0.98]"
       style={{
         background: unlocked
-          ? "linear-gradient(135deg, #2a2515, #1e1c18)"
-          : "rgba(30,28,24,0.6)",
+          ? "linear-gradient(135deg, var(--t-stone-800), var(--t-stone-900))"
+          : "rgba(var(--glass-bg-rgb), 0.6)",
         border: unlocked
           ? "1px solid rgba(201,168,76,0.4)"
-          : "1px solid rgba(255,255,255,0.06)",
+          : "1px solid var(--t-stone-700)",
         boxShadow: unlocked ? "0 0 12px rgba(201,168,76,0.12)" : "none",
         opacity: !unlocked && progress === 0 ? 0.5 : 1,
       }}
@@ -196,7 +196,7 @@ function AchievementDetailSheet({
       <div
         className="relative w-full max-w-lg mx-auto rounded-t-3xl animate-fade-up"
         style={{
-          background: "linear-gradient(160deg, #1e1c18, #252218)",
+          background: "linear-gradient(160deg, var(--t-stone-900), var(--t-stone-800))",
           border: "1px solid rgba(201,168,76,0.2)",
           paddingBottom: "max(2rem, env(safe-area-inset-bottom))",
         }}
@@ -354,8 +354,8 @@ function FriendCard({ profile }: { profile: UserProfile }) {
     <div
       className="flex items-center gap-3 rounded-xl p-3"
       style={{
-        background: "rgba(30,28,24,0.7)",
-        border: "1px solid rgba(255,255,255,0.06)",
+        background: "rgba(var(--glass-bg-rgb), 0.7)",
+        border: "1px solid var(--t-stone-700)",
       }}
     >
       <div
@@ -546,7 +546,7 @@ export default function AchievementsPage() {
         <div
           className="rounded-2xl p-5"
           style={{
-            background: "linear-gradient(135deg, #1e1c18, #2a2520)",
+            background: "linear-gradient(135deg, var(--t-stone-900), var(--t-stone-800))",
             border: "1px solid rgba(201,168,76,0.25)",
           }}
         >
@@ -631,8 +631,8 @@ export default function AchievementsPage() {
                 key={s.label}
                 className="rounded-xl p-3 text-center"
                 style={{
-                  background: "rgba(30,28,24,0.8)",
-                  border: "1px solid rgba(255,255,255,0.06)",
+                  background: "rgba(var(--glass-bg-rgb), 0.8)",
+                  border: "1px solid var(--t-stone-700)",
                 }}
               >
                 <p className="text-lg font-bold font-serif" style={{ color: "#c9a84c" }}>
@@ -665,7 +665,7 @@ export default function AchievementsPage() {
             {addFriendOpen && (
               <div
                 className="rounded-2xl p-4 mb-3 flex flex-col gap-3"
-                style={{ background: "rgba(26,25,23,0.8)", border: "1px solid rgba(255,255,255,0.07)" }}
+                style={{ background: "rgba(var(--glass-bg-rgb), 0.8)", border: "1px solid var(--t-stone-700)" }}
               >
                 <p className="text-stone-400 text-xs">Search by @username</p>
                 <div className="flex gap-2">
@@ -691,7 +691,7 @@ export default function AchievementsPage() {
                   <p className="text-stone-500 text-xs">No explorer found with that username.</p>
                 )}
                 {friendSearchResult && friendSearchResult !== "notfound" && (
-                  <div className="flex items-center gap-3 rounded-xl p-3" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div className="flex items-center gap-3 rounded-xl p-3" style={{ background: "rgba(var(--glass-bg-rgb), 0.03)", border: "1px solid var(--t-stone-700)" }}>
                     <div className="flex-1 min-w-0">
                       <p className="text-stone-200 text-sm font-semibold">
                         {friendSearchResult.showUsername && friendSearchResult.username ? `@${friendSearchResult.username}` : friendSearchResult.displayName || "Explorer"}
@@ -735,7 +735,7 @@ export default function AchievementsPage() {
               onChange={(e) => setSelectedCategory(e.target.value as AchievementCategory)}
               className="w-full appearance-none bg-stone-900/80 border border-stone-800 text-stone-200 text-sm font-semibold rounded-2xl px-5 py-4 focus:outline-none focus:border-stone-600 active:scale-[0.98] transition-all"
               style={{
-                background: "linear-gradient(135deg, #1e1c18, #2a2520)",
+                background: "linear-gradient(135deg, var(--t-stone-900), var(--t-stone-800))",
                 boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
               }}
             >
