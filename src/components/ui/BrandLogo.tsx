@@ -1,4 +1,4 @@
-import { useId } from "react";
+import React from "react";
 
 interface BrandLogoProps {
   className?: string;
@@ -14,8 +14,8 @@ export default function BrandLogo({
   className = "",
   size = 24,
   color = "var(--t-gold-500)", // Matching icon.tsx gold
-}: BrandLogoProps) {
-  const maskId = useId();
+  // Provide a safe, static, colon-free id so it doesn't fail on iOS Safari masks
+  const maskId = "brand-logo-mask-v1";
 
   return (
     <svg
