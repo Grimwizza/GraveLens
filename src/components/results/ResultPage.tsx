@@ -670,12 +670,21 @@ export default function ResultPage({ id }: { id: string }) {
 
     // Replace oldVal with newVal in text. Strategy:
     //   1. Case-insensitive exact match (handles "JOHN" → "John", "MARCH 15, 1890" → etc.)
-    //   2. Year-only fallback — the AI normalises dates so the extracted string rarely
+    //   2. Multiline fallback — OCR often puts first/last name on separate lines so
+    //      "George Sawyer" won't match "GEORGE\nSAWYER" with a plain regex.
+    //      Try matching words with flexible whitespace/newline separators.
+    //   3. Year-only fallback — the AI normalises dates so the extracted string rarely
     //      matches the raw inscription verbatim (e.g. "March 15, 1890" vs "MAR. 15, 1890").
     //      If the full string misses, replace just the year token so "1890" → "1891" still lands.
     function replaceInText(text: string, oldVal: string, newVal: string): string {
       const direct = text.replace(new RegExp(esc(oldVal.trim()), "gi"), newVal);
       if (direct !== text) return direct;
+      const words = oldVal.trim().split(/\s+/).filter(Boolean);
+      if (words.length > 1) {
+        const multilinePattern = words.map(esc).join("[\\s\\n]+");
+        const multiline = text.replace(new RegExp(multilinePattern, "gi"), newVal);
+        if (multiline !== text) return multiline;
+      }
       const oldYear = oldVal.match(YEAR_RE)?.[0];
       const newYear = newVal.match(YEAR_RE)?.[0];
       if (oldYear && newYear && oldYear !== newYear) {
@@ -714,7 +723,10 @@ export default function ResultPage({ id }: { id: string }) {
           if (!user) return;
           const photoUrl = await uploadPhoto(supabase, user.id, existing.id, existing.photoDataUrl);
           await upsertGrave(supabase, user.id, { ...existing, extracted: next }, photoUrl);
-          await saveGrave({ ...existing, extracted: next, photoDataUrl: photoUrl, syncedAt: Date.now() });
+          // Re-read from DB so this save doesn't clobber research data that
+          // handleRefreshData may have written while the upload was in flight.
+          const fresh = await getGrave(existing.id);
+          await saveGrave({ ...(fresh ?? existing), photoDataUrl: photoUrl, syncedAt: Date.now() });
         } catch { /* offline or not logged in — local save stands */ }
       })();
     }
