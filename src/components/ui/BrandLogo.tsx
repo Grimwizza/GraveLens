@@ -13,7 +13,7 @@ interface BrandLogoProps {
 export default function BrandLogo({
   className = "",
   size = 24,
-  color = "#c9a84c", // Matching icon.tsx gold
+  color = "var(--t-gold-500)", // Matching icon.tsx gold
 }: BrandLogoProps) {
   const maskId = useId();
 

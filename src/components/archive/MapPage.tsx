@@ -86,7 +86,7 @@ export default function MapPage() {
           }`}
           aria-label="Discovery and Search"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={menuOpen ? "#c9a84c" : "var(--t-stone-500)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={menuOpen ? "var(--t-gold-500)" : "var(--t-stone-500)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.3-4.3" />
           </svg>
@@ -122,7 +122,7 @@ export default function MapPage() {
                     key={r}
                     onClick={() => setFindRadius(r)}
                     className="w-12 h-8 text-xs transition-colors font-medium"
-                    style={{ color: findRadius === r ? "#c9a84c" : "#6a6560", background: findRadius === r ? "rgba(201,168,76,0.12)" : "transparent" }}
+                    style={{ color: findRadius === r ? "var(--t-gold-500)" : "#6a6560", background: findRadius === r ? "rgba(201,168,76,0.12)" : "transparent" }}
                   >
                     {r === 50 ? "50+" : `${r}mi`}
                   </button>
@@ -138,7 +138,7 @@ export default function MapPage() {
                   setMenuOpen(false);
                 }}
                 className="flex-1 py-2 rounded-lg font-semibold text-sm active:scale-[0.97] transition-all"
-                style={{ background: "#c9a84c", color: "var(--t-stone-900)" }}
+                style={{ background: "var(--t-gold-500)", color: "var(--t-stone-900)" }}
               >
                 Search
               </button>

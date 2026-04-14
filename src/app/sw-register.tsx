@@ -110,7 +110,7 @@ export default function ServiceWorkerRegister() {
           height="14"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#c9a84c"
+          stroke="var(--t-gold-500)"
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"

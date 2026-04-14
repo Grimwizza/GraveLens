@@ -461,10 +461,10 @@ function IdleState({
           <svg className="absolute inset-0 w-full h-full" viewBox="0 0 256 256">
             {/* Animated corner brackets */}
             <g className="animate-pulse-slow">
-              <path d="M32 80 L32 32 L80 32" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-              <path d="M176 32 L224 32 L224 80" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-              <path d="M32 176 L32 224 L80 224" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-              <path d="M176 224 L224 224 L224 176" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+              <path d="M32 80 L32 32 L80 32" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+              <path d="M176 32 L224 32 L224 80" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+              <path d="M32 176 L32 224 L80 224" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+              <path d="M176 224 L224 224 L224 176" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
             </g>
             
             {/* Headstone silhouette backdrop */}
@@ -473,7 +473,7 @@ function IdleState({
               fill="rgba(201,168,76,0.03)"
               stroke="#3a3633"
               strokeWidth="2"
-              className="transition-colors group-hover:stroke-[#c9a84c]/30"
+              className="transition-colors group-hover:stroke-[var(--t-gold-500)]/30"
             />
           </svg>
           
@@ -481,17 +481,17 @@ function IdleState({
             {/* Central scanning focal point */}
             <div className="relative translate-y-[1px]">
               {/* Outer glow ring */}
-              <div className="absolute inset-0 -m-8 rounded-full bg-[#c9a84c]/5 blur-2xl animate-pulse" />
+              <div className="absolute inset-0 -m-8 rounded-full bg-[var(--t-gold-500)]/5 blur-2xl animate-pulse" />
               
               {/* Logo with drop shadow for depth */}
               <div className="relative drop-shadow-[0_0_15px_rgba(201,168,76,0.5)] scale-90 sm:scale-110">
-                <BrandLogo size={100} color="#c9a84c" />
+                <BrandLogo size={100} color="var(--t-gold-500)" />
               </div>
             </div>
 
             {/* Status text - precision positioned to ensure ~11px gap and ZERO overlap */}
             <div className="absolute bottom-0 sm:bottom-2 left-1/2 -translate-x-1/2 animate-pulse-slow">
-              <span className="text-[#c9a84c]/80 text-[0.7rem] sm:text-xs font-bold tracking-[0.4em] whitespace-nowrap uppercase">
+              <span className="text-[var(--t-gold-500)]/80 text-[0.7rem] sm:text-xs font-bold tracking-[0.4em] whitespace-nowrap uppercase">
                 Ready to scan
               </span>
             </div>
@@ -715,7 +715,7 @@ function ProOnboarding({ onStart, onCancel }: { onStart: (skipInFuture: boolean)
         <button
           onClick={() => onStart(skipInFuture)}
           className="flex-1 py-3 rounded-xl text-white text-sm font-semibold"
-          style={{ background: "#c9a84c" }}
+          style={{ background: "var(--t-gold-500)" }}
         >
           Got it — Start
         </button>
@@ -730,7 +730,7 @@ function QueuedConfirmation({ reason }: { reason: "offline" | "rate_limited" | n
   return (
     <div className="flex flex-col items-center gap-4 animate-fade-in text-center px-4">
       <div className="w-16 h-16 rounded-2xl bg-stone-800 border border-stone-700 flex items-center justify-center">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
           <polyline points="22 4 12 14.01 9 11.01" />
         </svg>
@@ -776,8 +776,8 @@ function ProcessingState({
           className="absolute left-0 right-0 h-0.5 transition-all duration-700"
           style={{
             top: `${progress}%`,
-            background: "linear-gradient(90deg, transparent, #c9a84c, transparent)",
-            boxShadow: "0 0 8px #c9a84c",
+            background: "linear-gradient(90deg, transparent, var(--t-gold-500), transparent)",
+            boxShadow: "0 0 8px var(--t-gold-500)",
           }}
         />
       </div>
@@ -792,7 +792,7 @@ function ProcessingState({
             className="h-full rounded-full transition-all duration-700"
             style={{
               width: `${progress}%`,
-              background: "linear-gradient(90deg, #5c7a5c, #c9a84c)",
+              background: "linear-gradient(90deg, #5c7a5c, var(--t-gold-500))",
             }}
           />
         </div>

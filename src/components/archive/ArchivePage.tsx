@@ -564,7 +564,7 @@ export default function ArchivePage() {
               }`}
               aria-label="Toggle search"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={searchQuery || searchOpen ? "#c9a84c" : "var(--t-stone-500)"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={searchQuery || searchOpen ? "var(--t-gold-500)" : "var(--t-stone-500)"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
               </svg>
             </button>
@@ -578,7 +578,7 @@ export default function ArchivePage() {
               }`}
               aria-label="Toggle filters"
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={hasActiveFilters || filtersOpen ? "#c9a84c" : "var(--t-stone-500)"} strokeWidth="2" strokeLinecap="round">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={hasActiveFilters || filtersOpen ? "var(--t-gold-500)" : "var(--t-stone-500)"} strokeWidth="2" strokeLinecap="round">
                 <path d="M1 3h14M3 8h10M6 13h4" />
               </svg>
               {hasActiveFilters && (
@@ -791,7 +791,7 @@ export default function ArchivePage() {
             {showAssignBanner && (
               <div className="mx-4 mt-4 mb-1 flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border border-gold-500/30 bg-gold-500/5 animate-fade-in">
                 <div className="flex items-center gap-2 min-w-0">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--t-gold-500)" strokeWidth="1.5" strokeLinecap="round">
                     <path d="M8 1.5C5.52 1.5 3.5 3.52 3.5 6c0 3.5 4.5 8.5 4.5 8.5s4.5-5 4.5-8.5c0-2.48-2.02-4.5-4.5-4.5z" strokeLinejoin="round" />
                     <circle cx="8" cy="6" r="1.5" />
                   </svg>
@@ -803,7 +803,7 @@ export default function ArchivePage() {
                 <button
                   onClick={startAssignment}
                   className="shrink-0 text-xs font-semibold text-stone-900 px-3 py-1.5 rounded-lg"
-                  style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+                  style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
                 >
                   Assign
                 </button>
@@ -942,7 +942,7 @@ function AssignmentSheet({
               onClick={onSave}
               disabled={!value.trim()}
               className="flex-1 h-12 rounded-xl font-semibold text-stone-900 text-sm disabled:opacity-40 transition-all active:scale-[0.98]"
-              style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+              style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
             >
               Save
             </button>
@@ -1015,7 +1015,7 @@ function NearbyConfirmSheet({
             <button
               onClick={onYes}
               className="flex-1 h-12 rounded-xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.98]"
-              style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+              style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
             >
               Yes, apply to all
             </button>
@@ -1120,7 +1120,7 @@ function GraveTileGrid({
 
             {isNew && (
               <div className="absolute top-2 left-2 z-10 pointer-events-none">
-                <span className="px-1.5 py-0.5 rounded text-[0.75rem] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
+                <span className="px-1.5 py-0.5 rounded text-[0.75rem] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "var(--t-gold-500)", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
               </div>
             )}
 
@@ -1271,7 +1271,7 @@ function GraveCoverFlow({
 
             {isNew && (
               <div className="absolute top-3 left-3 z-10 pointer-events-none">
-                <span className="px-1.5 py-0.5 rounded text-[0.75rem] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
+                <span className="px-1.5 py-0.5 rounded text-[0.75rem] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "var(--t-gold-500)", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
               </div>
             )}
 
@@ -1327,7 +1327,7 @@ function EmptyState() {
       <Link
         href="/"
         className="mt-2 h-12 px-6 rounded-2xl flex items-center justify-center font-semibold text-stone-900 transition-all active:scale-[0.98]"
-        style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+        style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
       >
         Scan your first marker
       </Link>
@@ -1387,7 +1387,7 @@ function GraveList({
                     {grave.extracted.name || "Unknown"}
                   </p>
                   {isNew && (
-                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[0.75rem] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
+                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[0.75rem] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "var(--t-gold-500)", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
                   )}
                 </div>
                 <p className="text-stone-500 text-xs mt-0.5">
@@ -1416,7 +1416,7 @@ function GraveList({
                         if (name && onCemeteryEdit) onCemeteryEdit(grave.id, name).then(() => setEditingId(null));
                       }}
                       className="text-[0.75rem] font-semibold px-2 py-1 rounded"
-                      style={{ background: "#c9a84c", color: "var(--t-stone-900)" }}
+                      style={{ background: "var(--t-gold-500)", color: "var(--t-stone-900)" }}
                     >
                       Save
                     </button>
@@ -1538,7 +1538,7 @@ function CemeterySection({
               <div className="shrink-0 flex items-center gap-2">
                 {/* Visit badge */}
                 <div className="flex flex-col items-center px-2 py-1 rounded-lg bg-stone-800 border border-stone-700 min-w-[44px]">
-                  <span className="text-xs font-bold" style={{ color: "#c9a84c" }}>{c.visitCount}</span>
+                  <span className="text-xs font-bold" style={{ color: "var(--t-gold-500)" }}>{c.visitCount}</span>
                   <span className="text-[0.65rem] text-stone-500 uppercase tracking-wide">{c.visitCount === 1 ? "visit" : "visits"}</span>
                 </div>
                 {/* Delete — only for IDB-backed records, not derived entries */}
@@ -1571,13 +1571,13 @@ function CemeterySection({
                 {c.phone && (
                   <div className="flex items-center gap-2">
                     <span className="text-stone-500 text-xs shrink-0">📞</span>
-                    <a href={`tel:${c.phone}`} className="text-xs" style={{ color: "#c9a84c" }}>{c.phone}</a>
+                    <a href={`tel:${c.phone}`} className="text-xs" style={{ color: "var(--t-gold-500)" }}>{c.phone}</a>
                   </div>
                 )}
                 {c.website && (
                   <div className="flex items-center gap-2">
                     <span className="text-stone-500 text-xs shrink-0">🌐</span>
-                    <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-xs truncate" style={{ color: "#c9a84c" }}>
+                    <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-xs truncate" style={{ color: "var(--t-gold-500)" }}>
                       {c.website.replace(/^https?:\/\/(www\.)?/, "")}
                     </a>
                   </div>
@@ -1585,7 +1585,7 @@ function CemeterySection({
                 {c.wikipediaUrl && (
                   <div className="flex items-center gap-2">
                     <span className="text-stone-500 text-xs shrink-0">📖</span>
-                    <a href={c.wikipediaUrl} target="_blank" rel="noopener noreferrer" className="text-xs" style={{ color: "#c9a84c" }}>
+                    <a href={c.wikipediaUrl} target="_blank" rel="noopener noreferrer" className="text-xs" style={{ color: "var(--t-gold-500)" }}>
                       Wikipedia article
                     </a>
                   </div>

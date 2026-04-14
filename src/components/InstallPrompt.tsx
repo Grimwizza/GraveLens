@@ -106,7 +106,7 @@ export default function InstallPrompt() {
               onClick={handleInstall}
               className="h-8 px-3 rounded-lg text-xs font-bold text-stone-900 active:opacity-80"
               style={{
-                background: "linear-gradient(135deg, #c9a84c, #d4b76a)",
+                background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))",
               }}
             >
               Install
@@ -157,7 +157,7 @@ export default function InstallPrompt() {
                   Tap the{" "}
                   <span className="inline-flex items-center gap-1 text-stone-100 font-medium">
                     {/* Safari share icon */}
-                    <svg width="14" height="16" viewBox="0 0 14 16" fill="none" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="14" height="16" viewBox="0 0 14 16" fill="none" stroke="var(--t-gold-500)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="7 1 7 11" />
                       <polyline points="3 4 7 1 11 4" />
                       <path d="M2 7H1a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1" />
@@ -179,7 +179,7 @@ export default function InstallPrompt() {
           {/* Arrow pointing down to Safari toolbar */}
           <div className="flex justify-center mt-3">
             <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
-              <path d="M8 0 L8 16 M2 10 L8 18 L14 10" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M8 0 L8 16 M2 10 L8 18 L14 10" stroke="var(--t-gold-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
         </div>

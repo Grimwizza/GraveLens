@@ -42,9 +42,9 @@ function RankBadge({ level, title: _title }: { level: number; title: string }) {
       className="relative flex flex-col items-center justify-center rounded-full border-2 w-28 h-28 shrink-0"
       style={{
         background: isMax
-          ? "radial-gradient(circle at 40% 35%, #f5d080, #c9a84c 55%, #8a6820)"
+          ? "radial-gradient(circle at 40% 35%, var(--t-gold-200), var(--t-gold-500) 55%, var(--t-gold-600))"
           : "radial-gradient(circle at 40% 35%, var(--t-stone-700), var(--t-stone-800))",
-        borderColor: isMax ? "#f5d080" : "#c9a84c",
+        borderColor: isMax ? "var(--t-gold-200)" : "var(--t-gold-500)",
         boxShadow: isMax ? "0 0 20px rgba(201,168,76,0.45)" : "0 0 8px rgba(201,168,76,0.2)",
       }}
     >
@@ -61,7 +61,7 @@ function XPBar({ progress, label }: { progress: number; label: string }) {
           className="h-full rounded-full transition-all duration-700"
           style={{
             width: `${Math.max(2, Math.min(100, progress * 100))}%`,
-            background: "linear-gradient(90deg, #8a6820, #c9a84c, #f5d080)",
+            background: "linear-gradient(90deg, var(--t-gold-600), var(--t-gold-500), var(--t-gold-200))",
           }}
         />
       </div>
@@ -116,7 +116,7 @@ function AchievementCard({
         <div className="flex items-start justify-between gap-2">
           <p
             className="text-sm font-semibold leading-tight"
-            style={{ color: unlocked ? "#f5d080" : "#a09890" }}
+            style={{ color: unlocked ? "var(--t-gold-200)" : "#a09890" }}
           >
             {achievement.title}
           </p>
@@ -124,7 +124,7 @@ function AchievementCard({
             className="text-[0.75rem] font-bold shrink-0 px-1.5 py-0.5 rounded"
             style={{
               background: unlocked ? "rgba(201,168,76,0.2)" : "rgba(255,255,255,0.06)",
-              color: unlocked ? "#c9a84c" : "#6a6560",
+              color: unlocked ? "var(--t-gold-500)" : "#6a6560",
             }}
           >
             +{achievement.xp} XP
@@ -149,7 +149,7 @@ function AchievementCard({
                 className="h-full rounded-full"
                 style={{
                   width: `${Math.min(100, progress * 100)}%`,
-                  background: "linear-gradient(90deg, #5a4010, #c9a84c)",
+                  background: "linear-gradient(90deg, #5a4010, var(--t-gold-500))",
                 }}
               />
             </div>
@@ -160,10 +160,10 @@ function AchievementCard({
         {/* Unlocked checkmark */}
         {unlocked && (
           <div className="flex items-center gap-1 mt-1.5">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
-            <span className="text-[0.75rem]" style={{ color: "#c9a84c" }}>Unlocked · tap for details</span>
+            <span className="text-[0.75rem]" style={{ color: "var(--t-gold-500)" }}>Unlocked · tap for details</span>
           </div>
         )}
         {!unlocked && (
@@ -234,7 +234,7 @@ function AchievementDetailSheet({
                   className="text-sm font-bold px-2.5 py-1 rounded-lg"
                   style={{
                     background: unlocked ? "rgba(201,168,76,0.2)" : "rgba(255,255,255,0.06)",
-                    color: unlocked ? "#f5d080" : "#6a6560",
+                    color: unlocked ? "var(--t-gold-200)" : "#6a6560",
                   }}
                 >
                   +{achievement.xp} XP
@@ -246,7 +246,7 @@ function AchievementDetailSheet({
           {/* Title */}
           <h2
             className="font-serif text-2xl font-bold leading-tight mb-2"
-            style={{ color: unlocked ? "#f5d080" : "#c8c0b8" }}
+            style={{ color: unlocked ? "var(--t-gold-200)" : "#c8c0b8" }}
           >
             {achievement.title}
           </h2>
@@ -258,11 +258,11 @@ function AchievementDetailSheet({
                 className="w-5 h-5 rounded-full flex items-center justify-center"
                 style={{ background: "rgba(201,168,76,0.2)" }}
               >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               </div>
-              <span className="text-sm font-medium" style={{ color: "#c9a84c" }}>
+              <span className="text-sm font-medium" style={{ color: "var(--t-gold-500)" }}>
                 Unlocked
                 {unlockedAt && (
                   <span className="text-stone-500 font-normal ml-1">
@@ -310,7 +310,7 @@ function AchievementDetailSheet({
                   className="h-full rounded-full transition-all"
                   style={{
                     width: `${Math.min(100, progress * 100)}%`,
-                    background: "linear-gradient(90deg, #5a4010, #c9a84c)",
+                    background: "linear-gradient(90deg, #5a4010, var(--t-gold-500))",
                   }}
                 />
               </div>
@@ -360,7 +360,7 @@ function FriendCard({ profile }: { profile: UserProfile }) {
     >
       <div
         className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-lg font-bold font-serif"
-        style={{ background: "rgba(201,168,76,0.12)", border: "1px solid rgba(201,168,76,0.25)", color: "#c9a84c" }}
+        style={{ background: "rgba(201,168,76,0.12)", border: "1px solid rgba(201,168,76,0.25)", color: "var(--t-gold-500)" }}
       >
         {displayName.replace("@", "").slice(0, 1).toUpperCase()}
       </div>
@@ -558,7 +558,7 @@ export default function AchievementsPage() {
               </p>
               <h2
                 className="font-serif text-xl font-bold mt-0.5 leading-tight"
-                style={{ color: "#f5d080" }}
+                style={{ color: "var(--t-gold-200)" }}
               >
                 {rank.title}
               </h2>
@@ -570,7 +570,7 @@ export default function AchievementsPage() {
                     <XPBar progress={progress} label={`${xp} XP · ${needed} to ${nextRank.title}`} />
                   </>
                 ) : (
-                  <p className="text-xs text-gold-500 font-semibold" style={{ color: "#c9a84c" }}>
+                  <p className="text-xs text-gold-500 font-semibold" style={{ color: "var(--t-gold-500)" }}>
                     Maximum rank achieved
                   </p>
                 )}
@@ -593,16 +593,16 @@ export default function AchievementsPage() {
                     className="w-7 h-7 rounded-full flex items-center justify-center text-[0.75rem] font-bold border"
                     style={{
                       background: isCurrentRank
-                        ? "#c9a84c"
+                        ? "var(--t-gold-500)"
                         : isPastRank
                         ? "rgba(201,168,76,0.2)"
                         : "rgba(255,255,255,0.05)",
                       borderColor: isCurrentRank
-                        ? "#f5d080"
+                        ? "var(--t-gold-200)"
                         : isPastRank
                         ? "rgba(201,168,76,0.4)"
                         : "rgba(255,255,255,0.1)",
-                      color: isCurrentRank ? "#1a1510" : isPastRank ? "#c9a84c" : "#4a4540",
+                      color: isCurrentRank ? "#1a1510" : isPastRank ? "var(--t-gold-500)" : "#4a4540",
                     }}
                   >
                     {r.level}
@@ -610,7 +610,7 @@ export default function AchievementsPage() {
                   {isCurrentRank && (
                     <div
                       className="w-1 h-1 rounded-full mt-0.5"
-                      style={{ background: "#c9a84c" }}
+                      style={{ background: "var(--t-gold-500)" }}
                     />
                   )}
                 </div>
@@ -635,7 +635,7 @@ export default function AchievementsPage() {
                   border: "1px solid var(--t-stone-700)",
                 }}
               >
-                <p className="text-lg font-bold font-serif" style={{ color: "#c9a84c" }}>
+                <p className="text-lg font-bold font-serif" style={{ color: "var(--t-gold-500)" }}>
                   {s.value}
                 </p>
                 <p className="text-[0.75rem] uppercase tracking-wide text-stone-500 mt-0.5">
@@ -655,7 +655,7 @@ export default function AchievementsPage() {
               <button
                 onClick={() => { setAddFriendOpen((o) => !o); setFriendSearch(""); setFriendSearchResult(null); }}
                 className="ml-auto flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all active:scale-95"
-                style={{ background: "rgba(201,168,76,0.12)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.25)" }}
+                style={{ background: "rgba(201,168,76,0.12)", color: "var(--t-gold-500)", border: "1px solid rgba(201,168,76,0.25)" }}
               >
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Add
@@ -681,7 +681,7 @@ export default function AchievementsPage() {
                     onClick={handleSearchFriend}
                     disabled={friendSearching}
                     className="px-3.5 py-2 rounded-lg text-xs font-semibold transition-all active:scale-95 disabled:opacity-50"
-                    style={{ background: "rgba(201,168,76,0.15)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.3)" }}
+                    style={{ background: "rgba(201,168,76,0.15)", color: "var(--t-gold-500)", border: "1px solid rgba(201,168,76,0.3)" }}
                   >
                     {friendSearching ? "…" : "Search"}
                   </button>
@@ -702,7 +702,7 @@ export default function AchievementsPage() {
                       onClick={() => handleSendRequest(friendSearchResult.userId)}
                       disabled={sendingRequest}
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 disabled:opacity-50"
-                      style={{ background: "#c9a84c", color: "#1a1510" }}
+                      style={{ background: "var(--t-gold-500)", color: "#1a1510" }}
                     >
                       {sendingRequest ? "…" : "Send Request"}
                     </button>

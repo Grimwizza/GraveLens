@@ -15,7 +15,7 @@ export default function ThematicIllustration({
   className = "",
   size = 120,
 }: ThematicIllustrationProps) {
-  const color = "#c9a84c"; // Gold-500
+  const color = "var(--t-gold-500)"; // Gold-500
 
   const illustrations: Record<IllustrationType, React.ReactNode> = {
     urn: (

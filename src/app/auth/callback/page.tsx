@@ -83,9 +83,9 @@ export default function AuthCallbackPage() {
       }}
     >
       <div className="flex items-center gap-2.5 mb-10">
-        <BrandLogo size={28} color="#c9a84c" />
+        <BrandLogo size={28} color="var(--t-gold-500)" />
         <span className="font-serif text-2xl font-semibold tracking-wide">
-          <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
+          <span className="text-stone-50">Grave</span><span style={{ color: "var(--t-gold-500)" }}>Lens</span>
         </span>
       </div>
 
@@ -104,7 +104,7 @@ export default function AuthCallbackPage() {
           <a
             href="/"
             className="h-12 px-8 rounded-xl font-semibold text-stone-900 text-sm flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+            style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
           >
             Open GraveLens
           </a>

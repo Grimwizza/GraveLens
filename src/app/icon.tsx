@@ -4,7 +4,7 @@ export const size = { width: 512, height: 512 };
 export const contentType = "image/png";
 
 export default function Icon() {
-  const gold = "#c9a84c";
+  const gold = "var(--t-gold-500)";
   const bg = "#1a1917";
 
   return new ImageResponse(

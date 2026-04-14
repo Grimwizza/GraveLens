@@ -47,8 +47,8 @@ const FILTER_OPTIONS = [
 
 const GRAVE_ICON_HTML = `
 <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6))">
-  <rect x="2" y="14" width="24" height="18" rx="2" fill="#c9a84c"/>
-  <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#c9a84c"/>
+  <rect x="2" y="14" width="24" height="18" rx="2" fill="var(--t-gold-500)"/>
+  <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="var(--t-gold-500)"/>
   <line x1="14" y1="6" x2="14" y2="12" stroke="var(--t-stone-900)" stroke-width="2" stroke-linecap="round"/>
   <line x1="10" y1="9" x2="18" y2="9" stroke="var(--t-stone-900)" stroke-width="2" stroke-linecap="round"/>
   <rect x="10" y="20" width="8" height="9" rx="1" fill="var(--t-stone-900)" opacity="0.3"/>
@@ -77,8 +77,8 @@ const COMMUNITY_GRAVE_ICON_HTML = `
 const VISITED_ICON_HTML = `
 <div style="filter:drop-shadow(0 2px 5px rgba(0,0,0,0.4))">
   <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="16" cy="16" r="14" fill="var(--t-stone-900)" stroke="#c9a84c" stroke-width="2.5"/>
-    <path d="M10 16.5L14 20.5L23 11.5" stroke="#c9a84c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="16" cy="16" r="14" fill="var(--t-stone-900)" stroke="var(--t-gold-500)" stroke-width="2.5"/>
+    <path d="M10 16.5L14 20.5L23 11.5" stroke="var(--t-gold-500)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>
 </div>`.trim();
 
@@ -423,9 +423,9 @@ export default function ArchiveMap({
           <div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
             <a href="/result/${grave.id}" style="text-decoration:none;display:block;">
               <p style="font-family:Georgia,serif;font-size:1rem;font-weight:600;color:var(--t-stone-50);margin:0 0 2px;">${name}</p>
-              ${dates ? `<p style="font-size:0.75rem;color:#c9a84c;margin:0 0 6px;">${dates}</p>` : ""}
+              ${dates ? `<p style="font-size:0.75rem;color:var(--t-gold-500);margin:0 0 6px;">${dates}</p>` : ""}
               <img src="${grave.photoDataUrl}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px;" />
-              <div style="font-size:0.7rem;font-weight:700;color:#c9a84c;text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;justify-content:center;gap:4px;">
+              <div style="font-size:0.7rem;font-weight:700;color:var(--t-gold-500);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;justify-content:center;gap:4px;">
                 View Archive Entry
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="9 18 15 12 9 6"></polyline>
@@ -456,7 +456,7 @@ export default function ArchiveMap({
         const popup = `
           <div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
             <p style="font-family:Georgia,serif;font-size:1rem;font-weight:600;color:var(--t-stone-50);margin:0 0 2px;">${c.name}</p>
-            <p style="font-size:0.75rem;color:#c9a84c;margin:0 0 4px;">Visited Location</p>
+            <p style="font-size:0.75rem;color:var(--t-gold-500);margin:0 0 4px;">Visited Location</p>
             <p style="font-size:0.7rem;color:var(--t-stone-500);">${c.count} archive ${c.count === 1 ? 'record' : 'records'}</p>
           </div>`;
         L.marker([c.lat, c.lng], { icon: visitedIcon })
@@ -538,8 +538,8 @@ export default function ArchiveMap({
         const icon = makeCircleIcon(heritageIcon(h.type), "var(--t-stone-700)", "#3a3733");
         const html = `<div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
           <p style="font-family:Georgia,serif;font-size:1rem;font-weight:600;color:var(--t-stone-50);margin:0;">${h.name}</p>
-          <p style="font-size:0.75rem;color:#c9a84c;margin-top:2px;text-transform:capitalize;">${h.type}</p>
-          ${h.wikipedia ? `<a href="${h.wikipedia}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:var(--t-stone-900);text-align:center;border-radius:10px;font-weight:bold;text-decoration:none;font-size:0.875rem;">Learn more →</a>` : ""}
+          <p style="font-size:0.75rem;color:var(--t-gold-500);margin-top:2px;text-transform:capitalize;">${h.type}</p>
+          ${h.wikipedia ? `<a href="${h.wikipedia}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:var(--t-gold-500);color:var(--t-stone-900);text-align:center;border-radius:10px;font-weight:bold;text-decoration:none;font-size:0.875rem;">Learn more →</a>` : ""}
         </div>`;
         L.marker([h.lat, h.lng], { icon }).addTo(layer).bindPopup(html, { autoPan: false });
       });
@@ -552,8 +552,8 @@ export default function ArchiveMap({
         const icon = makeCircleIcon(figureIconMap[n.category] ?? "📍");
         const html = `<div style="font-family:system-ui;min-width:180px;padding:10px;text-align:center;">
           <p style="font-family:Georgia,serif;font-size:1rem;font-weight:600;color:var(--t-stone-50);margin:0;">${n.label}</p>
-          <p style="font-size:0.75rem;color:#c9a84c;margin-top:2px;">${n.occupationLabel || n.category}</p>
-          ${n.wikipediaUrl ? `<a href="${n.wikipediaUrl}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:#c9a84c;color:var(--t-stone-900);text-align:center;border-radius:10px;font-weight:bold;text-decoration:none;">Learn more →</a>` : ""}
+          <p style="font-size:0.75rem;color:var(--t-gold-500);margin-top:2px;">${n.occupationLabel || n.category}</p>
+          ${n.wikipediaUrl ? `<a href="${n.wikipediaUrl}" target="_blank" style="display:block;margin-top:10px;padding:8px;background:var(--t-gold-500);color:var(--t-stone-900);text-align:center;border-radius:10px;font-weight:bold;text-decoration:none;">Learn more →</a>` : ""}
         </div>`;
         L.marker([n.lat, n.lng], { icon }).addTo(layer).bindPopup(html, { autoPan: false });
       });
@@ -585,7 +585,7 @@ export default function ArchiveMap({
         const phoneLine = c.phone
           ? `<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px;">
                <span style="font-size:0.875rem;">📞</span>
-               <a href="tel:${c.phone}" style="font-size:0.75rem;color:#c9a84c;text-decoration:none;">${c.phone}</a>
+               <a href="tel:${c.phone}" style="font-size:0.75rem;color:var(--t-gold-500);text-decoration:none;">${c.phone}</a>
              </div>`
           : "";
 
@@ -610,7 +610,7 @@ export default function ArchiveMap({
                 Google
               </a>
             </div>
-            ${c.wikipedia ? `<a href="${c.wikipedia}" target="_blank" style="display:block;margin-top:6px;padding:6px;background:#c9a84c;color:var(--t-stone-900);text-align:center;border-radius:10px;font-size:0.75rem;font-weight:700;text-decoration:none;">Learn more →</a>` : ""}
+            ${c.wikipedia ? `<a href="${c.wikipedia}" target="_blank" style="display:block;margin-top:6px;padding:6px;background:var(--t-gold-500);color:var(--t-stone-900);text-align:center;border-radius:10px;font-size:0.75rem;font-weight:700;text-decoration:none;">Learn more →</a>` : ""}
           </div>`;
         L.marker([c.lat, c.lng], { icon }).addTo(layer).bindPopup(popup, { maxWidth: 280, autoPan: false });
       });
@@ -624,7 +624,7 @@ export default function ArchiveMap({
         const cemetery = g.location?.cemetery || "";
         const html = `<div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
           <p style="font-family:Georgia,serif;font-size:1rem;font-weight:600;color:var(--t-stone-50);margin:0 0 4px;">${name}</p>
-          ${cemetery ? `<p style="font-size:0.75rem;color:#c9a84c;margin:0;">${cemetery}</p>` : ""}
+          ${cemetery ? `<p style="font-size:0.75rem;color:var(--t-gold-500);margin:0;">${cemetery}</p>` : ""}
           <img src="${g.photoDataUrl}" style="width:100%;height:72px;object-fit:cover;border-radius:10px;margin-top:6px;" />
         </div>`;
         L.marker([g.location.lat, g.location.lng], { icon }).addTo(layer).bindPopup(html, { autoPan: false });
@@ -788,8 +788,8 @@ export default function ArchiveMap({
       items.push({
         icon: (
           <svg width="14" height="18" viewBox="0 0 28 36" fill="none">
-            <rect x="2" y="14" width="24" height="18" rx="2" fill="#c9a84c"/>
-            <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="#c9a84c"/>
+            <rect x="2" y="14" width="24" height="18" rx="2" fill="var(--t-gold-500)"/>
+            <path d="M2 16 Q2 2 14 2 Q26 2 26 16" fill="var(--t-gold-500)"/>
             <line x1="14" y1="6" x2="14" y2="12" stroke="var(--t-stone-900)" strokeWidth="2" strokeLinecap="round"/>
             <line x1="10" y1="9" x2="18" y2="9" stroke="var(--t-stone-900)" strokeWidth="2" strokeLinecap="round"/>
           </svg>
@@ -823,8 +823,8 @@ export default function ArchiveMap({
       items.push({
         icon: (
           <svg width="14" height="14" viewBox="0 0 32 32" fill="none">
-            <circle cx="16" cy="16" r="14" fill="var(--t-stone-900)" stroke="#c9a84c" strokeWidth="2.5"/>
-            <path d="M10 16.5L14 20.5L23 11.5" stroke="#c9a84c" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+            <circle cx="16" cy="16" r="14" fill="var(--t-stone-900)" stroke="var(--t-gold-500)" strokeWidth="2.5"/>
+            <path d="M10 16.5L14 20.5L23 11.5" stroke="var(--t-gold-500)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         ),
         label: "Visited location",
@@ -916,7 +916,7 @@ export default function ArchiveMap({
           className="w-11 h-11 rounded-full flex items-center justify-center shadow-xl transition-all active:scale-95 bg-[var(--t-stone-900)] border-2 border-[var(--t-stone-700)]"
           aria-label="Map Filters"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={filterMenuOpen ? "#c9a84c" : "var(--t-stone-500)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={filterMenuOpen ? "var(--t-gold-500)" : "var(--t-stone-500)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
           </svg>
         </button>
@@ -928,7 +928,7 @@ export default function ArchiveMap({
               <span className="text-stone-200 font-serif font-semibold text-sm">Map Filters</span>
               <button
                 onClick={() => setActiveFilters(new Set(FILTER_OPTIONS.map(o => o.id)))}
-                className="text-[#c9a84c] text-[0.75rem] uppercase tracking-wider font-bold hover:text-[#d4b76a]"
+                className="text-[var(--t-gold-500)] text-[0.75rem] uppercase tracking-wider font-bold hover:text-[var(--t-gold-400)]"
               >
                 Reset All
               </button>
@@ -951,7 +951,7 @@ export default function ArchiveMap({
                         });
                       }}
                     />
-                    <div className={`w-4 h-4 rounded shadow-inner flex items-center justify-center transition-colors ${checked ? 'bg-[#c9a84c]' : 'bg-[var(--t-stone-900)] border border-[#3a3733]'}`}>
+                    <div className={`w-4 h-4 rounded shadow-inner flex items-center justify-center transition-colors ${checked ? 'bg-[var(--t-gold-500)]' : 'bg-[var(--t-stone-900)] border border-[#3a3733]'}`}>
                       {checked && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--t-stone-900)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                     </div>
                     <span className="text-stone-300 text-xs font-medium">{opt.label}</span>
@@ -978,7 +978,7 @@ export default function ArchiveMap({
         {locating ? (
           <div className="w-4 h-4 border-2 border-stone-500 border-t-transparent rounded-full animate-spin" />
         ) : (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3" />
             <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
             <circle cx="12" cy="12" r="9" strokeOpacity="0.3" />
@@ -994,7 +994,7 @@ export default function ArchiveMap({
             className="pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold shadow-xl active:scale-95 transition-all"
             style={{ background: "var(--t-stone-900)", border: "1px solid #3a3733", color: "var(--t-stone-50)" }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
             </svg>
             Search here

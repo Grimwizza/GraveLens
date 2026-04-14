@@ -114,7 +114,7 @@ export default function LoginPage() {
 
         <div className="flex-1 flex flex-col items-center justify-center px-6 max-w-sm mx-auto w-full">
           <div className="w-16 h-16 rounded-2xl bg-stone-800 border border-stone-700 flex items-center justify-center mb-6">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="4" width="20" height="16" rx="2" />
               <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
             </svg>
@@ -139,7 +139,7 @@ export default function LoginPage() {
             <button
               onClick={() => { setMode("signin"); setError(""); setResent(false); }}
               className="w-full h-12 rounded-xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.97]"
-              style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+              style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
             >
               Back to Sign In
             </button>
@@ -182,9 +182,9 @@ export default function LoginPage() {
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 max-w-sm mx-auto w-full">
         <div className="flex items-center gap-2.5 mb-8">
-          <BrandLogo size={28} color="#c9a84c" />
+          <BrandLogo size={28} color="var(--t-gold-500)" />
           <span className="font-serif text-2xl font-semibold tracking-wide">
-            <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
+            <span className="text-stone-50">Grave</span><span style={{ color: "var(--t-gold-500)" }}>Lens</span>
           </span>
         </div>
 
@@ -226,7 +226,7 @@ export default function LoginPage() {
             type="submit"
             disabled={loading}
             className="w-full h-12 rounded-xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.97] disabled:opacity-60"
-            style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+            style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
           >
             {loading ? "Please wait…" : mode === "signin" ? "Sign In" : "Create Account"}
           </button>

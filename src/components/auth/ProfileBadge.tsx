@@ -110,7 +110,7 @@ export default function ProfileBadge() {
         className="w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 shrink-0"
         style={
           user
-            ? { background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }
+            ? { background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }
             : { background: "var(--t-stone-700)", border: "1px solid var(--t-stone-600)" }
         }
         aria-label={user ? "Account" : "Sign in"}
@@ -154,7 +154,7 @@ export default function ProfileBadge() {
                   <div className="flex items-center gap-3 py-2">
                     <div
                       className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-stone-900 shrink-0"
-                      style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+                      style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
                     >
                       {initials}
                     </div>
@@ -235,7 +235,7 @@ export default function ProfileBadge() {
                   <button
                     onClick={() => { close(); router.push("/login"); }}
                     className="w-full h-12 rounded-2xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.97] mt-2"
-                    style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+                    style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
                   >
                     Sign In or Create Account
                   </button>

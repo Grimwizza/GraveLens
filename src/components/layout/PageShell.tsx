@@ -57,7 +57,7 @@ export default function PageShell({
           style={{
             background: "rgba(180, 120, 20, 0.15)",
             borderBottom: "1px solid rgba(201, 168, 76, 0.25)",
-            color: "#c9a84c",
+            color: "var(--t-gold-500)",
           }}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -81,9 +81,9 @@ export default function PageShell({
                 {showLogo ? (
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
-                      <BrandLogo size={22} color="#c9a84c" />
+                      <BrandLogo size={22} color="var(--t-gold-500)" />
                       <span className="font-serif font-semibold tracking-wide text-[1.5rem] leading-none">
-                        <span className="text-stone-50">Grave</span><span style={{ color: "#c9a84c" }}>Lens</span>
+                        <span className="text-stone-50">Grave</span><span style={{ color: "var(--t-gold-500)" }}>Lens</span>
                       </span>
                     </div>
                     <span className="italic text-white text-[0.65rem] leading-none opacity-60 mt-1 ml-7">

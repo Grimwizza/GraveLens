@@ -838,7 +838,7 @@ export default function ResultPage({ id }: { id: string }) {
                     extracted.confidence === "high"
                       ? "#7a9a7a"
                       : extracted.confidence === "medium"
-                      ? "#d4b76a"
+                      ? "var(--t-gold-400)"
                       : "#c07070",
                   border: "1px solid currentColor",
                 }}
@@ -1080,7 +1080,7 @@ export default function ResultPage({ id }: { id: string }) {
                 {a.icon}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[0.75rem] uppercase tracking-widest font-medium" style={{ color: "#c9a84c" }}>
+                <p className="text-[0.75rem] uppercase tracking-widest font-medium" style={{ color: "var(--t-gold-500)" }}>
                   Achievement Unlocked
                 </p>
                 <p className="text-sm font-semibold text-stone-100 leading-tight mt-0.5">{a.title}</p>
@@ -1088,7 +1088,7 @@ export default function ResultPage({ id }: { id: string }) {
               </div>
               <span
                 className="text-xs font-bold shrink-0 px-2 py-1 rounded-lg"
-                style={{ background: "rgba(201,168,76,0.2)", color: "#f5d080" }}
+                style={{ background: "rgba(201,168,76,0.2)", color: "var(--t-gold-200)" }}
               >
                 +{a.xp} XP
               </span>
@@ -1191,7 +1191,7 @@ export default function ResultPage({ id }: { id: string }) {
               <button
                 onClick={handleNearbyYes}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
-                style={{ background: "#c9a84c", color: "#1a1917" }}
+                style={{ background: "var(--t-gold-500)", color: "#1a1917" }}
               >
                 Yes, update all
               </button>
@@ -1213,7 +1213,7 @@ export default function ResultPage({ id }: { id: string }) {
         >
           <div
             className="w-3.5 h-3.5 border-2 border-t-transparent rounded-full animate-spin shrink-0"
-            style={{ borderColor: "#c9a84c transparent #c9a84c #c9a84c" }}
+            style={{ borderColor: "var(--t-gold-500) transparent var(--t-gold-500) var(--t-gold-500)" }}
           />
           <span className="text-xs text-stone-300 font-medium">Verifying data quality…</span>
         </div>
@@ -1291,7 +1291,7 @@ function QualityIssueSheet({
             className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
             style={{ background: "rgba(201,168,76,0.12)", border: "1px solid rgba(201,168,76,0.25)" }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
               <line x1="12" y1="9" x2="12" y2="13"/>
               <line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -1333,7 +1333,7 @@ function QualityIssueSheet({
                   onClick={onRescan}
                   disabled={rescanBusy}
                   className="w-full py-3 rounded-2xl text-sm font-semibold text-stone-900 flex items-center justify-center gap-2 disabled:opacity-70"
-                  style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+                  style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
                 >
                   {rescanBusy ? (
                     <>
@@ -1353,7 +1353,7 @@ function QualityIssueSheet({
               <button
                 onClick={onEdit}
                 className="w-full py-3 rounded-2xl text-sm font-semibold"
-                style={onRescan ? { background: "rgba(var(--glass-bg-rgb), 0.06)", color: "var(--t-stone-200)", border: "1px solid var(--t-stone-700)" } : { background: "linear-gradient(135deg, #c9a84c, #d4b76a)", color: "var(--t-stone-900)" }}
+                style={onRescan ? { background: "rgba(var(--glass-bg-rgb), 0.06)", color: "var(--t-stone-200)", border: "1px solid var(--t-stone-700)" } : { background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))", color: "var(--t-stone-900)" }}
               >
                 Edit Manually
               </button>
@@ -1460,7 +1460,7 @@ function PrimaryCard({
           <button
             onClick={handleSave}
             className="flex-1 h-9 rounded-lg text-stone-900 text-sm font-semibold"
-            style={{ background: "#c9a84c" }}
+            style={{ background: "var(--t-gold-500)" }}
           >
             Save
           </button>
@@ -1575,7 +1575,7 @@ function CemeteryCard({
               onClick={handleSave}
               disabled={saving || !editValue.trim()}
               className="px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-40"
-              style={{ background: "#c9a84c", color: "#1a1917" }}
+              style={{ background: "var(--t-gold-500)", color: "#1a1917" }}
             >
               {saving ? "…" : "Save"}
             </button>
@@ -1871,7 +1871,7 @@ function InscriptionCard({
             <button
               onClick={handleSave}
               className="flex-1 h-9 rounded-lg text-stone-900 text-sm font-semibold"
-              style={{ background: "#c9a84c" }}
+              style={{ background: "var(--t-gold-500)" }}
             >
               Save
             </button>
@@ -2083,7 +2083,7 @@ function FamilySearchCard({
               {/* Record type badge */}
               <div
                 className="shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[0.65rem] font-semibold uppercase tracking-wide"
-                style={{ background: "rgba(201,168,76,0.15)", color: "#c9a84c" }}
+                style={{ background: "rgba(201,168,76,0.15)", color: "var(--t-gold-500)" }}
               >
                 {hint.recordType ?? "Record"}
               </div>
@@ -2104,7 +2104,7 @@ function FamilySearchCard({
                     </span>
                   )}
                 </div>
-                <p className="text-xs mt-1" style={{ color: "#c9a84c" }}>
+                <p className="text-xs mt-1" style={{ color: "var(--t-gold-500)" }}>
                   View on FamilySearch →
                 </p>
               </div>
@@ -2120,7 +2120,7 @@ function FamilySearchCard({
 
 const CONFIDENCE_STYLE: Record<string, { color: string; bg: string; label: string }> = {
   high:   { color: "#7ab87a", bg: "rgba(50,120,50,0.18)",  label: "High match"   },
-  medium: { color: "#c9a84c", bg: "rgba(150,100,20,0.18)", label: "Possible match" },
+  medium: { color: "var(--t-gold-500)", bg: "rgba(150,100,20,0.18)", label: "Possible match" },
   low:    { color: "#a07060", bg: "rgba(120,60,40,0.18)",  label: "Low confidence" },
 };
 
@@ -2158,7 +2158,7 @@ function SSDICard({ records }: { records: import("@/types").SSDIRecord[] }) {
                       <span className="text-stone-400 text-xs">Last residence: {r.lastResidenceState}</span>
                     )}
                   </div>
-                  <p className="text-xs mt-1.5" style={{ color: "#c9a84c" }}>View SSDI record →</p>
+                  <p className="text-xs mt-1.5" style={{ color: "var(--t-gold-500)" }}>View SSDI record →</p>
                 </div>
               </a>
             </li>
@@ -2190,7 +2190,7 @@ function HistoricalCensusCard({ records }: { records: import("@/types").Historic
             >
               <div
                 className="shrink-0 mt-0.5 px-2 py-0.5 rounded text-[0.7rem] font-bold tabular-nums"
-                style={{ background: "rgba(201,168,76,0.15)", color: "#c9a84c" }}
+                style={{ background: "rgba(201,168,76,0.15)", color: "var(--t-gold-500)" }}
               >
                 {r.year}
               </div>
@@ -2210,7 +2210,7 @@ function HistoricalCensusCard({ records }: { records: import("@/types").Historic
                     Household: {r.household.map((m) => m.name).join(", ")}
                   </p>
                 )}
-                <p className="text-xs mt-1.5" style={{ color: "#c9a84c" }}>View census record →</p>
+                <p className="text-xs mt-1.5" style={{ color: "var(--t-gold-500)" }}>View census record →</p>
               </div>
             </a>
           </li>
@@ -2253,7 +2253,7 @@ function ImmigrationCard({ records }: { records: import("@/types").ImmigrationRe
                   {r.arrivalPort && <span className="text-stone-400 text-xs">Arrived: {r.arrivalPort}</span>}
                   {r.departurePort && <span className="text-stone-400 text-xs">Departed: {r.departurePort}</span>}
                 </div>
-                <p className="text-xs mt-1.5" style={{ color: "#c9a84c" }}>View passenger record →</p>
+                <p className="text-xs mt-1.5" style={{ color: "var(--t-gold-500)" }}>View passenger record →</p>
               </div>
             </a>
           </li>
@@ -2284,7 +2284,7 @@ function NaraItemCard({ records }: { records: import("@/types").NaraItemRecord[]
             >
               <div
                 className="shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[0.65rem] font-semibold uppercase tracking-wide whitespace-nowrap"
-                style={{ background: "rgba(201,168,76,0.12)", color: "#c9a84c" }}
+                style={{ background: "rgba(201,168,76,0.12)", color: "var(--t-gold-500)" }}
               >
                 {r.recordGroup || "NARA"}
               </div>
@@ -2298,7 +2298,7 @@ function NaraItemCard({ records }: { records: import("@/types").NaraItemRecord[]
                   {r.occupation && <span className="text-stone-400 text-xs">Occ: {r.occupation}</span>}
                   {r.birthplace && <span className="text-stone-400 text-xs">b. {r.birthplace}</span>}
                 </div>
-                <p className="text-xs mt-1.5" style={{ color: "#c9a84c" }}>
+                <p className="text-xs mt-1.5" style={{ color: "var(--t-gold-500)" }}>
                   {r.pdfUrl ? "View PDF →" : "Search records →"}
                 </p>
               </div>
@@ -2348,7 +2348,7 @@ function UsGenWebCard({ records }: { records: import("@/types").UsGenWebRecord[]
                 <p className="text-stone-500 text-xs mt-0.5">
                   {r.county}, {r.state}
                 </p>
-                <p className="text-xs mt-1.5" style={{ color: "#c9a84c" }}>View on USGenWeb →</p>
+                <p className="text-xs mt-1.5" style={{ color: "var(--t-gold-500)" }}>View on USGenWeb →</p>
               </div>
             </a>
           </li>
@@ -2362,7 +2362,7 @@ function UsGenWebCard({ records }: { records: import("@/types").UsGenWebRecord[]
 
 const PRIORITY_LABEL: Record<1 | 2 | 3, { label: string; color: string; bg: string }> = {
   1: { label: "Do First",   color: "#e8a87c", bg: "rgba(180,90,40,0.2)" },
-  2: { label: "High Value", color: "#c9a84c", bg: "rgba(150,100,20,0.2)" },
+  2: { label: "High Value", color: "var(--t-gold-500)", bg: "rgba(150,100,20,0.2)" },
   3: { label: "Supplement", color: "#7a9a7a", bg: "rgba(50,90,50,0.2)" },
 };
 
@@ -2401,7 +2401,7 @@ function ResearchChecklistCard({
                   <span className="text-stone-500 text-xs">{item.source}</span>
                 </div>
                 {item.url && (
-                  <p className="text-xs mt-1" style={{ color: "#c9a84c" }}>
+                  <p className="text-xs mt-1" style={{ color: "var(--t-gold-500)" }}>
                     Open source →
                   </p>
                 )}
@@ -2990,7 +2990,7 @@ function NarrativeCard({
             className={`px-3 py-1 rounded-full text-xs font-medium transition-all active:scale-[0.97] ${
               isSelected ? "text-stone-900" : "bg-stone-800 text-stone-400 hover:bg-stone-700"
             }`}
-            style={isSelected ? { background: "linear-gradient(135deg, #c9a84c, #d4b76a)" } : undefined}
+            style={isSelected ? { background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" } : undefined}
           >
             {label}
           </button>
@@ -3010,7 +3010,7 @@ function NarrativeCard({
         <button
           onClick={onGenerate}
           className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-stone-900 transition-all active:scale-[0.97]"
-          style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+          style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
@@ -3103,7 +3103,7 @@ function CulturalContextCard({
         <button
           onClick={onLoad}
           className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-stone-900 transition-all active:scale-[0.97]"
-          style={{ background: "linear-gradient(135deg, #c9a84c, #d4b76a)" }}
+          style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
         >
           <span>🌎</span>
           Explore their world
