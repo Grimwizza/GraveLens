@@ -4,7 +4,7 @@ export const size = { width: 512, height: 512 };
 export const contentType = "image/png";
 
 export default function Icon() {
-  const gold = "var(--t-gold-500)";
+  const gold = "#c9a84c"; // --t-gold-500 hardcoded — CSS vars don't resolve in ImageResponse
   const bg = "#1a1917";
 
   return new ImageResponse(

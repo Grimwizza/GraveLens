@@ -4,7 +4,7 @@ export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
 export default function AppleIcon() {
-  const gold = "var(--t-gold-500)";
+  const gold = "#c9a84c"; // --t-gold-500 hardcoded — CSS vars don't resolve in ImageResponse
   const bg = "#1a1917";
 
   return new ImageResponse(
