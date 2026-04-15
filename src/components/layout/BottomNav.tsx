@@ -166,7 +166,7 @@ export default function BottomNav() {
                 )}
                 <span
                   className="text-[0.75rem] font-bold tracking-wide uppercase mt-1 transition-colors"
-                  style={{ color: isActive ? "var(--t-gold-500)" : "var(--t-stone-500)", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
+                  style={{ color: isActive ? "var(--t-gold-500)" : "var(--t-stone-500)", textShadow: "none" }}
                 >
                   {tab.label}
                 </span>
@@ -213,7 +213,7 @@ export default function BottomNav() {
                 {tab.icon(isActive)}
                 <span
                   className="text-[0.75rem] font-bold tracking-wide uppercase mt-1 transition-colors"
-                  style={{ color: isActive ? "var(--t-gold-500)" : "var(--t-stone-500)", textShadow: isActive ? "0 2px 4px rgba(0,0,0,0.5)" : "none" }}
+                  style={{ color: isActive ? "var(--t-gold-500)" : "var(--t-stone-500)", textShadow: "none" }}
                 >
                   {tab.label}
                 </span>
