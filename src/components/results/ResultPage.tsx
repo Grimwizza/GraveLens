@@ -47,9 +47,6 @@ export default function ResultPage({ id }: { id: string }) {
   const [tags, setTags] = useState<string[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
   const [achievementToasts, setAchievementToasts] = useState<Achievement[]>([]);
-  const [narratives, setNarratives] = useState<(LifeNarrative | null)[]>([null]);
-  const [narrativeLoadingIndex, setNarrativeLoadingIndex] = useState<number | null>(null);
-  const [selectedPersonIndex, setSelectedPersonIndex] = useState(0);
   const [culturalContext, setCulturalContext] = useState<CulturalContext | null>(null);
   const [culturalLoading, setCulturalLoading] = useState(false);
   const [expandingCategory, setExpandingCategory] = useState<string | null>(null);
@@ -98,12 +95,6 @@ export default function ResultPage({ id }: { id: string }) {
           timestamp: archived.timestamp,
         });
         setResearch(archived.research ?? {});
-        const archivePeople = archived.extracted?.people;
-        if (archivePeople && archivePeople.length > 1) {
-          setNarratives(archived.research?.narratives ?? new Array(archivePeople.length).fill(null));
-        } else {
-          setNarratives([archived.research?.narrative ?? null]);
-        }
         setCulturalContext(archived.research?.culturalContext ?? null);
         setTags(archived.tags ?? []);
         setIsPublic(archived.isPublic ?? false);
@@ -485,79 +476,6 @@ export default function ResultPage({ id }: { id: string }) {
     }
   }, [pending, expandingCategory, culturalContext]);
 
-  const handleGenerateNarrative = useCallback(async (personIndex: number = 0) => {
-    if (!pending || narrativeLoadingIndex !== null) return;
-    setNarrativeLoadingIndex(personIndex);
-    try {
-      const { extracted, location } = pending;
-      const people = extracted.people;
-      const person = people && people.length > personIndex ? people[personIndex] : null;
-      const historical = research?.historical;
-      const militaryContext = research?.militaryContext;
-      const res = await fetch("/api/narrative", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: person?.name ?? extracted.name,
-          birthYear: person?.birthYear ?? extracted.birthYear,
-          deathYear: person?.deathYear ?? extracted.deathYear,
-          birthDate: person?.birthDate ?? extracted.birthDate,
-          deathDate: person?.deathDate ?? extracted.deathDate,
-          ageAtDeath: person?.ageAtDeath ?? extracted.ageAtDeath,
-          city: location?.city,
-          state: location?.state,
-          country: location?.country,
-          inscription: extracted.inscription,
-          epitaph: extracted.epitaph,
-          symbols: extracted.symbols ?? [],
-          birthEra: historical?.birthEra,
-          deathEra: historical?.deathEra,
-          lifeExpectancyAtDeath: historical?.lifeExpectancyAtDeath,
-          militaryConflict: militaryContext?.likelyConflict,
-          militaryTheater: militaryContext?.theater,
-          militaryRole: militaryContext?.role,
-        }),
-      });
-      if (res.ok) {
-        const data: LifeNarrative = await res.json();
-        setNarratives((prev) => {
-          const updated = [...prev];
-          updated[personIndex] = data;
-          return updated;
-        });
-        const isMulti = people && people.length > 1;
-        if (isMulti) {
-          setResearch((prev) => {
-            const existing = prev?.narratives ?? new Array(people!.length).fill(null);
-            const updated = [...existing];
-            updated[personIndex] = data;
-            return { ...(prev ?? {}), narratives: updated };
-          });
-        } else {
-          setResearch((prev) => ({ ...(prev ?? {}), narrative: data }));
-        }
-        // Persist to IndexedDB
-        const existing = await getGrave(pending.id);
-        if (existing) {
-          const updatedResearch = isMulti
-            ? {
-                ...existing.research,
-                narratives: (() => {
-                  const arr = [...(existing.research?.narratives ?? new Array(people!.length).fill(null))];
-                  arr[personIndex] = data;
-                  return arr;
-                })(),
-              }
-            : { ...existing.research, narrative: data };
-          await saveGrave({ ...existing, research: updatedResearch });
-        }
-      }
-    } catch (err) {
-      console.warn("Narrative generation failed:", err);
-    } finally {
-      setNarrativeLoadingIndex(null);
-    }
-  }, [pending, research, narrativeLoadingIndex]);
 
   const currentLocation = locationOverride ?? pending?.location ?? null;
 
@@ -698,7 +616,6 @@ export default function ResultPage({ id }: { id: string }) {
             : undefined,
         };
         setResearch(researchData);
-        setNarratives(new Array(Math.max(1, pending.extracted?.people?.length ?? 1)).fill(null));
         setCulturalContext(null);
         const existing = await getGrave(pending.id);
         if (existing) await saveGrave({ ...existing, extracted: current, research: researchData });
@@ -942,6 +859,17 @@ export default function ResultPage({ id }: { id: string }) {
           {/* Primary info card */}
           <PrimaryCard extracted={extracted} onSave={handleExtractedEdit} />
 
+          {/* Flagship: Hear Their Story */}
+          <StoryCard
+            graveId={pending.id}
+            extracted={extracted}
+            research={research}
+            location={location}
+            onStoryGenerated={(epitaphSource, epitaphMeaning, script) => {
+              setResearch((prev) => ({ ...(prev ?? {}), epitaphSource, epitaphMeaning, storyScript: script }));
+            }}
+          />
+
           {/* Divider */}
           <div className="h-px bg-gradient-to-r from-transparent via-stone-700 to-transparent my-1" />
 
@@ -975,18 +903,6 @@ export default function ResultPage({ id }: { id: string }) {
             />
           )}
 
-          {/* A Life in Context — on-demand narrative */}
-          <NarrativeCard
-            narrative={narratives[selectedPersonIndex] ?? null}
-            loading={narrativeLoadingIndex === selectedPersonIndex}
-            onGenerate={() => handleGenerateNarrative(selectedPersonIndex)}
-            extracted={extracted}
-            people={extracted.people}
-            selectedPersonIndex={selectedPersonIndex}
-            onSelectPerson={setSelectedPersonIndex}
-            graveId={pending.id}
-          />
-
           {/* A Life in Their Era — cultural context */}
           <CulturalContextCard
             context={culturalContext}
@@ -1001,8 +917,8 @@ export default function ResultPage({ id }: { id: string }) {
           <InscriptionCard
             inscription={extracted.inscription}
             epitaph={extracted.epitaph}
-            epitaphSource={narratives[selectedPersonIndex]?.epitaphSource}
-            epitaphMeaning={narratives[selectedPersonIndex]?.epitaphMeaning}
+            epitaphSource={research?.epitaphSource}
+            epitaphMeaning={research?.epitaphMeaning}
             onSave={(inscription) => handleExtractedEdit({ inscription })}
           />
 
@@ -3186,302 +3102,262 @@ function LocalHistoryCard({
   );
 }
 
-// ── Narrative Card ────────────────────────────────────────────────────────────
+// ── Story Card (flagship "Hear Their Story") ──────────────────────────────────
 
-function NarrativeCard({
-  narrative,
-  loading,
-  onGenerate,
-  extracted,
-  people,
-  selectedPersonIndex = 0,
-  onSelectPerson,
-  graveId,
-}: {
-  narrative: LifeNarrative | null;
-  loading: boolean;
-  onGenerate: () => void;
-  extracted: ExtractedGraveData;
-  people?: PersonData[];
-  selectedPersonIndex?: number;
-  onSelectPerson?: (index: number) => void;
-  graveId?: string;
-}) {
-  // Only offer the feature when we have enough data to generate something meaningful
-  const hasEnoughData = !!(extracted.birthYear || extracted.deathYear || extracted.inscription);
-  if (!hasEnoughData) return null;
-
-  const isMulti = people && people.length > 1;
-
-  const eligiblePeople = isMulti
-    ? people.map((person, i) => ({ person, i })).filter(({ person }) => !!(person.deathDate || person.deathYear))
-    : [];
-
-  const pillSelector = eligiblePeople.length > 1 ? (
-    <div className="flex flex-wrap gap-2 mt-3">
-      {eligiblePeople.map(({ person, i }) => {
-        const label = person.firstName || person.name.split(" ")[0] || `Person ${i + 1}`;
-        const isSelected = i === selectedPersonIndex;
-        return (
-          <button
-            key={i}
-            onClick={() => onSelectPerson?.(i)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-all active:scale-[0.97] ${
-              isSelected ? "text-stone-900" : "bg-stone-800 text-stone-400 hover:bg-stone-700"
-            }`}
-            style={isSelected ? { background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" } : undefined}
-          >
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  ) : null;
-
-  if (!narrative && !loading) {
-    return (
-      <div className="py-5 animate-fade-up" style={{ animationDelay: "0.12s" }}>
-        <SectionHeader icon="📜" title="A Life in Context" />
-        {pillSelector}
-        <p className="mt-2 text-stone-500 text-sm leading-relaxed">
-          Generate a historical narrative about what life was like for someone of this era, place, and background.
-        </p>
-        <button
-          onClick={onGenerate}
-          className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-stone-900 transition-all active:scale-[0.97]"
-          style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-          </svg>
-          Tell me their story
-        </button>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="py-5 animate-fade-up" style={{ animationDelay: "0.12s" }}>
-        <SectionHeader icon="📜" title="A Life in Context" />
-        {pillSelector}
-        <div className="mt-3 space-y-2">
-          <div className="h-4 shimmer rounded w-full" />
-          <div className="h-4 shimmer rounded w-5/6" />
-          <div className="h-4 shimmer rounded w-4/5" />
-          <div className="h-4 shimmer rounded w-full mt-3" />
-          <div className="h-4 shimmer rounded w-3/4" />
-          <div className="h-4 shimmer rounded w-5/6" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!narrative) return null;
-
-  // Split narrative into paragraphs for better formatting
-  const paragraphs = narrative.narrative
-    .split(/\n\n+/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-
-  return (
-    <div className="py-5 animate-fade-up" style={{ animationDelay: "0.12s" }}>
-      <SectionHeader icon="📜" title="A Life in Context" />
-      {pillSelector}
-      <div className="mt-3 space-y-3">
-        {paragraphs.map((p, i) => (
-          <p key={i} className="text-stone-300 text-sm leading-relaxed">
-            {p}
-          </p>
-        ))}
-        <p className="text-stone-600 text-[0.75rem] italic pt-1">
-          Historical narrative generated by AI based on verified era context. Not specific to this individual.
-        </p>
-      </div>
-      {graveId && (
-        <NarrationPlayer
-          narrativeText={narrative.narrative}
-          graveId={graveId}
-          extracted={extracted}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── Narration Player ──────────────────────────────────────────────────────────
-
-function NarrationPlayer({
-  narrativeText,
+function StoryCard({
   graveId,
   extracted,
+  research,
+  location,
+  onStoryGenerated,
 }: {
-  narrativeText: string;
   graveId: string;
   extracted: ExtractedGraveData;
+  research: ResearchData | null;
+  location: GeoLocation | null;
+  onStoryGenerated: (epitaphSource: string, epitaphMeaning: string, script: string) => void;
 }) {
   const gender = inferGender(extracted);
-  const voice = selectVoice(gender, extracted.ageAtDeath);
+  const voice  = selectVoice(gender, extracted.ageAtDeath);
+  const cacheKey = `story_${voice}`;
 
-  const [audioDataUrl, setAudioDataUrl] = useState<string | null>(null);
-  const [audioLoading, setAudioLoading] = useState(false);
-  const [audioError, setAudioError] = useState(false);
-  const [playing, setPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [audioDataUrl, setAudioDataUrl]   = useState<string | null>(null);
+  const [loadingPhase, setLoadingPhase]   = useState<null | "crafting" | "recording">(null);
+  const [hasError, setHasError]           = useState(false);
+  const [scriptText, setScriptText]       = useState<string | null>(research?.storyScript ?? null);
+  const [scriptOpen, setScriptOpen]       = useState(false);
+  const [playing, setPlaying]             = useState(false);
+  const [progress, setProgress]           = useState(0);
+  const [currentTime, setCurrentTime]     = useState(0);
+  const [duration, setDuration]           = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Load from cache on mount
+  const hasEnoughData = !!(extracted.birthYear || extracted.deathYear || extracted.name);
+  if (!hasEnoughData) return null;
+
+  // Load cached audio on mount
   useEffect(() => {
-    getAudio(graveId, voice).then((cached) => {
+    getAudio(graveId, cacheKey).then((cached) => {
       if (cached) setAudioDataUrl(cached);
     }).catch(() => {});
-  }, [graveId, voice]);
+    if (research?.storyScript) setScriptText(research.storyScript);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graveId, cacheKey]);
 
-  // Wire audio element events
+  // Wire audio events
   useEffect(() => {
     const el = audioRef.current;
     if (!el || !audioDataUrl) return;
     el.src = audioDataUrl;
-
-    const onTimeUpdate = () => {
-      setCurrentTime(el.currentTime);
-      setProgress(el.duration ? el.currentTime / el.duration : 0);
-    };
-    const onDurationChange = () => setDuration(el.duration || 0);
+    const onTime  = () => { setCurrentTime(el.currentTime); setProgress(el.duration ? el.currentTime / el.duration : 0); };
+    const onDur   = () => setDuration(el.duration || 0);
     const onEnded = () => { setPlaying(false); setProgress(0); setCurrentTime(0); el.currentTime = 0; };
     const onPlay  = () => setPlaying(true);
     const onPause = () => setPlaying(false);
-
-    el.addEventListener("timeupdate",      onTimeUpdate);
-    el.addEventListener("durationchange",  onDurationChange);
-    el.addEventListener("ended",           onEnded);
-    el.addEventListener("play",            onPlay);
-    el.addEventListener("pause",           onPause);
+    el.addEventListener("timeupdate", onTime);
+    el.addEventListener("durationchange", onDur);
+    el.addEventListener("ended", onEnded);
+    el.addEventListener("play",  onPlay);
+    el.addEventListener("pause", onPause);
     return () => {
-      el.removeEventListener("timeupdate",     onTimeUpdate);
-      el.removeEventListener("durationchange", onDurationChange);
-      el.removeEventListener("ended",          onEnded);
-      el.removeEventListener("play",           onPlay);
-      el.removeEventListener("pause",          onPause);
+      el.removeEventListener("timeupdate", onTime);
+      el.removeEventListener("durationchange", onDur);
+      el.removeEventListener("ended", onEnded);
+      el.removeEventListener("play",  onPlay);
+      el.removeEventListener("pause", onPause);
     };
   }, [audioDataUrl]);
 
-  const handleGenerate = async () => {
-    setAudioLoading(true);
-    setAudioError(false);
+  const handleHearStory = async () => {
+    setHasError(false);
+    setLoadingPhase("crafting");
     try {
-      const res = await fetch("/api/tts", {
+      // Fetch cultural context in parallel with story generation setup
+      const culturalPromise = fetch("/api/cultural", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: narrativeText, voice }),
+        body: JSON.stringify({
+          mode: "summary",
+          name: extracted.name,
+          birthYear: extracted.birthYear,
+          deathYear: extracted.deathYear,
+          ageAtDeath: extracted.ageAtDeath,
+          city: location?.city,
+          state: location?.state,
+        }),
+      }).then((r) => r.ok ? r.json() : null).catch(() => null);
+
+      const cultural = await culturalPromise;
+
+      // Generate first-person script
+      const storyRes = await fetch("/api/story", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: extracted.name,
+          birthDate: extracted.birthDate,
+          deathDate: extracted.deathDate,
+          birthYear: extracted.birthYear,
+          deathYear: extracted.deathYear,
+          ageAtDeath: extracted.ageAtDeath,
+          inscription: extracted.inscription,
+          epitaph: extracted.epitaph,
+          symbols: extracted.symbols ?? [],
+          city: location?.city,
+          state: location?.state,
+          country: location?.country,
+          cemetery: location?.cemetery,
+          historical: research?.historical,
+          militaryContext: research?.militaryContext,
+          culturalSummary: cultural?.categories ?? [],
+        }),
       });
-      if (!res.ok) throw new Error(`TTS ${res.status}`);
-      const blob = await res.blob();
+      if (!storyRes.ok) throw new Error("story " + storyRes.status);
+      const { script, epitaphSource = "", epitaphMeaning = "" } = await storyRes.json();
+
+      setScriptText(script);
+      onStoryGenerated(epitaphSource, epitaphMeaning, script);
+
+      // Now generate audio
+      setLoadingPhase("recording");
+      const ttsRes = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: script, voice }),
+      });
+      if (!ttsRes.ok) throw new Error("tts " + ttsRes.status);
+      const blob = await ttsRes.blob();
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
+        reader.onload  = () => resolve(reader.result as string);
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      await saveAudio(graveId, voice, dataUrl);
+      await saveAudio(graveId, cacheKey, dataUrl);
       setAudioDataUrl(dataUrl);
-      // Auto-play after generation
       setTimeout(() => audioRef.current?.play().catch(() => {}), 50);
     } catch {
-      setAudioError(true);
+      setHasError(true);
     } finally {
-      setAudioLoading(false);
+      setLoadingPhase(null);
     }
   };
 
   const togglePlay = () => {
     const el = audioRef.current;
     if (!el) return;
-    if (playing) el.pause();
-    else el.play().catch(() => {});
+    if (playing) el.pause(); else el.play().catch(() => {});
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const el = audioRef.current;
     if (!el || !el.duration) return;
-    const t = parseFloat(e.target.value) * el.duration;
-    el.currentTime = t;
+    el.currentTime = parseFloat(e.target.value) * el.duration;
     setProgress(parseFloat(e.target.value));
   };
 
   return (
-    <div className="mt-4">
-      {/* Hidden audio element */}
+    <div className="py-5 animate-fade-up" style={{ animationDelay: "0.04s" }}>
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio ref={audioRef} preload="none" />
 
-      {!audioDataUrl && !audioLoading && (
+      {/* Idle: flagship CTA button */}
+      {!audioDataUrl && !loadingPhase && (
         <button
-          onClick={handleGenerate}
-          className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-stone-900 transition-all active:scale-[0.97] hover:opacity-90"
-          style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
+          onClick={handleHearStory}
+          className="relative w-full flex items-center justify-center gap-3 h-14 rounded-2xl text-base font-bold text-stone-900 transition-all active:scale-[0.97] overflow-hidden"
+          style={{
+            background: "linear-gradient(135deg, #eadd9a 0%, var(--t-gold-500) 50%, #9e7f33 100%)",
+            boxShadow: "0 0 0 0 rgba(201,168,76,0.4)",
+            animation: "pulse-gold 2.5s ease-in-out infinite",
+          }}
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
           </svg>
-          {audioError ? "Retry audio" : "Hear their story"}
+          {hasError ? "Try again — hear their story" : "Hear their story"}
         </button>
       )}
 
-      {audioLoading && (
-        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl border border-stone-700 bg-stone-800/50">
-          <div className="w-3.5 h-3.5 border-2 border-t-transparent rounded-full animate-spin shrink-0"
-            style={{ borderColor: "var(--t-gold-500) transparent var(--t-gold-500) var(--t-gold-500)" }} />
-          <span className="text-stone-400 text-sm">Generating audio…</span>
+      {/* Loading states */}
+      {loadingPhase && (
+        <div
+          className="w-full flex items-center justify-center gap-3 h-14 rounded-2xl"
+          style={{ background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.2)" }}
+        >
+          <div
+            className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin shrink-0"
+            style={{ borderColor: "var(--t-gold-500) transparent var(--t-gold-500) var(--t-gold-500)" }}
+          />
+          <span className="text-sm font-medium" style={{ color: "var(--t-gold-400)" }}>
+            {loadingPhase === "crafting" ? "Crafting your story…" : "Recording your voice…"}
+          </span>
         </div>
       )}
 
-      {audioDataUrl && !audioLoading && (
-        <div
-          className="flex items-center gap-3 px-4 py-3 rounded-xl border border-stone-700 bg-stone-800/50"
-        >
-          {/* Play / Pause */}
-          <button
-            onClick={togglePlay}
-            className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90"
-            style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
-            aria-label={playing ? "Pause" : "Play"}
+      {/* Player */}
+      {audioDataUrl && !loadingPhase && (
+        <div className="flex flex-col gap-2">
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-2xl"
+            style={{ background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.2)" }}
           >
-            {playing ? (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="var(--t-stone-900)" stroke="none">
-                <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
-              </svg>
-            ) : (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="var(--t-stone-900)" stroke="none">
-                <polygon points="5 3 19 12 5 21 5 3"/>
-              </svg>
-            )}
-          </button>
-
-          {/* Progress bar + time */}
-          <div className="flex-1 flex flex-col gap-1 min-w-0">
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.001}
-              value={progress}
-              onChange={handleSeek}
-              className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-              style={{
-                background: `linear-gradient(to right, var(--t-gold-500) ${progress * 100}%, rgb(68 64 60) ${progress * 100}%)`,
-                accentColor: "var(--t-gold-500)",
-              }}
-            />
-            <div className="flex justify-between text-[0.7rem] text-stone-500 select-none">
-              <span>{formatTime(currentTime)}</span>
-              {duration > 0 && <span>{formatTime(duration)}</span>}
+            <button
+              onClick={togglePlay}
+              className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90"
+              style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
+              aria-label={playing ? "Pause" : "Play"}
+            >
+              {playing ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--t-stone-900)" stroke="none">
+                  <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--t-stone-900)" stroke="none">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+              )}
+            </button>
+            <div className="flex-1 flex flex-col gap-1 min-w-0">
+              <input
+                type="range" min={0} max={1} step={0.001} value={progress}
+                onChange={handleSeek}
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                style={{
+                  background: `linear-gradient(to right, var(--t-gold-500) ${progress * 100}%, rgb(68 64 60) ${progress * 100}%)`,
+                  accentColor: "var(--t-gold-500)",
+                }}
+              />
+              <div className="flex justify-between text-[0.7rem] text-stone-500 select-none">
+                <span>{formatTime(currentTime)}</span>
+                {duration > 0 && <span>{formatTime(duration)}</span>}
+              </div>
             </div>
           </div>
+
+          {/* Collapsible script */}
+          {scriptText && (
+            <div>
+              <button
+                onClick={() => setScriptOpen((o) => !o)}
+                className="flex items-center gap-1.5 text-[0.75rem] text-stone-500 py-1"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ transform: scriptOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+                {scriptOpen ? "Hide script" : "Read the script"}
+              </button>
+              {scriptOpen && (
+                <div className="mt-2 space-y-3 pl-1 border-l-2 border-stone-800">
+                  {scriptText.split(/\n\n+/).filter(Boolean).map((p, i) => (
+                    <p key={i} className="text-stone-400 text-sm leading-relaxed italic">{p}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
