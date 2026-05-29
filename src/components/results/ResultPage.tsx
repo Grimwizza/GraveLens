@@ -6,6 +6,7 @@ import Link from "next/link";
 import BottomNav from "@/components/layout/BottomNav";
 import { saveGrave, getGrave, getAllGraves, getPendingResult, deletePendingResult, deleteGrave, recordCemeteryVisit } from "@/lib/storage";
 import { cemeteryId } from "@/lib/apis/cemetery";
+import { reverseGeocode } from "@/lib/apis/nominatim";
 import { checkAndUnlock, loadStats, type Achievement } from "@/lib/achievements";
 import { createClient } from "@/lib/supabase/browser";
 import { uploadPhoto, upsertGrave, pushExplorerPoints, deleteFromCloud } from "@/lib/cloudSync";
@@ -63,6 +64,10 @@ export default function ResultPage({ id }: { id: string }) {
   // response can never overwrite a corrected refresh that resolves first.
   const initialFetchAbortRef = useRef<AbortController | null>(null);
   const isDesktop = useIsDesktop();
+
+  // Cemetery prompt state — shown when refresh is triggered with no cemetery assigned
+  const [cemeteryPrompt, setCemeteryPrompt] = useState<"detecting" | "manual" | null>(null);
+  const [cemeteryPromptInput, setCemeteryPromptInput] = useState("");
 
   // Quality check state
   type RescanStatus = "idle" | "checking" | "rescanning" | "done";
@@ -597,11 +602,56 @@ export default function ResultPage({ id }: { id: string }) {
     setNearbyPrompt(null);
   }, [nearbyPrompt]);
 
-  const handleRefreshData = useCallback(async (extractedData?: ExtractedGraveData) => {
+  const handleRefreshData = useCallback(async (extractedData?: ExtractedGraveData, skipCemeteryCheck = false) => {
     if (!pending || refreshingRef.current) return;
     // Cancel any in-flight initial scan fetch so it can't overwrite this refresh
     initialFetchAbortRef.current?.abort();
     initialFetchAbortRef.current = null;
+
+    // ── Cemetery auto-detection ──────────────────────────────────────────────
+    // Only runs on explicit user-triggered refreshes (not edit-triggered ones).
+    let effectiveLocation = currentLocation;
+    if (!skipCemeteryCheck && !effectiveLocation?.cemetery) {
+      const lat = effectiveLocation?.lat;
+      const lng = effectiveLocation?.lng;
+      const hasCoords = typeof lat === "number" && typeof lng === "number" && (lat !== 0 || lng !== 0);
+
+      if (hasCoords) {
+        setCemeteryPrompt("detecting");
+        setRefreshing(true);
+        try {
+          const geo = await reverseGeocode(lat!, lng!);
+          if (geo.cemetery) {
+            // Auto-detected — apply silently and continue
+            const newLoc: GeoLocation = { ...(effectiveLocation ?? { lat: lat!, lng: lng! }), ...geo };
+            setLocationOverride(newLoc);
+            effectiveLocation = newLoc;
+            const existing = await getGrave(pending.id);
+            if (existing) await saveGrave({ ...existing, location: newLoc });
+          } else {
+            // Coords exist but no cemetery polygon found — ask user
+            setCemeteryPrompt("manual");
+            setCemeteryPromptInput("");
+            setRefreshing(false);
+            return;
+          }
+        } catch {
+          // Network error — fall through to manual prompt
+          setCemeteryPrompt("manual");
+          setCemeteryPromptInput("");
+          setRefreshing(false);
+          return;
+        }
+        setCemeteryPrompt(null);
+      } else {
+        // No GPS at all — ask user immediately
+        setCemeteryPrompt("manual");
+        setCemeteryPromptInput("");
+        return;
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     refreshingRef.current = true;
     setRefreshing(true);
     const current = extractedData ?? { ...pending.extracted, ...(extractedOverride ?? {}) };
@@ -616,12 +666,12 @@ export default function ResultPage({ id }: { id: string }) {
           lastName: current.lastName,
           birthYear: current.birthYear,
           deathYear: current.deathYear,
-          lat: currentLocation?.lat,
-          lng: currentLocation?.lng,
-          city: currentLocation?.city,
-          county: currentLocation?.county,
-          state: currentLocation?.state,
-          cemetery: currentLocation?.cemetery,
+          lat: effectiveLocation?.lat,
+          lng: effectiveLocation?.lng,
+          city: effectiveLocation?.city,
+          county: effectiveLocation?.county,
+          state: effectiveLocation?.state,
+          cemetery: effectiveLocation?.cemetery,
           inscription: current.inscription ?? "",
           symbols: current.symbols ?? [],
         }),
@@ -642,8 +692,8 @@ export default function ResultPage({ id }: { id: string }) {
           naraItemRecords:   d.naraItemRecords ?? undefined,
           usGenWebRecords:   d.usGenWebRecords ?? undefined,
           researchChecklist: d.researchChecklist ?? undefined,
-          cemetery: currentLocation?.cemetery
-            ? { name: currentLocation.cemetery, wikipediaUrl: d.cemeteryWikiUrl, location: currentLocation ?? undefined }
+          cemetery: effectiveLocation?.cemetery
+            ? { name: effectiveLocation.cemetery, wikipediaUrl: d.cemeteryWikiUrl, location: effectiveLocation ?? undefined }
             : undefined,
         };
         setResearch(researchData);
@@ -1329,6 +1379,103 @@ export default function ResultPage({ id }: { id: string }) {
           }}
           onDismiss={() => setQualityDialog(null)}
         />
+      )}
+
+      {/* Cemetery prompt — shown when refresh finds no cemetery */}
+      {cemeteryPrompt === "detecting" && (
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-[70] flex items-center gap-2.5 px-4 py-2.5 rounded-2xl shadow-xl"
+          style={{
+            top: "calc(env(safe-area-inset-top, 0px) + 3.5rem)",
+            background: "rgba(var(--glass-bg-rgb), 0.96)",
+            border: "1px solid rgba(201,168,76,0.3)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div
+            className="w-3.5 h-3.5 border-2 border-t-transparent rounded-full animate-spin shrink-0"
+            style={{ borderColor: "var(--t-gold-500) transparent var(--t-gold-500) var(--t-gold-500)" }}
+          />
+          <span className="text-xs text-stone-300 font-medium">Looking up cemetery location…</span>
+        </div>
+      )}
+
+      {cemeteryPrompt === "manual" && (
+        <div className="fixed inset-0 z-[70] flex items-end lg:items-center justify-center lg:p-6">
+          <div className="absolute inset-0 bg-stone-950/70 backdrop-blur-sm" onClick={() => setCemeteryPrompt(null)} />
+          <div
+            className="relative w-full max-w-sm rounded-t-3xl lg:rounded-2xl flex flex-col gap-0 overflow-hidden"
+            style={{
+              background: "rgba(var(--glass-bg-rgb), 0.98)",
+              border: "1px solid var(--t-stone-700)",
+              paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))",
+            }}
+          >
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-stone-700" />
+            </div>
+            <div className="flex items-start gap-3 px-5 pt-3 pb-4">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "rgba(201,168,76,0.12)", border: "1px solid rgba(201,168,76,0.25)" }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 11 7 11s7-5.75 7-11c0-3.87-3.13-7-7-7z"/>
+                  <circle cx="12" cy="9" r="2.5"/>
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-stone-100 font-semibold text-base leading-snug">No cemetery assigned</p>
+                <p className="text-stone-400 text-sm mt-0.5 leading-relaxed">
+                  {currentLocation?.lat && currentLocation?.lat !== 0
+                    ? "We couldn't detect a cemetery at this location. Enter the name to improve research accuracy."
+                    : "No location data was found. Enter the cemetery name to improve research accuracy."}
+                </p>
+              </div>
+            </div>
+            <div className="px-5 pb-4">
+              <input
+                autoFocus
+                type="text"
+                value={cemeteryPromptInput}
+                onChange={(e) => setCemeteryPromptInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && cemeteryPromptInput.trim()) {
+                    const name = cemeteryPromptInput.trim();
+                    setCemeteryPrompt(null);
+                    handleCemeteryEdit(name).then(() => handleRefreshData(undefined, true));
+                  }
+                }}
+                placeholder="e.g. Lakeside Cemetery"
+                className="w-full bg-stone-800 text-stone-200 text-sm rounded-xl px-4 py-3 border border-stone-700 focus:outline-none focus:border-stone-500 mb-3"
+              />
+              <div className="flex flex-col gap-2">
+                <button
+                  disabled={!cemeteryPromptInput.trim()}
+                  onClick={() => {
+                    const name = cemeteryPromptInput.trim();
+                    if (!name) return;
+                    setCemeteryPrompt(null);
+                    handleCemeteryEdit(name).then(() => handleRefreshData(undefined, true));
+                  }}
+                  className="w-full py-3 rounded-2xl text-sm font-semibold text-stone-900 disabled:opacity-40"
+                  style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
+                >
+                  Save & Search
+                </button>
+                <button
+                  onClick={() => {
+                    setCemeteryPrompt(null);
+                    handleRefreshData(undefined, true);
+                  }}
+                  className="w-full py-2.5 text-sm text-stone-500"
+                >
+                  Search without cemetery
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
