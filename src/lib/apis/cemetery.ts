@@ -102,42 +102,15 @@ interface WikipediaEnrichment {
   historicalEvents?: string[];
 }
 
+// Only called when OSM provides a direct Wikipedia URL — never via name search,
+// since searching by name can return a different cemetery with the same name.
 async function fetchWikipediaEnrichment(
-  cemeteryName: string,
-  wikipediaUrl?: string,
-  locationHint?: string,
+  wikipediaUrl: string,
 ): Promise<WikipediaEnrichment> {
   try {
-    // Prefer the direct Wikipedia URL if we have it; otherwise search by name
-    let articleTitle: string | null = null;
-
-    if (wikipediaUrl) {
-      const m = wikipediaUrl.match(/\/wiki\/(.+)$/);
-      if (m) articleTitle = decodeURIComponent(m[1]);
-    }
-
-    if (!articleTitle) {
-      // Include location hint (e.g. "Portage County, Wisconsin") for more precise match
-      const query = locationHint
-        ? `${cemeteryName} cemetery ${locationHint}`
-        : `${cemeteryName} cemetery`;
-      const searchRes = await fetch(
-        `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
-          query
-        )}&srlimit=3&format=json&origin=*`,
-        { signal: AbortSignal.timeout(8000) }
-      );
-      if (!searchRes.ok) return {};
-      const searchData = await searchRes.json();
-      // Pick the first result whose title contains "cemetery" (case-insensitive) if possible
-      const results: Array<{ title: string }> = searchData?.query?.search ?? [];
-      const best = results.find((r) => r.title.toLowerCase().includes("cemetery"))
-        ?? results[0]
-        ?? null;
-      articleTitle = best?.title ?? null;
-    }
-
-    if (!articleTitle) return {};
+    const m = wikipediaUrl.match(/\/wiki\/(.+)$/);
+    if (!m) return {};
+    const articleTitle = decodeURIComponent(m[1]);
 
     const summaryRes = await fetch(
       `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(articleTitle)}`,
@@ -205,21 +178,15 @@ export async function enrichCemetery(
   city?: string,
   state?: string,
 ): Promise<Omit<CemeteryRecord, "visitCount" | "firstVisited" | "lastVisited">> {
-  const locationHint = [city, state].filter(Boolean).join(", ") || undefined;
+  // Fetch OSM data — location-verified via 800 m radius query
+  const osmData = await fetchOsmCemeteryDetails(lat, lng).catch((): OsmCemeteryDetail => ({}));
 
-  const [osm, wiki] = await Promise.allSettled([
-    fetchOsmCemeteryDetails(lat, lng),
-    fetchWikipediaEnrichment(name, undefined, locationHint),
-  ]);
-
-  const osmData = osm.status === "fulfilled" ? osm.value : {};
-  const wikiData = wiki.status === "fulfilled" ? wiki.value : {};
-
-  // Re-fetch wiki with the OSM-provided Wikipedia URL if our name search found nothing
-  let finalWiki = wikiData;
-  if (osmData.wikipedia && !wikiData.description) {
-    const retry = await fetchWikipediaEnrichment(name, osmData.wikipedia, locationHint).catch(() => ({}));
-    finalWiki = retry;
+  // Only fetch Wikipedia when OSM provides a direct, georeferenced link.
+  // Never search Wikipedia by name: "Lakeside Cemetery" matches hundreds of
+  // different cemeteries and the first result is almost certainly the wrong one.
+  let finalWiki: WikipediaEnrichment = {};
+  if (osmData.wikipedia) {
+    finalWiki = await fetchWikipediaEnrichment(osmData.wikipedia).catch(() => ({}));
   }
 
   const id = cemeteryId(name, lat, lng, osmData.osmId);
