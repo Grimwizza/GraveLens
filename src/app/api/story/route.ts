@@ -16,6 +16,7 @@ Core rules:
 - Speak with warmth, dignity, and historical authenticity
 - Write for the ear, not the eye — short sentences, vivid images, no lists or headers
 - If an epitaph is provided, identify its source and meaning in the separate JSON fields
+- If symbol meanings are provided, reference them naturally near the close of the narrative — they reveal what the family chose to say about this person in stone
 - Return ONLY valid JSON — no markdown, no explanation, no code fences
 
 LOCATION RULE: The city/state/country provided is ONLY where this person is buried — not necessarily where they were born or lived.
@@ -91,6 +92,7 @@ function buildPrompt(params: {
   ssdi?: SSDIRecord[];
   historicalCensus?: CensusRecord[];
   immigration?: ImmigrationRecord[];
+  symbolMeanings?: Array<{ symbol: string; meaning: string; category: string }>;
 }): string {
   const lines: string[] = [];
 
@@ -156,9 +158,17 @@ function buildPrompt(params: {
   }
 
   // Marker details
-  if (params.symbols?.length) lines.push(`Symbols on marker: ${params.symbols.join("; ")}`);
   if (params.inscription) lines.push(`Full inscription: ${params.inscription}`);
   if (params.epitaph)     lines.push(`Epitaph: "${params.epitaph}"`);
+  if (params.symbols?.length) lines.push(`Raw symbols on marker: ${params.symbols.join("; ")}`);
+
+  // Interpreted symbol meanings — weave into closing of narrative
+  if (params.symbolMeanings?.length) {
+    lines.push("\nSymbol meanings (reference naturally near the close of the story):");
+    for (const s of params.symbolMeanings) {
+      lines.push(`  ${s.symbol} [${s.category}]: ${s.meaning}`);
+    }
+  }
 
   // Confirmed biographical records from external sources
   const hasRecords =

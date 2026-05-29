@@ -1,4 +1,4 @@
-// Option G: Wikidata SPARQL — notable local events within the person's lifespan.
+// Wikidata SPARQL utilities for GraveLens historical enrichment.
 // Finds items with a geo-coordinate within ~50 km of the grave that have a
 // point-in-time (P585) date falling within birth–death years.
 // Excludes NRHP heritage sites (covered separately by nrhp.ts).
@@ -184,6 +184,65 @@ LIMIT 100`.trim();
       .filter((n): n is NotableFigure => n !== null);
   } catch (err) {
     console.warn("Wikidata notable figures fetch failed:", err);
+    return [];
+  }
+}
+
+// ── Notable people born in the same year ─────────────────────────────────────
+
+export async function getBirthYearNotables(
+  year: number
+): Promise<Array<{ name: string; description?: string; wikipediaUrl?: string }>> {
+  if (!year || year < 1400 || year > new Date().getFullYear()) return [];
+
+  const query = `
+SELECT DISTINCT ?person ?personLabel ?desc ?wikipedia WHERE {
+  ?person wdt:P569 ?dob .
+  FILTER(YEAR(?dob) = ${year})
+  ?person wdt:P31 wd:Q5 .
+  ?person wikibase:sitelinks ?sitelinks .
+  FILTER(?sitelinks >= 15)
+  OPTIONAL { ?person schema:description ?desc FILTER(LANG(?desc) = "en") }
+  OPTIONAL {
+    ?wikipedia schema:about ?person ;
+               schema:isPartOf <https://en.wikipedia.org/> .
+  }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
+}
+ORDER BY DESC(?sitelinks)
+LIMIT 6`.trim();
+
+  try {
+    const res = await fetch(
+      `${SPARQL_ENDPOINT}?query=${encodeURIComponent(query)}&format=json`,
+      {
+        headers: {
+          Accept: "application/sparql-results+json",
+          "User-Agent": "GraveLens/1.0 (genealogy research app)",
+        },
+        signal: AbortSignal.timeout(12000),
+      }
+    );
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const bindings: Array<Record<string, { value: string }>> =
+      data?.results?.bindings ?? [];
+
+    type Notable = { name: string; description?: string; wikipediaUrl?: string };
+    return bindings
+      .map((b): Notable | null => {
+        const name = b.personLabel?.value ?? "";
+        const wikidataId = b.person?.value?.split("/").pop() ?? "";
+        if (!name || name === wikidataId || /^Q\d+$/.test(name)) return null;
+        return {
+          name,
+          description: b.desc?.value,
+          wikipediaUrl: b.wikipedia?.value,
+        };
+      })
+      .filter((n): n is Notable => n !== null);
+  } catch {
     return [];
   }
 }

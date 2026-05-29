@@ -7,7 +7,7 @@ import { getCityContext, getDecadeSnapshots } from "@/lib/apis/localHistory";
 import { searchNrhpSites } from "@/lib/apis/nrhp";
 import { getCountyPopulation } from "@/lib/apis/census";
 import { getSanbornMapUrl } from "@/lib/apis/sanborn";
-import { getLocalWikidataEvents } from "@/lib/apis/wikidata";
+import { getLocalWikidataEvents, getBirthYearNotables } from "@/lib/apis/wikidata";
 import {
   hasMilitaryIndicators,
   extractMilitaryTerms,
@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
       ssdiRecords,
       immigrationRecords,
       historicalCensusRecords,
+      birthYearNotables,
     ] = await Promise.allSettled([
       searchNewspapers(name, deathYear, state),
       searchNaraRecords(name, birthYear, deathYear, militaryTerms || undefined),
@@ -91,6 +92,8 @@ export async function POST(req: NextRequest) {
       (!deathYear || deathYear <= 1943)
         ? searchHistoricalCensus(firstName, lastName, birthYear, deathYear, state)
         : Promise.resolve([]),
+      // Notable people born the same year
+      birthYear ? getBirthYearNotables(birthYear) : Promise.resolve([]),
     ]);
 
     // ── Tier 2: Military context (local, instant) ───────────────────────────
@@ -110,9 +113,10 @@ export async function POST(req: NextRequest) {
     const sanborn      = sanbornMapUrl.status    === "fulfilled" ? sanbornMapUrl.value    : undefined;
     const wikiEvents   = wikidataEvents.status   === "fulfilled" ? wikidataEvents.value   : [];
     const fsHints      = familySearchHints.status === "fulfilled" ? familySearchHints.value : [];
-    const ssdi         = ssdiRecords.status      === "fulfilled" ? ssdiRecords.value      : [];
+    const ssdi         = ssdiRecords.status        === "fulfilled" ? ssdiRecords.value        : [];
     const immigration  = immigrationRecords.status === "fulfilled" ? immigrationRecords.value : [];
     const histCensus   = historicalCensusRecords.status === "fulfilled" ? historicalCensusRecords.value : [];
+    const notables     = birthYearNotables.status  === "fulfilled" ? birthYearNotables.value  : [];
 
     const localHistory = {
       ...(cityCtx.cityArticle   ? { cityArticle:   cityCtx.cityArticle   } : {}),
@@ -174,6 +178,7 @@ export async function POST(req: NextRequest) {
       historicalCensus:   histCensus.length      > 0 ? histCensus      : undefined,
       naraItemRecords:    naraItemRecords.length > 0 ? naraItemRecords : undefined,
       usGenWebRecords:    usGenWebRecords.length > 0 ? usGenWebRecords : undefined,
+      birthYearNotables:  notables.length        > 0 ? notables        : undefined,
       researchChecklist,
       surnameSoundex:     surnameSoundex || undefined,
     });

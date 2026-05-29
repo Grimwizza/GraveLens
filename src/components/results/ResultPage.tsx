@@ -224,8 +224,9 @@ export default function ResultPage({ id }: { id: string }) {
             immigration:       d.immigration ?? undefined,
             historicalCensus:  d.historicalCensus ?? undefined,
             naraItemRecords:   d.naraItemRecords ?? undefined,
-            usGenWebRecords:   d.usGenWebRecords ?? undefined,
-            researchChecklist: d.researchChecklist ?? undefined,
+            usGenWebRecords:    d.usGenWebRecords    ?? undefined,
+            birthYearNotables:  d.birthYearNotables  ?? undefined,
+            researchChecklist:  d.researchChecklist  ?? undefined,
             cemetery: data.location?.cemetery
               ? {
                   name: data.location.cemetery,
@@ -431,13 +432,68 @@ export default function ResultPage({ id }: { id: string }) {
         const data: CulturalContext = await res.json();
         setCulturalContext(data);
         setResearch((prev) => ({ ...(prev ?? {}), culturalContext: data }));
+        // Auto-expand all 5 categories in parallel (background, non-blocking)
+        autoExpandAllCategories(data, extracted, location ?? null);
       }
     } catch (err) {
       console.warn("Cultural context generation failed:", err);
     } finally {
       setCulturalLoading(false);
     }
-  }, [pending, culturalLoading]);
+  }, [pending, culturalLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const autoExpandAllCategories = useCallback(async (
+    ctx: CulturalContext,
+    extracted: ExtractedGraveData,
+    location: GeoLocation | null,
+  ) => {
+    const defs = [
+      { id: "popculture",    label: "Pop Culture" },
+      { id: "transport",     label: "Getting Around" },
+      { id: "homelife",      label: "Home & Daily Life" },
+      { id: "health",        label: "Health & Medicine" },
+      { id: "communication", label: "News & Communication" },
+    ];
+    const results = await Promise.allSettled(
+      defs.map(({ id, label }) =>
+        fetch("/api/cultural", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "expand",
+            categoryId: id,
+            categoryLabel: label,
+            name: extracted.name,
+            birthYear: extracted.birthYear,
+            deathYear: extracted.deathYear,
+            ageAtDeath: extracted.ageAtDeath,
+            city: location?.city,
+            state: location?.state,
+          }),
+        }).then((r) => r.ok ? r.json() : null).catch(() => null)
+      )
+    );
+    const updatedCtx: CulturalContext = {
+      categories: ctx.categories.map((c, i) => {
+        const result = results[i];
+        if (result?.status === "fulfilled" && result.value?.detail) {
+          return { ...c, detail: result.value.detail };
+        }
+        return c;
+      }),
+    };
+    setCulturalContext(updatedCtx);
+    setResearch((r) => {
+      const next = { ...(r ?? {}), culturalContext: updatedCtx };
+      return next;
+    });
+    // Persist expanded cultural context to IDB
+    if (pending) {
+      getGrave(pending.id).then((existing) => {
+        if (existing) saveGrave({ ...existing, research: { ...existing.research, culturalContext: updatedCtx } });
+      }).catch(() => {});
+    }
+  }, [pending]);
 
   const handleExpandCategory = useCallback(async (categoryId: string, categoryLabel: string) => {
     if (!pending || expandingCategory || !culturalContext) return;
@@ -476,6 +532,14 @@ export default function ResultPage({ id }: { id: string }) {
     }
   }, [pending, expandingCategory, culturalContext]);
 
+
+  // Auto-load cultural context once the main research fetch completes
+  useEffect(() => {
+    if (!pending || researchLoading || culturalContext) return;
+    if (!extracted?.birthYear && !extracted?.deathYear) return;
+    handleLoadCultural();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [researchLoading]);
 
   const currentLocation = locationOverride ?? pending?.location ?? null;
 
@@ -903,6 +967,11 @@ export default function ResultPage({ id }: { id: string }) {
             />
           )}
 
+          {/* Notable people born the same year */}
+          {research?.birthYearNotables?.length ? (
+            <BirthYearNotablesCard notables={research.birthYearNotables} birthYear={extracted.birthYear} />
+          ) : null}
+
           {/* Local & regional history */}
           {(research?.localHistory || researchLoading) && (
             <LocalHistoryCard
@@ -916,9 +985,6 @@ export default function ResultPage({ id }: { id: string }) {
           <CulturalContextCard
             context={culturalContext}
             loading={culturalLoading}
-            expandingCategory={expandingCategory}
-            onLoad={handleLoadCultural}
-            onExpand={handleExpandCategory}
             extracted={extracted}
           />
 
@@ -1032,9 +1098,19 @@ export default function ResultPage({ id }: { id: string }) {
             <HistoricalCensusCard records={research.historicalCensus} />
           ) : null}
 
+          {/* Household members from census */}
+          {research?.historicalCensus?.some((r) => r.household?.length) ? (
+            <HouseholdCard records={research.historicalCensus} />
+          ) : null}
+
           {/* F5: Immigration records */}
           {research?.immigration?.length ? (
             <ImmigrationCard records={research.immigration} />
+          ) : null}
+
+          {/* Immigration journey visual */}
+          {research?.immigration?.length ? (
+            <ImmigrationJourneyCard records={research.immigration} />
           ) : null}
 
           {/* F6: Item-level military/enlistment records */}
@@ -2071,56 +2147,38 @@ function InscriptionCard({
 
 function SymbolsCard({ symbols }: { symbols: string[] }) {
   const interpretations = interpretSymbols(symbols);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-
-  const toggle = (sym: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      next.has(sym) ? next.delete(sym) : next.add(sym);
-      return next;
-    });
 
   return (
     <div className="py-5 animate-fade-up" style={{ animationDelay: "0.2s" }}>
       <SectionHeader icon="✦" title="Symbols & Emblems" />
-      <ul className="mt-3 space-y-3">
+      <div className="mt-3 space-y-3">
         {symbols.map((s, i) => {
           const interp = interpretations.get(s);
-          const isExpanded = expanded.has(s);
           return (
-            <li key={i} className="text-sm">
-              <div className="flex items-start gap-2">
-                <span className="text-gold-500 mt-0.5 shrink-0">—</span>
-                <div className="flex-1 min-w-0">
-                  <span className="text-stone-300">{s}</span>
-                  {interp && (
-                    <button
-                      onClick={() => toggle(s)}
-                      className="ml-2 text-gold-500/70 text-xs underline-offset-2 hover:text-gold-400"
-                    >
-                      {isExpanded ? "less" : "what this means"}
-                    </button>
-                  )}
-                  {interp && isExpanded && (
-                    <div className="mt-2 p-3 rounded-xl bg-stone-800 border border-stone-700/60 space-y-1.5">
-                      <p className="text-stone-200 text-xs font-semibold uppercase tracking-wide">
-                        {interp.name}
-                        <span className="ml-2 text-stone-600 font-normal capitalize">
-                          {interp.category}
-                        </span>
-                      </p>
-                      <p className="text-stone-300 text-xs leading-relaxed">{interp.meaning}</p>
-                      {interp.era && (
-                        <p className="text-stone-500 text-xs italic">{interp.era}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
+            <div key={i} className="rounded-xl bg-stone-800 border border-stone-700/60 p-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-gold-500 text-xs">✦</span>
+                <p className="text-stone-200 text-sm font-medium">{s}</p>
+                {interp && (
+                  <span className="text-[0.65rem] uppercase tracking-widest text-stone-600 capitalize ml-1">
+                    {interp.category}
+                  </span>
+                )}
               </div>
-            </li>
+              {interp ? (
+                <>
+                  <p className="text-stone-300 text-xs leading-relaxed">{interp.meaning}</p>
+                  {interp.era && (
+                    <p className="text-stone-500 text-xs italic mt-1">{interp.era}</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-stone-500 text-xs italic">Symbol noted on marker</p>
+              )}
+            </div>
           );
         })}
-      </ul>
+      </div>
     </div>
   );
 }
@@ -3227,6 +3285,17 @@ function StoryCard({
             ?.slice(0, 2),
           immigration: research?.immigration
             ?.slice(0, 1),
+          symbolMeanings: (() => {
+            const syms = extracted.symbols ?? [];
+            if (!syms.length) return undefined;
+            const map = interpretSymbols(syms);
+            return syms
+              .map((s) => {
+                const interp = map.get(s.toLowerCase());
+                return interp ? { symbol: s, meaning: interp.meaning, category: interp.category } : null;
+              })
+              .filter(Boolean);
+          })(),
         }),
       });
       if (!storyRes.ok) throw new Error("story " + storyRes.status);
@@ -3394,42 +3463,18 @@ const CULTURAL_DEFS = [
 function CulturalContextCard({
   context,
   loading,
-  expandingCategory,
-  onLoad,
-  onExpand,
   extracted,
 }: {
   context: CulturalContext | null;
   loading: boolean;
-  expandingCategory: string | null;
-  onLoad: () => void;
-  onExpand: (id: string, label: string) => void;
   extracted: ExtractedGraveData;
 }) {
-  const [openCategory, setOpenCategory] = useState<string | null>(null);
   const hasEnoughData = !!(extracted.birthYear || extracted.deathYear);
   if (!hasEnoughData) return null;
+  // Don't render placeholder — auto-load is triggered by useEffect in parent
+  if (!context && !loading) return null;
 
-  if (!context && !loading) {
-    return (
-      <div className="py-5 animate-fade-up" style={{ animationDelay: "0.14s" }}>
-        <SectionHeader icon="🌎" title="A Life in Their Era" />
-        <p className="mt-2 text-stone-500 text-sm leading-relaxed">
-          Discover the music, transport, home life, and culture of this person&apos;s time and place.
-        </p>
-        <button
-          onClick={onLoad}
-          className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-stone-900 transition-all active:scale-[0.97]"
-          style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
-        >
-          <span>🌎</span>
-          Explore their world
-        </button>
-      </div>
-    );
-  }
-
-  if (loading) {
+  if (loading && !context) {
     return (
       <div className="py-5 animate-fade-up" style={{ animationDelay: "0.14s" }}>
         <SectionHeader icon="🌎" title="A Life in Their Era" />
@@ -3456,12 +3501,9 @@ function CulturalContextCard({
   return (
     <div className="py-5 animate-fade-up" style={{ animationDelay: "0.14s" }}>
       <SectionHeader icon="🌎" title="A Life in Their Era" />
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 space-y-3">
         {context.categories.map((cat) => {
           const def = CULTURAL_DEFS.find((d) => d.id === cat.id);
-          const isOpen = openCategory === cat.id;
-          const isExpanding = expandingCategory === cat.id;
-
           return (
             <div key={cat.id} className="rounded-xl bg-stone-800 border border-stone-700/60 overflow-hidden">
               <div className="p-3">
@@ -3472,49 +3514,21 @@ function CulturalContextCard({
                   </p>
                 </div>
                 <p className="text-stone-300 text-sm leading-relaxed">{cat.summary}</p>
-                {!isOpen && (
-                  <button
-                    onClick={() => {
-                      setOpenCategory(cat.id);
-                      if (!cat.detail && !isExpanding) onExpand(cat.id, def?.label ?? cat.id);
-                    }}
-                    className="mt-2 text-gold-500 text-xs flex items-center gap-1"
-                  >
-                    Tell me more
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="m9 18 6-6-6-6"/>
-                    </svg>
-                  </button>
-                )}
               </div>
-
-              {isOpen && (
-                <div className="border-t border-stone-700/60 px-3 pb-3 pt-2">
-                  {isExpanding ? (
-                    <div className="space-y-1.5 py-1">
-                      <div className="h-3 shimmer rounded w-full" />
-                      <div className="h-3 shimmer rounded w-5/6" />
-                      <div className="h-3 shimmer rounded w-full" />
-                      <div className="h-3 shimmer rounded w-4/5" />
-                      <div className="h-3 shimmer rounded w-full mt-3" />
-                      <div className="h-3 shimmer rounded w-3/4" />
-                      <div className="h-3 shimmer rounded w-5/6" />
-                    </div>
-                  ) : cat.detail ? (
-                    <>
-                      {cat.detail.split(/\n\n+/).map((p, i) => (
-                        <p key={i} className="text-stone-400 text-sm leading-relaxed mt-2 first:mt-0">
-                          {p.trim()}
-                        </p>
-                      ))}
-                      <button
-                        onClick={() => setOpenCategory(null)}
-                        className="mt-3 text-stone-500 text-xs"
-                      >
-                        Show less
-                      </button>
-                    </>
-                  ) : null}
+              {/* Detail paragraphs — shown when auto-expand has completed */}
+              {cat.detail ? (
+                <div className="border-t border-stone-700/60 px-3 pb-3 pt-2 space-y-2">
+                  {cat.detail.split(/\n\n+/).filter(Boolean).map((p, i) => (
+                    <p key={i} className="text-stone-400 text-sm leading-relaxed">{p.trim()}</p>
+                  ))}
+                </div>
+              ) : (
+                /* Shimmer while detail is still loading */
+                <div className="border-t border-stone-700/60 px-3 pb-3 pt-2 space-y-1.5">
+                  <div className="h-3 shimmer rounded w-full" />
+                  <div className="h-3 shimmer rounded w-5/6" />
+                  <div className="h-3 shimmer rounded w-full" />
+                  <div className="h-3 shimmer rounded w-4/5" />
                 </div>
               )}
             </div>
@@ -3527,6 +3541,141 @@ function CulturalContextCard({
     </div>
   );
 }
+
+// ── Born the Same Year ────────────────────────────────────────────────────────
+
+function BirthYearNotablesCard({
+  notables,
+  birthYear,
+}: {
+  notables: Array<{ name: string; description?: string; wikipediaUrl?: string }>;
+  birthYear?: number | null;
+}) {
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="🌟" title={`Born in ${birthYear ?? "the same year"}`} />
+      <div className="mt-3 space-y-2">
+        {notables.slice(0, 5).map((n, i) => (
+          <div key={i} className="flex items-start gap-3 py-1">
+            <span className="text-stone-600 text-xs mt-0.5 shrink-0 w-4">{i + 1}.</span>
+            <div className="flex-1 min-w-0">
+              {n.wikipediaUrl ? (
+                <a
+                  href={n.wikipediaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-stone-200 text-sm font-medium hover:underline"
+                  style={{ color: "var(--t-gold-400)" }}
+                >
+                  {n.name}
+                </a>
+              ) : (
+                <span className="text-stone-200 text-sm font-medium">{n.name}</span>
+              )}
+              {n.description && (
+                <p className="text-stone-500 text-xs mt-0.5 leading-relaxed capitalize">{n.description}</p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Household Card ────────────────────────────────────────────────────────────
+
+function HouseholdCard({ records }: { records: import("@/types").HistoricalCensusRecord[] }) {
+  // Pick the census year with the most household members
+  const best = records
+    .filter((r) => r.household?.length)
+    .sort((a, b) => (b.household?.length ?? 0) - (a.household?.length ?? 0))[0];
+  if (!best?.household?.length) return null;
+
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="📋" title={`Household — ${best.year} Census`} />
+      <div className="mt-3 rounded-xl bg-stone-800 border border-stone-700/60 overflow-hidden">
+        {best.household.map((m, i) => (
+          <div key={i} className="flex items-start gap-3 px-3 py-2.5 border-b border-stone-700/50 last:border-0">
+            <div className="flex-1 min-w-0">
+              <span className="text-stone-200 text-sm font-medium">{m.name || "Unknown"}</span>
+              {m.relationship && (
+                <span className="text-stone-500 text-xs ml-2 capitalize">{m.relationship}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-3 shrink-0 text-xs text-stone-500">
+              {m.age && <span>Age {m.age}</span>}
+              {m.birthplace && <span>{m.birthplace}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Immigration Journey Card ──────────────────────────────────────────────────
+
+function ImmigrationJourneyCard({ records }: { records: import("@/types").ImmigrationRecord[] }) {
+  if (!records.length) return null;
+  const r = records[0];
+  const hasRoute = r.departurePort || r.arrivalPort;
+
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="🚢" title="Immigration Journey" />
+      <div className="mt-3 rounded-xl bg-stone-800 border border-stone-700/60 p-4">
+        {hasRoute && (
+          <div className="flex items-center gap-3 mb-3">
+            {r.departurePort && (
+              <div className="text-center">
+                <p className="text-[0.65rem] uppercase tracking-widest text-stone-500 mb-0.5">Departed</p>
+                <p className="text-stone-200 text-sm font-medium">{r.departurePort}</p>
+              </div>
+            )}
+            {r.departurePort && r.arrivalPort && (
+              <svg width="32" height="12" viewBox="0 0 32 12" fill="none" className="text-stone-600 shrink-0">
+                <path d="M0 6h28M22 1l6 5-6 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+            {r.arrivalPort && (
+              <div className="text-center">
+                <p className="text-[0.65rem] uppercase tracking-widest text-stone-500 mb-0.5">Arrived</p>
+                <p className="text-stone-200 text-sm font-medium">{r.arrivalPort}</p>
+              </div>
+            )}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs">
+          {r.origin && (
+            <div>
+              <span className="text-stone-500">Origin: </span>
+              <span className="text-stone-300">{r.origin}</span>
+            </div>
+          )}
+          {r.arrivalYear && (
+            <div>
+              <span className="text-stone-500">Year: </span>
+              <span className="text-stone-300">{r.arrivalYear}</span>
+            </div>
+          )}
+          {r.ageAtArrival && (
+            <div>
+              <span className="text-stone-500">Age at arrival: </span>
+              <span className="text-stone-300">{r.ageAtArrival}</span>
+            </div>
+          )}
+        </div>
+        {r.collection && (
+          <p className="text-stone-600 text-[0.7rem] italic mt-2">{r.collection}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Section Header ────────────────────────────────────────────────────────────
 
 function SectionHeader({ icon, title }: { icon: string; title: string }) {
   return (
