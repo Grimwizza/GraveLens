@@ -16,6 +16,8 @@ import { checkQuality, qualitySeverity, type QualityResult } from "@/lib/quality
 import { loadSettings } from "@/lib/settings";
 import { SHOW_COMMUNITY_FEATURES } from "@/lib/config";
 import ProfileBadge from "@/components/auth/ProfileBadge";
+import DesktopNav from "@/components/layout/DesktopNav";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 import type {
   GraveRecord,
   ResearchData,
@@ -60,6 +62,7 @@ export default function ResultPage({ id }: { id: string }) {
   // Cancelled the moment a user-triggered refresh starts so the old-name
   // response can never overwrite a corrected refresh that resolves first.
   const initialFetchAbortRef = useRef<AbortController | null>(null);
+  const isDesktop = useIsDesktop();
 
   // Quality check state
   type RescanStatus = "idle" | "checking" | "rescanning" | "done";
@@ -770,7 +773,8 @@ export default function ResultPage({ id }: { id: string }) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-stone-900 overflow-hidden">
+    <div className="flex flex-col h-full bg-stone-900 overflow-hidden lg:pl-56">
+      {isDesktop && <DesktopNav />}
       {/* Header */}
       <header
         className="flex items-center justify-between px-5 py-3 bg-stone-900/95 backdrop-blur-sm sticky top-0 z-30 border-b border-stone-800"
@@ -817,7 +821,7 @@ export default function ResultPage({ id }: { id: string }) {
               <line x1="12" y1="2" x2="12" y2="15"/>
             </svg>
           </button>
-          <ProfileBadge />
+          {!isDesktop && <ProfileBadge />}
         </div>
       </header>
 
@@ -1182,7 +1186,7 @@ export default function ResultPage({ id }: { id: string }) {
 
       {/* Nearby-records bulk-update prompt */}
       {nearbyPrompt && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 pb-safe">
+        <div className="fixed inset-0 z-50 flex items-end lg:items-center justify-center p-4 lg:p-6 pb-safe">
           <div className="absolute inset-0 bg-stone-950/70 backdrop-blur-sm" onClick={() => setNearbyPrompt(null)} />
           <div
             className="relative w-full max-w-sm rounded-2xl p-5 flex flex-col gap-4"
@@ -1287,12 +1291,12 @@ function QualityIssueSheet({
   const [deleting, setDeleting] = useState(false);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center">
+    <div className="fixed inset-0 z-[60] flex items-end lg:items-center justify-center lg:p-6">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-stone-950/70 backdrop-blur-sm" onClick={onDismiss} />
 
       <div
-        className="relative w-full max-w-sm rounded-t-3xl flex flex-col gap-0 overflow-hidden"
+        className="relative w-full max-w-sm rounded-t-3xl lg:rounded-2xl flex flex-col gap-0 overflow-hidden"
         style={{
           background: "rgba(var(--glass-bg-rgb), 0.98)",
           border: "1px solid var(--t-stone-700)",
@@ -3253,12 +3257,12 @@ function ShareSheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end"
+      className="fixed inset-0 z-50 flex items-end lg:items-center lg:p-6"
       onClick={onClose}
     >
       <div className="absolute inset-0 bg-black/60" />
       <div
-        className="relative w-full bg-stone-800 rounded-t-3xl p-6 animate-fade-up"
+        className="relative w-full max-w-sm mx-auto bg-stone-800 rounded-t-3xl lg:rounded-2xl p-6 animate-fade-up"
         style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
         onClick={(e) => e.stopPropagation()}
       >

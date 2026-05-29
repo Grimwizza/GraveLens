@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import PageShell from "@/components/layout/PageShell";
-import { getAllGraves, deleteGrave, saveGrave, getAllCemeteries, deleteCemetery } from "@/lib/storage";
+import { getAllGraves, deleteGrave, saveGrave, getAllCemeteries, deleteCemetery, saveCemetery } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/browser";
 import { fetchAllFromCloud, deleteFromCloud } from "@/lib/cloudSync";
 import type { GraveRecord, CemeteryRecord } from "@/types";
 import Link from "next/link";
 import ThematicIllustration from "@/components/ui/ThematicIllustration";
 import { reverseGeocode } from "@/lib/apis/nominatim";
-import { formatOpeningHours } from "@/lib/apis/cemetery";
+import { formatOpeningHours, enrichCemetery, cemeteryId } from "@/lib/apis/cemetery";
 
 type SortField = "birthYear" | "deathYear" | "name" | "dateAdded";
 type SortDir = "asc" | "desc";
@@ -854,11 +854,18 @@ export default function ArchivePage() {
         {!loading && archiveTab === "places" && (
           <CemeterySection
             cemeteries={derivedPlaces}
+            graves={graves}
             onDelete={async (id) => {
               if (!id.startsWith("gl_derived_")) {
                 await deleteCemetery(id);
               }
               setCemeteries((prev) => prev.filter((c) => c.id !== id));
+            }}
+            onRefresh={async (updated) => {
+              await saveCemetery(updated);
+              setCemeteries((prev) =>
+                prev.map((c) => (c.id === updated.id ? updated : c))
+              );
             }}
           />
         )}
@@ -890,10 +897,10 @@ function AssignmentSheet({
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 100); }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end">
+    <div className="fixed inset-0 z-50 flex items-end lg:items-center lg:p-6">
       <div className="absolute inset-0 bg-black/60" onClick={onSkip} />
       <div
-        className="relative w-full bg-stone-800 rounded-t-3xl animate-fade-up"
+        className="relative w-full max-w-sm mx-auto bg-stone-800 rounded-t-3xl lg:rounded-2xl animate-fade-up"
         style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -972,10 +979,10 @@ function NearbyConfirmSheet({
   onNo: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end">
+    <div className="fixed inset-0 z-50 flex items-end lg:items-center lg:p-6">
       <div className="absolute inset-0 bg-black/60" onClick={onNo} />
       <div
-        className="relative w-full bg-stone-800 rounded-t-3xl animate-fade-up"
+        className="relative w-full max-w-sm mx-auto bg-stone-800 rounded-t-3xl lg:rounded-2xl animate-fade-up"
         style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -1487,12 +1494,17 @@ function GraveList({
 
 function CemeterySection({
   cemeteries,
+  graves,
   onDelete,
+  onRefresh,
 }: {
   cemeteries: CemeteryRecord[];
+  graves: GraveRecord[];
   onDelete: (id: string) => Promise<void>;
+  onRefresh: (updated: CemeteryRecord) => Promise<void>;
 }) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
 
   if (cemeteries.length === 0) {
     return (
@@ -1512,6 +1524,25 @@ function CemeterySection({
     );
   }
 
+  const handleRefresh = async (c: CemeteryRecord) => {
+    setRefreshingId(c.id);
+    try {
+      const enriched = await enrichCemetery(c.name, c.lat, c.lng);
+      const stableId = c.id.startsWith("gl_derived_") ? cemeteryId(c.name, c.lat, c.lng, enriched.osmId) : c.id;
+      const updated: CemeteryRecord = {
+        ...c,
+        ...enriched,
+        id: stableId,
+        visitCount: c.visitCount,
+        firstVisited: c.firstVisited,
+        lastVisited: c.lastVisited,
+      };
+      await onRefresh(updated);
+    } catch { /* non-fatal */ } finally {
+      setRefreshingId(null);
+    }
+  };
+
   return (
     <div className="flex flex-col divide-y divide-stone-800">
       {cemeteries.map((c) => {
@@ -1520,6 +1551,17 @@ function CemeterySection({
         const firstDate = new Date(c.firstVisited).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
         const lastDate = new Date(c.lastVisited).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
+        // Derive location + grave count from the graves archive
+        const cGraves = graves.filter((g) => g.location?.cemetery?.toLowerCase().trim() === c.name.toLowerCase().trim());
+        const graveCount = cGraves.length;
+        const sample = cGraves[0];
+        const city = sample?.location?.city;
+        const state = sample?.location?.state;
+        const locationLine = [city, state].filter(Boolean).join(", ");
+
+        const hasEnrichment = !!(c.description || c.openingHours || c.phone || c.website || c.wikipediaUrl || c.established || c.denomination || c.notableFeatures?.length || c.historicalEvents?.length);
+        const isRefreshing = refreshingId === c.id;
+
         return (
           <div key={c.id} className="px-5 py-5 flex flex-col gap-3">
             {/* Name + badge row */}
@@ -1527,11 +1569,13 @@ function CemeterySection({
               <div className="flex-1 min-w-0">
                 <p className="font-serif text-stone-100 text-base font-semibold leading-snug">{c.name}</p>
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-                  {c.established && (
-                    <span className="text-[0.8rem] text-stone-500">Est. {c.established}</span>
-                  )}
-                  {c.denomination && (
-                    <span className="text-[0.8rem] text-stone-500 capitalize">{c.denomination}</span>
+                  {locationLine && <span className="text-[0.8rem] text-stone-400">{locationLine}</span>}
+                  {c.established && <span className="text-[0.8rem] text-stone-400">Est. {c.established}</span>}
+                  {c.denomination && <span className="text-[0.8rem] text-stone-400 capitalize">{c.denomination}</span>}
+                  {graveCount > 0 && (
+                    <span className="text-[0.8rem] text-stone-500">
+                      {graveCount} {graveCount === 1 ? "marker" : "markers"} in archive
+                    </span>
                   )}
                 </div>
               </div>
@@ -1541,6 +1585,18 @@ function CemeterySection({
                   <span className="text-xs font-bold" style={{ color: "var(--t-gold-500)" }}>{c.visitCount}</span>
                   <span className="text-[0.65rem] text-stone-500 uppercase tracking-wide">{c.visitCount === 1 ? "visit" : "visits"}</span>
                 </div>
+                {/* Refresh info */}
+                <button
+                  onClick={() => handleRefresh(c)}
+                  disabled={isRefreshing}
+                  title={hasEnrichment ? "Refresh info" : "Look up cemetery info"}
+                  className="w-8 h-8 flex items-center justify-center text-stone-500 active:text-stone-200 rounded-lg disabled:opacity-40"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isRefreshing ? "animate-spin" : ""}>
+                    <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                  </svg>
+                </button>
                 {/* Delete — only for IDB-backed records, not derived entries */}
                 {!c.id.startsWith("gl_derived_") && (
                   deleteId === c.id ? (
@@ -1549,7 +1605,7 @@ function CemeterySection({
                       <button onClick={() => setDeleteId(null)} className="text-xs text-stone-500">Cancel</button>
                     </div>
                   ) : (
-                    <button onClick={() => setDeleteId(c.id)} className="w-8 h-8 flex items-center justify-center text-stone-700 active:text-red-400 rounded-lg">
+                    <button onClick={() => setDeleteId(c.id)} className="w-8 h-8 flex items-center justify-center text-stone-500 active:text-red-400 rounded-lg">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
                       </svg>
@@ -1595,17 +1651,17 @@ function CemeterySection({
 
             {/* Description */}
             {c.description && (
-              <p className="text-stone-400 text-sm leading-relaxed">{c.description}</p>
+              <p className="text-stone-300 text-sm leading-relaxed">{c.description}</p>
             )}
 
             {/* Notable features */}
             {c.notableFeatures && c.notableFeatures.length > 0 && (
               <div className="flex flex-col gap-1">
-                <p className="text-[0.75rem] uppercase tracking-widest text-stone-600 font-semibold">Notable Features</p>
+                <p className="text-[0.75rem] uppercase tracking-widest text-stone-400 font-semibold">Notable Features</p>
                 {c.notableFeatures.map((f, i) => (
                   <div key={i} className="flex items-start gap-2">
-                    <span className="text-stone-600 text-xs mt-0.5 shrink-0">•</span>
-                    <span className="text-stone-400 text-xs leading-relaxed">{f}</span>
+                    <span className="text-stone-500 text-xs mt-0.5 shrink-0">•</span>
+                    <span className="text-stone-300 text-xs leading-relaxed">{f}</span>
                   </div>
                 ))}
               </div>
@@ -1614,11 +1670,11 @@ function CemeterySection({
             {/* Historical events */}
             {c.historicalEvents && c.historicalEvents.length > 0 && (
               <div className="flex flex-col gap-1">
-                <p className="text-[0.75rem] uppercase tracking-widest text-stone-600 font-semibold">Historical Events</p>
+                <p className="text-[0.75rem] uppercase tracking-widest text-stone-400 font-semibold">Historical Events</p>
                 {c.historicalEvents.map((e, i) => (
                   <div key={i} className="flex items-start gap-2">
                     <span className="text-[0.75rem] mt-0.5 shrink-0">📜</span>
-                    <span className="text-stone-400 text-xs leading-relaxed">{e}</span>
+                    <span className="text-stone-300 text-xs leading-relaxed">{e}</span>
                   </div>
                 ))}
               </div>
@@ -1639,7 +1695,7 @@ function CemeterySection({
             </div>
 
             {/* Visit metadata */}
-            <p className="text-[0.75rem] text-stone-700">
+            <p className="text-[0.75rem] text-stone-500">
               First visited {firstDate}{c.visitCount > 1 ? ` · Last visited ${lastDate}` : ""}
             </p>
           </div>

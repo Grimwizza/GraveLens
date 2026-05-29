@@ -2,8 +2,10 @@
 
 import React, { ReactNode, useEffect, useState } from "react";
 import BottomNav from "@/components/layout/BottomNav";
+import DesktopNav from "@/components/layout/DesktopNav";
 import ProfileBadge from "@/components/auth/ProfileBadge";
 import BrandLogo from "@/components/ui/BrandLogo";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 
 interface PageShellProps {
   children: ReactNode;
@@ -35,6 +37,7 @@ export default function PageShell({
   backgroundClass = "bg-stone-900",
 }: PageShellProps) {
   const [offline, setOffline] = useState(false);
+  const isDesktop = useIsDesktop();
 
   useEffect(() => {
     setOffline(!navigator.onLine);
@@ -49,7 +52,8 @@ export default function PageShell({
   }, []);
 
   return (
-    <div className={`flex flex-col h-full ${backgroundClass} overflow-hidden relative w-full`}>
+    <div className={`flex flex-col h-full ${backgroundClass} overflow-hidden relative w-full lg:pl-56`}>
+      {isDesktop && <DesktopNav />}
       {/* Offline banner */}
       {offline && (
         <div
@@ -78,7 +82,7 @@ export default function PageShell({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="flex flex-col">
-                {showLogo ? (
+                {showLogo && !isDesktop ? (
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
                       <BrandLogo size={22} color="var(--t-gold-500)" />
@@ -104,7 +108,7 @@ export default function PageShell({
 
             <div className="flex items-center gap-3">
               {headerActions}
-              <ProfileBadge />
+              {!isDesktop && <ProfileBadge />}
             </div>
           </div>
 
@@ -124,7 +128,7 @@ export default function PageShell({
       <main
         className={`flex-1 flex flex-col ${
           noScroll ? "overflow-hidden" : "scroll-container overflow-y-auto overflow-x-hidden"
-        } ${customMainClasses !== undefined ? customMainClasses : "pb-44"}`}
+        } ${customMainClasses !== undefined ? customMainClasses : "pb-44 lg:pb-8"}`}
         style={{ scrollbarWidth: "none" }}
       >
         {children}

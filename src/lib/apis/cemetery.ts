@@ -215,7 +215,7 @@ export async function enrichCemetery(
     phone: osmData.phone,
     website: osmData.website,
     wikipediaUrl: osmData.wikipedia,
-    denomination: osmData.denomination ?? finalWiki.established ? undefined : osmData.denomination,
+    denomination: osmData.denomination,
     established: osmData.startDate ?? finalWiki.established,
     description: finalWiki.description,
     notableFeatures: finalWiki.notableFeatures?.length ? finalWiki.notableFeatures : undefined,

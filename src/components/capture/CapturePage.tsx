@@ -4,6 +4,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import BrandLogo from "@/components/ui/BrandLogo";
 import PageShell from "@/components/layout/PageShell";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { fileToDataUrl, extractExifLocation, correctOrientation, generateId } from "@/lib/exif";
 import { savePendingResult, addToQueue } from "@/lib/storage";
 import { QUEUE_CHANGED_EVENT } from "@/lib/queue";
@@ -16,6 +17,7 @@ type Phase = "idle" | "processing" | "queued" | "pro_prompt" | "degraded_prompt"
 
 export default function CapturePage() {
   const router = useRouter();
+  const isDesktop = useIsDesktop();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -357,10 +359,17 @@ export default function CapturePage() {
       ) : (
         <>
           {phase === "idle" && !showProOnboarding && (
-            <IdleState
-              onUpload={() => fileInputRef.current?.click()}
-              onCapture={() => cameraInputRef.current?.click()}
-            />
+            isDesktop ? (
+              <DesktopIdleState
+                onUpload={() => fileInputRef.current?.click()}
+                onFileDrop={(file) => handleFileChosen(file, "upload")}
+              />
+            ) : (
+              <IdleState
+                onUpload={() => fileInputRef.current?.click()}
+                onCapture={() => cameraInputRef.current?.click()}
+              />
+            )
           )}
           {phase === "idle" && showProOnboarding && (
             <ProOnboarding
@@ -522,6 +531,67 @@ function IdleState({
           Upload from Library
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Desktop idle state (file upload / drag-and-drop) ────────────────────────
+
+function DesktopIdleState({ onUpload, onFileDrop }: { onUpload: () => void; onFileDrop: (file: File) => void }) {
+  const [dragging, setDragging] = useState(false);
+
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      onFileDrop(file);
+    }
+  }, [onFileDrop]);
+
+  return (
+    <div className="flex flex-col items-center justify-center w-full flex-1 px-8 py-12 max-w-xl mx-auto">
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+        onClick={onUpload}
+        className="w-full flex flex-col items-center justify-center gap-5 rounded-2xl border-2 border-dashed cursor-pointer transition-colors px-8 py-14"
+        style={{
+          borderColor: dragging ? "var(--t-gold-500)" : "var(--t-stone-700)",
+          background: dragging ? "rgba(201,168,76,0.06)" : "rgba(255,255,255,0.02)",
+        }}
+      >
+        <div
+          className="w-16 h-16 rounded-2xl flex items-center justify-center"
+          style={{ background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)" }}
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+
+        <div className="text-center">
+          <p className="text-stone-200 font-medium text-base">
+            {dragging ? "Drop to analyze" : "Drop a grave photo here"}
+          </p>
+          <p className="text-stone-500 text-sm mt-1">or click to browse your files</p>
+        </div>
+
+        <button
+          onClick={(e) => { e.stopPropagation(); onUpload(); }}
+          className="px-6 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90"
+          style={{ background: "linear-gradient(135deg, #c9a84c 0%, #a07830 100%)", color: "var(--t-stone-900)" }}
+        >
+          Browse Files
+        </button>
+      </div>
+
+      <p className="text-stone-600 text-xs text-center mt-5">
+        Supports JPG, PNG, HEIC · EXIF GPS extracted automatically
+      </p>
     </div>
   );
 }
