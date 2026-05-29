@@ -37,12 +37,14 @@ async function fetchOsmCemeteryDetails(
   lng: number
 ): Promise<OsmCemeteryDetail> {
   const query = `
-[out:json][timeout:12];
+[out:json][timeout:15];
 (
-  way["landuse"="cemetery"](around:400,${lat},${lng});
-  relation["landuse"="cemetery"](around:400,${lat},${lng});
-  way["amenity"="grave_yard"](around:400,${lat},${lng});
-  relation["amenity"="grave_yard"](around:400,${lat},${lng});
+  node["landuse"="cemetery"](around:800,${lat},${lng});
+  way["landuse"="cemetery"](around:800,${lat},${lng});
+  relation["landuse"="cemetery"](around:800,${lat},${lng});
+  node["amenity"="grave_yard"](around:800,${lat},${lng});
+  way["amenity"="grave_yard"](around:800,${lat},${lng});
+  relation["amenity"="grave_yard"](around:800,${lat},${lng});
 );
 out tags;
 `.trim();
@@ -50,9 +52,12 @@ out tags;
   try {
     const res = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "GraveLens/1.0 (https://lowhigh.ai)",
+      },
       body: `data=${encodeURIComponent(query)}`,
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(18000),
     });
     if (!res.ok) return {};
 
@@ -99,7 +104,8 @@ interface WikipediaEnrichment {
 
 async function fetchWikipediaEnrichment(
   cemeteryName: string,
-  wikipediaUrl?: string
+  wikipediaUrl?: string,
+  locationHint?: string,
 ): Promise<WikipediaEnrichment> {
   try {
     // Prefer the direct Wikipedia URL if we have it; otherwise search by name
@@ -111,15 +117,24 @@ async function fetchWikipediaEnrichment(
     }
 
     if (!articleTitle) {
+      // Include location hint (e.g. "Portage County, Wisconsin") for more precise match
+      const query = locationHint
+        ? `${cemeteryName} cemetery ${locationHint}`
+        : `${cemeteryName} cemetery`;
       const searchRes = await fetch(
         `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
-          cemeteryName + " cemetery"
-        )}&srlimit=1&format=json&origin=*`,
+          query
+        )}&srlimit=3&format=json&origin=*`,
         { signal: AbortSignal.timeout(8000) }
       );
       if (!searchRes.ok) return {};
       const searchData = await searchRes.json();
-      articleTitle = searchData?.query?.search?.[0]?.title ?? null;
+      // Pick the first result whose title contains "cemetery" (case-insensitive) if possible
+      const results: Array<{ title: string }> = searchData?.query?.search ?? [];
+      const best = results.find((r) => r.title.toLowerCase().includes("cemetery"))
+        ?? results[0]
+        ?? null;
+      articleTitle = best?.title ?? null;
     }
 
     if (!articleTitle) return {};
@@ -186,20 +201,24 @@ async function fetchWikipediaEnrichment(
 export async function enrichCemetery(
   name: string,
   lat: number,
-  lng: number
+  lng: number,
+  city?: string,
+  state?: string,
 ): Promise<Omit<CemeteryRecord, "visitCount" | "firstVisited" | "lastVisited">> {
+  const locationHint = [city, state].filter(Boolean).join(", ") || undefined;
+
   const [osm, wiki] = await Promise.allSettled([
     fetchOsmCemeteryDetails(lat, lng),
-    fetchWikipediaEnrichment(name),
+    fetchWikipediaEnrichment(name, undefined, locationHint),
   ]);
 
   const osmData = osm.status === "fulfilled" ? osm.value : {};
   const wikiData = wiki.status === "fulfilled" ? wiki.value : {};
 
-  // Re-fetch wiki with the proper URL if OSM gave us one
+  // Re-fetch wiki with the OSM-provided Wikipedia URL if our name search found nothing
   let finalWiki = wikiData;
   if (osmData.wikipedia && !wikiData.description) {
-    const retry = await fetchWikipediaEnrichment(name, osmData.wikipedia).catch(() => ({}));
+    const retry = await fetchWikipediaEnrichment(name, osmData.wikipedia, locationHint).catch(() => ({}));
     finalWiki = retry;
   }
 

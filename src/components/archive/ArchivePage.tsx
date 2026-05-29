@@ -9,7 +9,7 @@ import type { GraveRecord, CemeteryRecord } from "@/types";
 import Link from "next/link";
 import ThematicIllustration from "@/components/ui/ThematicIllustration";
 import { reverseGeocode } from "@/lib/apis/nominatim";
-import { formatOpeningHours, enrichCemetery, cemeteryId } from "@/lib/apis/cemetery";
+import { formatOpeningHours, cemeteryId } from "@/lib/apis/cemetery";
 
 type SortField = "birthYear" | "deathYear" | "name" | "dateAdded";
 type SortDir = "asc" | "desc";
@@ -863,9 +863,16 @@ export default function ArchivePage() {
             }}
             onRefresh={async (updated) => {
               await saveCemetery(updated);
-              setCemeteries((prev) =>
-                prev.map((c) => (c.id === updated.id ? updated : c))
-              );
+              setCemeteries((prev) => {
+                const idx = prev.findIndex((c) => c.id === updated.id);
+                if (idx >= 0) {
+                  const next = [...prev];
+                  next[idx] = updated;
+                  return next;
+                }
+                // Derived record promoted to real IDB record — add it
+                return [...prev, updated];
+              });
             }}
           />
         )}
@@ -1527,11 +1534,19 @@ function CemeterySection({
   const handleRefresh = async (c: CemeteryRecord) => {
     setRefreshingId(c.id);
     try {
-      const enriched = await enrichCemetery(c.name, c.lat, c.lng);
+      const res = await fetch("/api/enrich-cemetery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: c.name, lat: c.lat, lng: c.lng }),
+      });
+      if (!res.ok) return;
+      const enriched = await res.json();
       const stableId = c.id.startsWith("gl_derived_") ? cemeteryId(c.name, c.lat, c.lng, enriched.osmId) : c.id;
+      // Only apply fields that are actually populated — don't overwrite existing data with undefined
+      const patch = Object.fromEntries(Object.entries(enriched).filter(([, v]) => v !== undefined && v !== null));
       const updated: CemeteryRecord = {
         ...c,
-        ...enriched,
+        ...patch,
         id: stableId,
         visitCount: c.visitCount,
         firstVisited: c.firstVisited,

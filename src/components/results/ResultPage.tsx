@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BottomNav from "@/components/layout/BottomNav";
 import { saveGrave, getGrave, getAllGraves, getPendingResult, deletePendingResult, deleteGrave, recordCemeteryVisit } from "@/lib/storage";
-import { enrichCemetery, cemeteryId } from "@/lib/apis/cemetery";
+import { cemeteryId } from "@/lib/apis/cemetery";
 import { checkAndUnlock, loadStats, type Achievement } from "@/lib/achievements";
 import { createClient } from "@/lib/supabase/browser";
 import { uploadPhoto, upsertGrave, pushExplorerPoints, deleteFromCloud } from "@/lib/cloudSync";
@@ -126,12 +126,21 @@ export default function ResultPage({ id }: { id: string }) {
 
       // Auto-create / update a CemeteryRecord when a grave is saved at a named cemetery
       if (data.location?.cemetery && data.location?.lat && data.location?.lng) {
-        const { cemetery, lat, lng } = data.location;
+        const { cemetery, lat, lng, city, state } = data.location;
         (async () => {
           try {
-            // Kick off enrichment in the background — non-blocking
-            const enriched = await enrichCemetery(cemetery, lat, lng);
-            await recordCemeteryVisit(enriched);
+            // Use the server-side route so OSM/Wikipedia calls run without browser CORS restrictions
+            const res = await fetch("/api/enrich-cemetery", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: cemetery, lat, lng, city, state }),
+            });
+            if (res.ok) {
+              const enriched = await res.json();
+              await recordCemeteryVisit(enriched);
+            } else {
+              throw new Error("enrich-cemetery returned " + res.status);
+            }
           } catch {
             // Enrichment failed: record a minimal visit so we always track it
             try {
