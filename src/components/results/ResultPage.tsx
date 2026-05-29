@@ -3210,6 +3210,14 @@ function StoryCard({
           historical: research?.historical,
           militaryContext: research?.militaryContext,
           culturalSummary: cultural?.categories ?? [],
+          // High-confidence biographical records used as confirmed facts
+          ssdi: research?.ssdi
+            ?.filter((r) => r.matchConfidence === "high")
+            .slice(0, 1),
+          historicalCensus: research?.historicalCensus
+            ?.slice(0, 2),
+          immigration: research?.immigration
+            ?.slice(0, 1),
         }),
       });
       if (!storyRes.ok) throw new Error("story " + storyRes.status);

@@ -7,29 +7,53 @@ const MAX_TOKENS = 1200;
 const SYSTEM_PROMPT = `You are writing a first-person spoken monologue for a grave marker audio guide.
 Write 400–500 words as if the deceased is narrating their own life.
 
-Rules:
-- Begin: "I was born in [year] in [place]…" — use specific year and place if available
+Core rules:
 - Speak naturally in first person throughout — "I", "my", "we"
 - Weave in the era's historical events they lived through at specific ages
-- Include military service details naturally if provided (when, where, what role)
 - Include the feel of daily life in their era — what they would have seen, heard, used
 - End with their death: "I died in [year] at [age] years old…" or similar
 - If they outlived the average lifespan, note that warmly; if they died young, make it poignant
-- Never fabricate names of family members, specific occupations, or causes of death
 - Speak with warmth, dignity, and historical authenticity
 - Write for the ear, not the eye — short sentences, vivid images, no lists or headers
 - If an epitaph is provided, identify its source and meaning in the separate JSON fields
-- Return ONLY valid JSON — no markdown, no explanation, no code fences`;
+- Return ONLY valid JSON — no markdown, no explanation, no code fences
 
-interface CulturalCategory {
-  id: string;
-  summary: string;
+LOCATION RULE: The city/state/country provided is ONLY where this person is buried — not necessarily where they were born or lived.
+Do not open with "I was born in [city]" unless a census record below explicitly confirms their birthplace.
+Instead begin with the year: "I was born in [year], into a world…" or "The year was [year] when I came into this world…"
+You may reference the burial location only as where they rest: "I came to rest here in [cemetery/state]."
+
+MILITARY RULE: Only include military content if "militaryConfirmed: true" appears in the data.
+If militaryConfirmed is false or absent, do NOT mention military service — even if you could infer it from dates.
+Silence on unconfirmed service is more honest than speculation.
+
+RECORDS RULE: If census, SSDI, or immigration records appear in the "Confirmed biographical records" section below,
+treat those as verified facts and weave them naturally into the narrative.
+They may confirm birthplace, occupation, immigration origin, last residence, and more.`;
+
+interface CulturalCategory { id: string; summary: string; }
+interface LifetimeLandmark  { year: number; age: number; event: string; }
+
+interface SSDIRecord {
+  name?: string;
+  birthDate?: string;
+  deathDate?: string;
+  lastResidenceState?: string;
 }
 
-interface LifetimeLandmark {
+interface CensusRecord {
   year: number;
-  age: number;
-  event: string;
+  occupation?: string;
+  birthplace?: string;
+  fatherBirthplace?: string;
+  motherBirthplace?: string;
+}
+
+interface ImmigrationRecord {
+  arrivalYear?: string;
+  origin?: string;
+  departurePort?: string;
+  arrivalPort?: string;
 }
 
 function buildPrompt(params: {
@@ -61,8 +85,12 @@ function buildPrompt(params: {
     role?: string;
     roleDescription?: string;
     historicalNote?: string;
+    inferredFrom?: string;
   };
   culturalSummary?: CulturalCategory[];
+  ssdi?: SSDIRecord[];
+  historicalCensus?: CensusRecord[];
+  immigration?: ImmigrationRecord[];
 }): string {
   const lines: string[] = [];
 
@@ -73,8 +101,9 @@ function buildPrompt(params: {
   }
   if (params.ageAtDeath) lines.push(`Age at death: ${params.ageAtDeath}`);
 
+  // Burial location — explicitly labeled so Claude doesn't assume birthplace
   const location = [params.city, params.state, params.country].filter(Boolean).join(", ");
-  if (location) lines.push(`Location: ${location}`);
+  if (location) lines.push(`Burial location (NOT assumed birthplace): ${location}`);
   if (params.cemetery) lines.push(`Cemetery: ${params.cemetery}`);
 
   // Historical context
@@ -105,15 +134,17 @@ function buildPrompt(params: {
     }
   }
 
-  // Military context
+  // Military context — only include if confirmed from inscription or symbols
   const m = params.militaryContext;
-  if (m?.likelyConflict) {
+  const militaryConfirmed = m?.inferredFrom === "inscription" || m?.inferredFrom === "symbols";
+  lines.push(`militaryConfirmed: ${militaryConfirmed}`);
+  if (militaryConfirmed && m?.likelyConflict) {
     lines.push(`Military service: ${m.likelyConflict}`);
     if (m.servedDuring) lines.push(`Served: ${m.servedDuring}`);
-    if (m.theater) lines.push(`Theater: ${m.theater}`);
-    if (m.role) lines.push(`Role: ${m.role}`);
+    if (m.theater)      lines.push(`Theater: ${m.theater}`);
+    if (m.role)         lines.push(`Role: ${m.role}`);
     if (m.roleDescription) lines.push(`Role context: ${m.roleDescription}`);
-    if (m.historicalNote) lines.push(`Historical note: ${m.historicalNote}`);
+    if (m.historicalNote)  lines.push(`Historical note: ${m.historicalNote}`);
   }
 
   // Cultural context summaries
@@ -127,7 +158,49 @@ function buildPrompt(params: {
   // Marker details
   if (params.symbols?.length) lines.push(`Symbols on marker: ${params.symbols.join("; ")}`);
   if (params.inscription) lines.push(`Full inscription: ${params.inscription}`);
-  if (params.epitaph) lines.push(`Epitaph: "${params.epitaph}"`);
+  if (params.epitaph)     lines.push(`Epitaph: "${params.epitaph}"`);
+
+  // Confirmed biographical records from external sources
+  const hasRecords =
+    params.ssdi?.length ||
+    params.historicalCensus?.length ||
+    params.immigration?.length;
+
+  if (hasRecords) {
+    lines.push("\nConfirmed biographical records (treat as verified facts):");
+
+    if (params.ssdi?.length) {
+      const s = params.ssdi[0];
+      const parts = [
+        s.name && `Name on record: ${s.name}`,
+        s.birthDate && `Birth: ${s.birthDate}`,
+        s.deathDate && `Death: ${s.deathDate}`,
+        s.lastResidenceState && `Last known residence: ${s.lastResidenceState}`,
+      ].filter(Boolean);
+      if (parts.length) lines.push(`  SSDI: ${parts.join(", ")}`);
+    }
+
+    for (const c of (params.historicalCensus ?? [])) {
+      const parts = [
+        c.occupation && `occupation=${c.occupation}`,
+        c.birthplace && `birthplace=${c.birthplace}`,
+        c.fatherBirthplace && `father born in ${c.fatherBirthplace}`,
+        c.motherBirthplace && `mother born in ${c.motherBirthplace}`,
+      ].filter(Boolean);
+      if (parts.length) lines.push(`  Census ${c.year}: ${parts.join(", ")}`);
+    }
+
+    if (params.immigration?.length) {
+      const im = params.immigration[0];
+      const parts = [
+        im.origin && `from ${im.origin}`,
+        im.arrivalYear && `arrived ${im.arrivalYear}`,
+        im.departurePort && `departed ${im.departurePort}`,
+        im.arrivalPort && `arrived at ${im.arrivalPort}`,
+      ].filter(Boolean);
+      if (parts.length) lines.push(`  Immigration: ${parts.join(", ")}`);
+    }
+  }
 
   return (
     lines.join("\n") +
