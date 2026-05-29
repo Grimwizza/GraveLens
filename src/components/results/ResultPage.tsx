@@ -150,8 +150,12 @@ export default function ResultPage({ id }: { id: string }) {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
             const photoUrl = await uploadPhoto(supabase, user.id, autoRecord.id, autoRecord.photoDataUrl);
-            await upsertGrave(supabase, user.id, autoRecord, photoUrl);
-            await saveGrave({ ...autoRecord, photoDataUrl: photoUrl, syncedAt: Date.now() });
+            // Re-read from DB so this save doesn't clobber research data that
+            // the lookup fetch may have written while the upload was in flight.
+            const fresh = await getGrave(autoRecord.id);
+            const toSync = { ...(fresh ?? autoRecord), photoDataUrl: photoUrl, syncedAt: Date.now() };
+            await upsertGrave(supabase, user.id, toSync, photoUrl);
+            await saveGrave(toSync);
           }
         } catch { /* offline or not logged in — local save stands */ }
 
@@ -222,8 +226,11 @@ export default function ResultPage({ id }: { id: string }) {
               : undefined,
           };
           setResearch(researchData);
-          // Patch research into the already-saved record
-          saveGrave({ ...autoRecord, research: researchData }).catch(() => {});
+          // Patch research into the already-saved record, re-reading first so we
+          // don't clobber the cloud photoDataUrl/syncedAt if the upload finished first.
+          getGrave(autoRecord.id).then((existing) => {
+            saveGrave({ ...(existing ?? autoRecord), research: researchData });
+          }).catch(() => {});
         })
         .catch((err) => {
           // Ignore aborts — a user-triggered refresh took over
