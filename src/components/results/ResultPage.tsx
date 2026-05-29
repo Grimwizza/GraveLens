@@ -3124,6 +3124,9 @@ function StoryCard({
   useEffect(() => {
     const el = audioRef.current;
     if (!el || !audioDataUrl) return;
+    // Only update src when not actively playing — the background blob→base64 swap
+    // updates audioDataUrl after playback has started; skip resetting src in that case.
+    if (!el.paused && el.currentTime > 0) return;
     el.src = audioDataUrl;
     const onTime  = () => { setCurrentTime(el.currentTime); setProgress(el.duration ? el.currentTime / el.duration : 0); };
     const onDur   = () => setDuration(el.duration || 0);
@@ -3148,8 +3151,10 @@ function StoryCard({
     setHasError(false);
     setLoadingPhase("crafting");
     try {
-      // Fetch cultural context in parallel with story generation setup
-      const culturalPromise = fetch("/api/cultural", {
+      // ── Optimisation 1: reuse already-loaded cultural context ────────────
+      // The page auto-loads cultural context after research arrives.
+      // No need to re-fetch it — use what's already in memory.
+      const cultural = research?.culturalContext ?? await fetch("/api/cultural", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3163,57 +3168,64 @@ function StoryCard({
         }),
       }).then((r) => r.ok ? r.json() : null).catch(() => null);
 
-      const cultural = await culturalPromise;
+      // ── Optimisation 2: reuse cached story script ────────────────────────
+      // If the script was already generated (stored in research.storyScript),
+      // skip the Claude call entirely and jump straight to TTS.
+      let script: string;
+      let epitaphSource = "";
+      let epitaphMeaning = "";
 
-      // Generate first-person script
-      const storyRes = await fetch("/api/story", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: extracted.name,
-          birthDate: extracted.birthDate,
-          deathDate: extracted.deathDate,
-          birthYear: extracted.birthYear,
-          deathYear: extracted.deathYear,
-          ageAtDeath: extracted.ageAtDeath,
-          inscription: extracted.inscription,
-          epitaph: extracted.epitaph,
-          symbols: extracted.symbols ?? [],
-          city: location?.city,
-          state: location?.state,
-          country: location?.country,
-          cemetery: location?.cemetery,
-          historical: research?.historical,
-          militaryContext: research?.militaryContext,
-          culturalSummary: cultural?.categories ?? [],
-          // High-confidence biographical records used as confirmed facts
-          ssdi: research?.ssdi
-            ?.filter((r) => r.matchConfidence === "high")
-            .slice(0, 1),
-          historicalCensus: research?.historicalCensus
-            ?.slice(0, 2),
-          immigration: research?.immigration
-            ?.slice(0, 1),
-          symbolMeanings: (() => {
-            const syms = extracted.symbols ?? [];
-            if (!syms.length) return undefined;
-            const map = interpretSymbols(syms);
-            return syms
-              .map((s) => {
-                const interp = map.get(s.toLowerCase());
-                return interp ? { symbol: s, meaning: interp.meaning, category: interp.category } : null;
-              })
-              .filter(Boolean);
-          })(),
-        }),
-      });
-      if (!storyRes.ok) throw new Error("story " + storyRes.status);
-      const { script, epitaphSource = "", epitaphMeaning = "" } = await storyRes.json();
+      if (research?.storyScript) {
+        script = research.storyScript;
+        epitaphSource = research.epitaphSource ?? "";
+        epitaphMeaning = research.epitaphMeaning ?? "";
+      } else {
+        const storyRes = await fetch("/api/story", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: extracted.name,
+            birthDate: extracted.birthDate,
+            deathDate: extracted.deathDate,
+            birthYear: extracted.birthYear,
+            deathYear: extracted.deathYear,
+            ageAtDeath: extracted.ageAtDeath,
+            inscription: extracted.inscription,
+            epitaph: extracted.epitaph,
+            symbols: extracted.symbols ?? [],
+            city: location?.city,
+            state: location?.state,
+            country: location?.country,
+            cemetery: location?.cemetery,
+            historical: research?.historical,
+            militaryContext: research?.militaryContext,
+            culturalSummary: (cultural as { categories?: unknown[] } | null)?.categories ?? [],
+            ssdi: research?.ssdi?.filter((r) => r.matchConfidence === "high").slice(0, 1),
+            historicalCensus: research?.historicalCensus?.slice(0, 2),
+            immigration: research?.immigration?.slice(0, 1),
+            symbolMeanings: (() => {
+              const syms = extracted.symbols ?? [];
+              if (!syms.length) return undefined;
+              const map = interpretSymbols(syms);
+              return syms
+                .map((s) => {
+                  const interp = map.get(s.toLowerCase());
+                  return interp ? { symbol: s, meaning: interp.meaning, category: interp.category } : null;
+                })
+                .filter(Boolean);
+            })(),
+          }),
+        });
+        if (!storyRes.ok) throw new Error("story " + storyRes.status);
+        ({ script, epitaphSource = "", epitaphMeaning = "" } = await storyRes.json());
+        setScriptText(script);
+        onStoryGenerated(epitaphSource, epitaphMeaning, script);
+      }
 
-      setScriptText(script);
-      onStoryGenerated(epitaphSource, epitaphMeaning, script);
-
-      // Now generate audio
+      // ── Optimisation 3: stream TTS, play from blob URL immediately ───────
+      // Stream chunks into memory. Once all arrive, create a Blob URL
+      // (URL.createObjectURL is synchronous and instant — no FileReader needed).
+      // Save base64 to IndexedDB in the background AFTER playback starts.
       setLoadingPhase("recording");
       const ttsRes = await fetch("/api/tts", {
         method: "POST",
@@ -3221,16 +3233,33 @@ function StoryCard({
         body: JSON.stringify({ text: script, voice }),
       });
       if (!ttsRes.ok) throw new Error("tts " + ttsRes.status);
-      const blob = await ttsRes.blob();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload  = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-      await saveAudio(graveId, cacheKey, dataUrl);
-      setAudioDataUrl(dataUrl);
+
+      // Consume the stream into a Blob (streaming from the server is already happening;
+      // ttsRes.blob() drains it and resolves as soon as the last byte arrives)
+      const audioBlob = await ttsRes.blob();
+
+      // Instant: create an object URL and play — no FileReader conversion needed
+      const blobUrl = URL.createObjectURL(audioBlob);
+      setAudioDataUrl(blobUrl);
       setTimeout(() => audioRef.current?.play().catch(() => {}), 50);
+
+      // Background: convert to base64 and persist so future visits are cache-hits
+      (async () => {
+        try {
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload  = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(audioBlob);
+          });
+          await saveAudio(graveId, cacheKey, dataUrl);
+          // Swap the transient blob URL for the persistent data URL so the
+          // cached version is used when the audio element is re-initialized
+          URL.revokeObjectURL(blobUrl);
+          setAudioDataUrl(dataUrl);
+        } catch { /* non-fatal — in-memory blob URL still works for this session */ }
+      })();
+
     } catch {
       setHasError(true);
     } finally {
