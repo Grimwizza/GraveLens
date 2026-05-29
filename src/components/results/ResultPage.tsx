@@ -432,15 +432,13 @@ export default function ResultPage({ id }: { id: string }) {
         const data: CulturalContext = await res.json();
         setCulturalContext(data);
         setResearch((prev) => ({ ...(prev ?? {}), culturalContext: data }));
-        // Auto-expand all 5 categories in parallel (background, non-blocking)
-        autoExpandAllCategories(data, extracted, location ?? null);
       }
     } catch (err) {
       console.warn("Cultural context generation failed:", err);
     } finally {
       setCulturalLoading(false);
     }
-  }, [pending, culturalLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pending, culturalLoading]);
 
   const autoExpandAllCategories = useCallback(async (
     ctx: CulturalContext,
@@ -985,6 +983,8 @@ export default function ResultPage({ id }: { id: string }) {
           <CulturalContextCard
             context={culturalContext}
             loading={culturalLoading}
+            expandingCategory={expandingCategory}
+            onExpand={handleExpandCategory}
             extracted={extracted}
           />
 
@@ -3463,15 +3463,20 @@ const CULTURAL_DEFS = [
 function CulturalContextCard({
   context,
   loading,
+  expandingCategory,
+  onExpand,
   extracted,
 }: {
   context: CulturalContext | null;
   loading: boolean;
+  expandingCategory: string | null;
+  onExpand: (id: string, label: string) => void;
   extracted: ExtractedGraveData;
 }) {
+  const [openCategory, setOpenCategory] = useState<string | null>(null);
   const hasEnoughData = !!(extracted.birthYear || extracted.deathYear);
   if (!hasEnoughData) return null;
-  // Don't render placeholder — auto-load is triggered by useEffect in parent
+  // Summaries are auto-loaded; no placeholder button needed
   if (!context && !loading) return null;
 
   if (loading && !context) {
@@ -3501,9 +3506,12 @@ function CulturalContextCard({
   return (
     <div className="py-5 animate-fade-up" style={{ animationDelay: "0.14s" }}>
       <SectionHeader icon="🌎" title="A Life in Their Era" />
-      <div className="mt-3 space-y-3">
+      <div className="mt-3 space-y-2">
         {context.categories.map((cat) => {
           const def = CULTURAL_DEFS.find((d) => d.id === cat.id);
+          const isOpen = openCategory === cat.id;
+          const isExpanding = expandingCategory === cat.id;
+
           return (
             <div key={cat.id} className="rounded-xl bg-stone-800 border border-stone-700/60 overflow-hidden">
               <div className="p-3">
@@ -3514,21 +3522,50 @@ function CulturalContextCard({
                   </p>
                 </div>
                 <p className="text-stone-300 text-sm leading-relaxed">{cat.summary}</p>
+                {!isOpen && (
+                  <button
+                    onClick={() => {
+                      setOpenCategory(cat.id);
+                      if (!cat.detail && !isExpanding) onExpand(cat.id, def?.label ?? cat.id);
+                    }}
+                    className="mt-2 text-xs flex items-center gap-1"
+                    style={{ color: "var(--t-gold-500)" }}
+                  >
+                    Tell me more
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m9 18 6-6-6-6"/>
+                    </svg>
+                  </button>
+                )}
               </div>
-              {/* Detail paragraphs — shown when auto-expand has completed */}
-              {cat.detail ? (
-                <div className="border-t border-stone-700/60 px-3 pb-3 pt-2 space-y-2">
-                  {cat.detail.split(/\n\n+/).filter(Boolean).map((p, i) => (
-                    <p key={i} className="text-stone-400 text-sm leading-relaxed">{p.trim()}</p>
-                  ))}
-                </div>
-              ) : (
-                /* Shimmer while detail is still loading */
-                <div className="border-t border-stone-700/60 px-3 pb-3 pt-2 space-y-1.5">
-                  <div className="h-3 shimmer rounded w-full" />
-                  <div className="h-3 shimmer rounded w-5/6" />
-                  <div className="h-3 shimmer rounded w-full" />
-                  <div className="h-3 shimmer rounded w-4/5" />
+
+              {isOpen && (
+                <div className="border-t border-stone-700/60 px-3 pb-3 pt-2">
+                  {isExpanding ? (
+                    <div className="space-y-1.5 py-1">
+                      <div className="h-3 shimmer rounded w-full" />
+                      <div className="h-3 shimmer rounded w-5/6" />
+                      <div className="h-3 shimmer rounded w-full" />
+                      <div className="h-3 shimmer rounded w-4/5" />
+                      <div className="h-3 shimmer rounded w-full mt-3" />
+                      <div className="h-3 shimmer rounded w-3/4" />
+                      <div className="h-3 shimmer rounded w-5/6" />
+                    </div>
+                  ) : cat.detail ? (
+                    <>
+                      {cat.detail.split(/\n\n+/).filter(Boolean).map((p, i) => (
+                        <p key={i} className="text-stone-400 text-sm leading-relaxed mt-2 first:mt-0">
+                          {p.trim()}
+                        </p>
+                      ))}
+                      <button
+                        onClick={() => setOpenCategory(null)}
+                        className="mt-3 text-stone-500 text-xs"
+                      >
+                        Show less
+                      </button>
+                    </>
+                  ) : null}
                 </div>
               )}
             </div>
