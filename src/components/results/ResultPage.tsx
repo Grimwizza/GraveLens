@@ -865,8 +865,17 @@ export default function ResultPage({ id }: { id: string }) {
             extracted={extracted}
             research={research}
             location={location}
-            onStoryGenerated={(epitaphSource, epitaphMeaning, script) => {
+            onStoryGenerated={async (epitaphSource, epitaphMeaning, script) => {
               setResearch((prev) => ({ ...(prev ?? {}), epitaphSource, epitaphMeaning, storyScript: script }));
+              if (pending) {
+                const existing = await getGrave(pending.id);
+                if (existing) {
+                  await saveGrave({
+                    ...existing,
+                    research: { ...existing.research, epitaphSource, epitaphMeaning, storyScript: script },
+                  });
+                }
+              }
             }}
           />
 
