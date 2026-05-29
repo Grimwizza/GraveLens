@@ -834,58 +834,60 @@ export default function ResultPage({ id }: { id: string }) {
         </div>
       </header>
 
-      <main className="scroll-container max-w-lg mx-auto w-full pb-32">
-        {/* Hero photo */}
-        <div
-          className="relative w-full aspect-[4/3] bg-stone-800 overflow-hidden cursor-pointer"
-          onClick={() => setPhotoFullscreen(true)}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={photoDataUrl}
-            alt="Grave marker"
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-stone-900 via-transparent to-transparent" />
-          {/* Expand hint */}
-          <div className="absolute bottom-3 right-3 w-7 h-7 rounded-full flex items-center justify-center bg-stone-900/60">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#b0aba6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
-            </svg>
-          </div>
+      {/* Desktop: side-by-side wrapper. Mobile: plain column (flex-col is default). */}
+      <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
 
-          {/* Confidence badge */}
-          {extracted.confidence && (
-            <div className="absolute top-3 right-3">
-              <span
-                className="px-2 py-0.5 rounded-full text-xs font-medium"
-                style={{
-                  background:
-                    extracted.confidence === "high"
-                      ? "#5c7a5c40"
-                      : extracted.confidence === "medium"
-                      ? "#a07830 40"
-                      : "#8b3a3a40",
-                  color:
-                    extracted.confidence === "high"
-                      ? "#7a9a7a"
-                      : extracted.confidence === "medium"
-                      ? "var(--t-gold-400)"
-                      : "#c07070",
-                  border: "1px solid currentColor",
-                }}
-              >
-                {extracted.confidence === "high"
-                  ? "High confidence"
-                  : extracted.confidence === "medium"
-                  ? "Medium confidence"
-                  : "Low confidence — verify manually"}
-              </span>
+      <main className="scroll-container flex-1 w-full pb-32 lg:pb-8 lg:basis-[60%] lg:shrink-0 lg:overflow-y-auto">
+        {/* Hero photo — mobile only; desktop uses the aside panel */}
+        <div className="lg:hidden">
+          <div
+            className="relative w-full aspect-[4/3] bg-stone-800 overflow-hidden cursor-pointer"
+            onClick={() => setPhotoFullscreen(true)}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photoDataUrl}
+              alt="Grave marker"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-stone-900 via-transparent to-transparent" />
+            <div className="absolute bottom-3 right-3 w-7 h-7 rounded-full flex items-center justify-center bg-stone-900/60">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#b0aba6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+              </svg>
             </div>
-          )}
+            {extracted.confidence && (
+              <div className="absolute top-3 right-3">
+                <span
+                  className="px-2 py-0.5 rounded-full text-xs font-medium"
+                  style={{
+                    background:
+                      extracted.confidence === "high"
+                        ? "#5c7a5c40"
+                        : extracted.confidence === "medium"
+                        ? "#a07830 40"
+                        : "#8b3a3a40",
+                    color:
+                      extracted.confidence === "high"
+                        ? "#7a9a7a"
+                        : extracted.confidence === "medium"
+                        ? "var(--t-gold-400)"
+                        : "#c07070",
+                    border: "1px solid currentColor",
+                  }}
+                >
+                  {extracted.confidence === "high"
+                    ? "High confidence"
+                    : extracted.confidence === "medium"
+                    ? "Medium confidence"
+                    : "Low confidence — verify manually"}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-col gap-0 px-5">
+        <div className="flex flex-col gap-0 px-5 lg:px-8 lg:py-4">
           {/* Primary info card */}
           <PrimaryCard extracted={extracted} onSave={handleExtractedEdit} />
 
@@ -1074,7 +1076,7 @@ export default function ResultPage({ id }: { id: string }) {
           ) : null}
         </div>
 
-        <div className="mx-5 mt-4">
+        <div className="mx-5 lg:mx-8 mt-4">
           <Link
             href="/archive"
             className="flex items-center justify-center gap-2 h-11 rounded-xl border border-stone-700 text-stone-300 text-sm w-full"
@@ -1083,6 +1085,59 @@ export default function ResultPage({ id }: { id: string }) {
           </Link>
         </div>
       </main>
+
+      {/* Desktop image panel — right column, fills height, no gradient */}
+      <aside className="hidden lg:block lg:basis-[40%] lg:shrink-0 relative overflow-hidden border-l border-stone-800">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={photoDataUrl}
+          alt="Grave marker"
+          className="w-full h-full object-cover object-center cursor-pointer"
+          onClick={() => setPhotoFullscreen(true)}
+        />
+        {/* Confidence badge */}
+        {extracted.confidence && (
+          <div className="absolute top-4 right-4">
+            <span
+              className="px-2 py-0.5 rounded-full text-xs font-medium"
+              style={{
+                background:
+                  extracted.confidence === "high"
+                    ? "#5c7a5c40"
+                    : extracted.confidence === "medium"
+                    ? "#a0783040"
+                    : "#8b3a3a40",
+                color:
+                  extracted.confidence === "high"
+                    ? "#7a9a7a"
+                    : extracted.confidence === "medium"
+                    ? "var(--t-gold-400)"
+                    : "#c07070",
+                border: "1px solid currentColor",
+                backdropFilter: "blur(4px)",
+              }}
+            >
+              {extracted.confidence === "high"
+                ? "High confidence"
+                : extracted.confidence === "medium"
+                ? "Medium confidence"
+                : "Low confidence — verify manually"}
+            </span>
+          </div>
+        )}
+        {/* Expand to fullscreen */}
+        <button
+          onClick={() => setPhotoFullscreen(true)}
+          className="absolute bottom-4 right-4 w-8 h-8 rounded-full flex items-center justify-center bg-stone-900/70 backdrop-blur-sm hover:bg-stone-900/90 transition-colors"
+          aria-label="View fullscreen"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b0aba6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+          </svg>
+        </button>
+      </aside>
+
+      </div>{/* end desktop split wrapper */}
 
       {/* Share sheet fallback */}
       {shareOpen && (
