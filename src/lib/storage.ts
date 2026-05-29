@@ -2,11 +2,12 @@ import { openDB, type IDBPDatabase } from "idb";
 import type { GraveRecord, QueuedCapture, CemeteryRecord } from "@/types";
 
 const DB_NAME = "gravelens";
-const DB_VERSION = 5;          // ← bumped from 4 to add cemetery store
+const DB_VERSION = 6;          // ← bumped from 5 to add audio store
 const STORE_NAME = "graves";
 const PENDING_STORE = "pending";
 const QUEUE_STORE = "queue";
 const CEMETERY_STORE = "cemeteries";
+const AUDIO_STORE = "audio";
 
 async function getDB(): Promise<IDBPDatabase> {
   return openDB(DB_NAME, DB_VERSION, {
@@ -24,6 +25,9 @@ async function getDB(): Promise<IDBPDatabase> {
       }
       if (!db.objectStoreNames.contains(CEMETERY_STORE)) {
         db.createObjectStore(CEMETERY_STORE, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(AUDIO_STORE)) {
+        db.createObjectStore(AUDIO_STORE, { keyPath: "id" });
       }
     },
   });
@@ -171,4 +175,30 @@ export async function recordCemeteryVisit(
 
   await db.put(CEMETERY_STORE, record);
   return record;
+}
+
+// ── Audio cache ────────────────────────────────────────────────────────────
+
+export async function saveAudio(graveId: string, voice: string, dataUrl: string): Promise<void> {
+  const db = await getDB();
+  await db.put(AUDIO_STORE, { id: `${graveId}_${voice}`, dataUrl, createdAt: Date.now() });
+}
+
+export async function getAudio(graveId: string, voice: string): Promise<string | undefined> {
+  const db = await getDB();
+  const record = await db.get(AUDIO_STORE, `${graveId}_${voice}`);
+  return record?.dataUrl;
+}
+
+export async function deleteAudio(graveId: string): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction(AUDIO_STORE, "readwrite");
+  const keys = await tx.store.getAllKeys();
+  const prefix = `${graveId}_`;
+  await Promise.all(
+    keys
+      .filter((k) => String(k).startsWith(prefix))
+      .map((k) => tx.store.delete(k))
+  );
+  await tx.done;
 }

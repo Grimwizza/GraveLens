@@ -126,6 +126,7 @@ export interface LifeNarrative {
   narrative: string;
   epitaphSource?: string;
   epitaphMeaning?: string;
+  voiceUsed?: string;
 }
 
 // ── Local / geographic history ────────────────────────────────────────────────
