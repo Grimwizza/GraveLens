@@ -21,7 +21,6 @@ export interface AppSettings {
   autoDiscover: boolean;
 
   // Scan
-  autoQualityCheck: boolean;
   saveLocation: LocationPref;
 }
 
@@ -32,7 +31,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mapStyle: "standard",
   defaultSearchRadius: 5,
   autoDiscover: true,
-  autoQualityCheck: true,
   saveLocation: "always",
 };
 

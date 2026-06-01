@@ -14,8 +14,6 @@ import { uploadPhoto, upsertGrave, pushExplorerPoints, deleteFromCloud } from "@
 import { setGravePublic } from "@/lib/community";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import { interpretSymbols } from "@/lib/apis/symbols";
-import { checkQuality, qualitySeverity, type QualityResult } from "@/lib/qualityCheck";
-import { loadSettings } from "@/lib/settings";
 import { SHOW_COMMUNITY_FEATURES } from "@/lib/config";
 import ProfileBadge from "@/components/auth/ProfileBadge";
 import DesktopNav from "@/components/layout/DesktopNav";
@@ -73,16 +71,6 @@ export default function ResultPage({ id }: { id: string }) {
   // Detecting spinner shown briefly while reverse-geocoding for a cemetery name
   const [cemeteryPrompt, setCemeteryPrompt] = useState<"detecting" | null>(null);
 
-  // Quality check state
-  type RescanStatus = "idle" | "checking" | "rescanning" | "done";
-  const [rescanStatus, setRescanStatus] = useState<RescanStatus>("idle");
-  const [qualityResult, setQualityResult] = useState<QualityResult | null>(null);
-  const [qualityDialog, setQualityDialog] = useState<{
-    issues: QualityResult["issues"];
-    photoDataUrl: string;
-  } | null>(null);
-  const [deepRescanDone, setDeepRescanDone] = useState(false);
-  const [deepRescanning, setDeepRescanning] = useState(false);
   const [selectedPersonIdx, setSelectedPersonIdx] = useState(0);
   const personResearchCacheRef = useRef<Map<number, ResearchData>>(new Map());
 
@@ -261,77 +249,6 @@ export default function ResultPage({ id }: { id: string }) {
     });
   }, [id, router]);
 
-  // ── Automatic quality check + rescan ─────────────────────────────────────
-  // Runs once when a fresh scan result arrives (not when loading from archive).
-  // Skips: re-opened archived records (saved=true before this effect has a chance
-  //        to do anything), records that already went through a rescan.
-  useEffect(() => {
-    if (!pending) return;
-    if (rescanStatus !== "idle") return;
-    // Don't run the quality check on already-archived records opened from history
-    const currentExtracted = pending.extracted;
-    if ((currentExtracted as any).isRescan) return; // was already upgraded
-
-    // Respect the autoQualityCheck setting
-    if (!loadSettings().autoQualityCheck) {
-      setRescanStatus("done");
-      return;
-    }
-
-    setRescanStatus("checking");
-    const qr = checkQuality(currentExtracted);
-    setQualityResult(qr);
-
-    const severity = qualitySeverity(qr);
-    if (severity === "clean") {
-      setRescanStatus("done");
-      return;
-    }
-
-    // Silently kick off a Sonnet rescan with the specific issues listed
-    setRescanStatus("rescanning");
-    const issueMessages = qr.issues.map((i) => i.message);
-
-    fetch("/api/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        imageBase64: pending.photoDataUrl.replace(/^data:[^;]+;base64,/, ""),
-        mimeType: pending.photoDataUrl.match(/^data:([^;]+);/)?.[1] ?? "image/jpeg",
-        rescan: true,
-        issues: issueMessages,
-      }),
-    })
-      .then((r) => r.json())
-      .then(async (d) => {
-        if (!d.extracted) throw new Error("No extracted data in rescan response");
-
-        const newExtracted: ExtractedGraveData = { ...d.extracted };
-        const postRescanQr = checkQuality(newExtracted);
-        setQualityResult(postRescanQr);
-
-        if (postRescanQr.pass || qualitySeverity(postRescanQr) === "soft") {
-          // Rescan improved things — silently apply the better data
-          setExtractedOverride(newExtracted);
-          const existing = await getGrave(pending.id);
-          if (existing) {
-            await saveGrave({ ...existing, extracted: newExtracted });
-          }
-          setRescanStatus("done");
-        } else {
-          // Still bad after best effort — show the user-facing dialog
-          setQualityDialog({ issues: postRescanQr.issues, photoDataUrl: pending.photoDataUrl });
-          setRescanStatus("done");
-        }
-      })
-      .catch(() => {
-        // Network or API failure — show dialog with original issues so user can fix manually
-        setQualityDialog({ issues: qr.issues, photoDataUrl: pending.photoDataUrl });
-        setRescanStatus("done");
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending]);
-
   // When already saved, persist tag changes immediately
   const handleTagsChange = useCallback(async (next: string[]) => {
     setTags(next);
@@ -362,44 +279,6 @@ export default function ResultPage({ id }: { id: string }) {
       if (user) await setGravePublic(supabase, pending.id, next);
     } catch { /* non-fatal */ }
   }, [pending]);
-
-  const handleDeepRescan = useCallback(async () => {
-    if (!pending || deepRescanDone) return;
-    setDeepRescanning(true);
-    const issueMessages = (qualityResult?.issues ?? []).map((i) => i.message);
-    try {
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageBase64: pending.photoDataUrl.replace(/^data:[^;]+;base64,/, ""),
-          mimeType: pending.photoDataUrl.match(/^data:([^;]+);/)?.[1] ?? "image/jpeg",
-          rescan: true,
-          deep: true,
-          issues: issueMessages,
-        }),
-      });
-      const d = await res.json();
-      if (d.extracted) {
-        const newExtracted: ExtractedGraveData = { ...d.extracted };
-        const postQr = checkQuality(newExtracted);
-        setQualityResult(postQr);
-        if (postQr.pass || qualitySeverity(postQr) === "soft") {
-          setExtractedOverride(newExtracted);
-          const existing = await getGrave(pending.id);
-          if (existing) await saveGrave({ ...existing, extracted: newExtracted });
-          setQualityDialog(null);
-          return;
-        }
-        // Still has issues — update dialog issues but keep it open (no rescan button)
-        setQualityDialog({ issues: postQr.issues, photoDataUrl: pending.photoDataUrl });
-      }
-    } catch { /* network failure — keep dialog open */ }
-    finally {
-      setDeepRescanning(false);
-      setDeepRescanDone(true);
-    }
-  }, [pending, deepRescanDone, qualityResult]);
 
   const handleShare = useCallback(async () => {
     if (!pending) return;
@@ -1414,51 +1293,6 @@ export default function ResultPage({ id }: { id: string }) {
         </div>
       )}
 
-      {/* Rescan status indicator — floats below header */}
-      {rescanStatus === "rescanning" && (
-        <div
-          className="fixed left-1/2 -translate-x-1/2 z-[70] flex items-center gap-2.5 px-4 py-2.5 rounded-2xl shadow-xl"
-          style={{
-            top: "calc(env(safe-area-inset-top, 0px) + 3.5rem)",
-            background: "rgba(var(--glass-bg-rgb), 0.96)",
-            border: "1px solid rgba(201,168,76,0.3)",
-            backdropFilter: "blur(12px)",
-          }}
-        >
-          <div
-            className="w-3.5 h-3.5 border-2 border-t-transparent rounded-full animate-spin shrink-0"
-            style={{ borderColor: "var(--t-gold-500) transparent var(--t-gold-500) var(--t-gold-500)" }}
-          />
-          <span className="text-xs text-stone-300 font-medium">Verifying data quality…</span>
-        </div>
-      )}
-
-      {/* Quality issue dialog — shown when both AI passes fail checks */}
-      {qualityDialog && (
-        <QualityIssueSheet
-          issues={qualityDialog.issues}
-          onRescan={deepRescanDone ? undefined : handleDeepRescan}
-          rescanBusy={deepRescanning}
-          onEdit={() => {
-            setQualityDialog(null);
-            document.getElementById("primary-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
-          }}
-          onDelete={async () => {
-            if (!pending) return;
-            setQualityDialog(null);
-            await deleteGrave(pending.id);
-            deleteAudio(pending.id).catch(() => {});
-            try {
-              const supabase = createClient();
-              const { data: { user } } = await supabase.auth.getUser();
-              if (user) await deleteFromCloud(supabase, user.id, pending.id);
-            } catch { /* non-fatal */ }
-            router.replace("/");
-          }}
-          onDismiss={() => setQualityDialog(null)}
-        />
-      )}
-
       {/* Cemetery prompt — shown when refresh finds no cemetery */}
       {cemeteryPrompt === "detecting" && (
         <div
@@ -1478,155 +1312,6 @@ export default function ResultPage({ id }: { id: string }) {
         </div>
       )}
 
-    </div>
-  );
-}
-
-// ── Quality Issue Sheet ───────────────────────────────────────────────────────
-
-function QualityIssueSheet({
-  issues,
-  onRescan,
-  rescanBusy,
-  onEdit,
-  onDelete,
-  onDismiss,
-}: {
-  issues: { field: string; code: string; message: string }[];
-  onRescan?: () => void;
-  rescanBusy?: boolean;
-  onEdit: () => void;
-  onDelete: () => Promise<void>;
-  onDismiss: () => void;
-}) {
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end lg:items-center justify-center lg:p-6">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-stone-950/70 backdrop-blur-sm" onClick={onDismiss} />
-
-      <div
-        className="relative w-full max-w-sm rounded-t-3xl lg:rounded-2xl flex flex-col gap-0 overflow-hidden"
-        style={{
-          background: "rgba(var(--glass-bg-rgb), 0.98)",
-          border: "1px solid var(--t-stone-700)",
-          paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))",
-        }}
-      >
-        {/* Handle */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full bg-stone-700" />
-        </div>
-
-        {/* Header */}
-        <div className="flex items-start gap-3 px-5 pt-3 pb-4">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: "rgba(201,168,76,0.12)", border: "1px solid rgba(201,168,76,0.25)" }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-stone-100 font-semibold text-base leading-snug">Data quality issue detected</p>
-            <p className="text-stone-400 text-sm mt-0.5 leading-relaxed">
-              The scan result couldn't be verified after two attempts. You can correct it manually or delete this entry.
-            </p>
-          </div>
-        </div>
-
-        {/* Issue list */}
-        <div className="mx-5 rounded-xl overflow-hidden border border-stone-800 mb-5">
-          {issues.slice(0, 4).map((issue, i) => (
-            <div
-              key={i}
-              className="flex items-start gap-2.5 px-3 py-2.5 border-b border-stone-800 last:border-0"
-              style={{ background: "rgba(var(--glass-bg-rgb), 0.5)" }}
-            >
-              <span className="text-[0.8rem] mt-0.5 shrink-0">⚠️</span>
-              <span className="text-stone-400 text-xs leading-relaxed">{issue.message}</span>
-            </div>
-          ))}
-          {issues.length > 4 && (
-            <div className="px-3 py-2 text-xs text-stone-600 text-center" style={{ background: "rgba(var(--glass-bg-rgb), 0.5)" }}>
-              +{issues.length - 4} more issue{issues.length - 4 !== 1 ? "s" : ""}
-            </div>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-col gap-2 px-5">
-          {!confirmDelete ? (
-            <>
-              {onRescan && (
-                <button
-                  onClick={onRescan}
-                  disabled={rescanBusy}
-                  className="w-full py-3 rounded-2xl text-sm font-semibold text-stone-900 flex items-center justify-center gap-2 disabled:opacity-70"
-                  style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
-                >
-                  {rescanBusy ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-stone-900/40 border-t-stone-900 rounded-full animate-spin" />
-                      Scanning…
-                    </>
-                  ) : (
-                    <>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
-                      </svg>
-                      Re-scan with Enhanced Analysis
-                    </>
-                  )}
-                </button>
-              )}
-              <button
-                onClick={onEdit}
-                className="w-full py-3 rounded-2xl text-sm font-semibold"
-                style={onRescan ? { background: "rgba(var(--glass-bg-rgb), 0.06)", color: "var(--t-stone-200)", border: "1px solid var(--t-stone-700)" } : { background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))", color: "var(--t-stone-900)" }}
-              >
-                Edit Manually
-              </button>
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="w-full py-3 rounded-2xl text-sm font-medium text-red-400 border border-red-500/20 bg-red-500/5"
-              >
-                Delete Entry
-              </button>
-              <button
-                onClick={onDismiss}
-                className="w-full py-2.5 text-xs text-stone-500"
-              >
-                Keep as-is
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-stone-300 text-center pb-1">
-                Are you sure? This will permanently remove this entry.
-              </p>
-              <button
-                onClick={async () => { setDeleting(true); await onDelete(); }}
-                disabled={deleting}
-                className="w-full py-3 rounded-2xl text-sm font-semibold text-white bg-red-600 active:bg-red-700 disabled:opacity-60"
-              >
-                {deleting ? "Deleting…" : "Yes, Delete Permanently"}
-              </button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                className="w-full py-2.5 text-xs text-stone-500"
-              >
-                Cancel
-              </button>
-            </>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

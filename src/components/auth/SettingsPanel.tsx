@@ -397,10 +397,6 @@ export default function SettingsPanel({ onClose }: Props) {
           />
           <div className="mx-5 rounded-2xl overflow-hidden border border-stone-800/80 mb-1">
             <Row>
-              <Label title="Auto Quality Check" sub="Rescans with premium AI if data looks incorrect" />
-              <Toggle on={settings.autoQualityCheck} onChange={(v) => update("autoQualityCheck", v)} />
-            </Row>
-            <Row>
               <Label title="Save Location with Scans" sub="Tags grave records with GPS coordinates" />
               <SegmentControl<LocationPref>
                 value={settings.saveLocation}
