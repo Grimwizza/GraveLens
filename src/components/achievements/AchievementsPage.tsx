@@ -426,7 +426,7 @@ export default function AchievementsPage() {
           .eq("type", "friend")
           .or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`);
         if (!relData?.length) return;
-        const friendIds = relData.map((r) =>
+        const friendIds = relData.map((r: any) =>
           r.from_user_id === user.id ? r.to_user_id : r.from_user_id
         );
         const { data: profiles } = await supabase
@@ -434,7 +434,7 @@ export default function AchievementsPage() {
           .select("user_id, username, display_name, show_username, explorer_xp, explorer_rank, public_grave_count")
           .in("user_id", friendIds);
         setFriends(
-          (profiles ?? []).map((p) => ({
+          (profiles ?? []).map((p: any) => ({
             userId: p.user_id,
             username: p.username ?? undefined,
             displayName: p.display_name ?? undefined,

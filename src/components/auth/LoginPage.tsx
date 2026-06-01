@@ -26,7 +26,7 @@ export default function LoginPage() {
   // Redirect away if already signed in
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(({ data }: { data: any }) => {
       if (data.user) router.replace(next);
     });
   }, [next, router]);
@@ -138,7 +138,7 @@ export default function LoginPage() {
           <div className="w-full flex flex-col gap-3">
             <button
               onClick={() => { setMode("signin"); setError(""); setResent(false); }}
-              className="w-full h-12 rounded-xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.97]"
+              className="w-full h-12 rounded-xl font-semibold text-[#1a1917] text-sm transition-all active:scale-[0.97]"
               style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
             >
               Back to Sign In
@@ -225,7 +225,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-12 rounded-xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.97] disabled:opacity-60"
+            className="w-full h-12 rounded-xl font-semibold text-[#1a1917] text-sm transition-all active:scale-[0.97] disabled:opacity-60"
             style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
           >
             {loading ? "Please wait…" : mode === "signin" ? "Sign In" : "Create Account"}

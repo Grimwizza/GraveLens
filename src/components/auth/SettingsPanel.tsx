@@ -99,7 +99,7 @@ function SegmentControl<T extends string>({
           className="px-3 py-1.5 text-xs font-semibold transition-colors"
           style={
             value === opt.value
-              ? { background: "var(--t-gold-500)", color: "var(--t-stone-900)" }
+              ? { background: "var(--t-gold-500)", color: "#1a1917" }
               : { color: "var(--t-stone-500)" }
           }
         >
@@ -580,7 +580,7 @@ export default function SettingsPanel({ onClose }: Props) {
               onClick={handleSaveAll}
               disabled={saving}
               className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50"
-              style={{ background: "var(--t-gold-500)", color: "var(--t-stone-900)" }}
+              style={{ background: "var(--t-gold-500)", color: "#1a1917" }}
             >
               {saving ? "Saving…" : "Save Settings"}
             </button>

@@ -104,7 +104,7 @@ export default function InstallPrompt() {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleInstall}
-              className="h-8 px-3 rounded-lg text-xs font-bold text-stone-900 active:opacity-80"
+              className="h-8 px-3 rounded-lg text-xs font-bold text-[#1a1917] active:opacity-80"
               style={{
                 background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))",
               }}
@@ -146,7 +146,7 @@ export default function InstallPrompt() {
           <div className="flex items-start gap-3">
             {/* Step indicators */}
             <div className="flex flex-col items-center gap-1 mt-0.5 shrink-0">
-              <div className="w-5 h-5 rounded-full bg-gold-500 flex items-center justify-center text-stone-900 text-xs font-bold">1</div>
+              <div className="w-5 h-5 rounded-full bg-gold-500 flex items-center justify-center text-[#1a1917] text-xs font-bold">1</div>
               <div className="w-px h-4 bg-stone-700" />
               <div className="w-5 h-5 rounded-full bg-stone-700 flex items-center justify-center text-stone-300 text-xs font-bold">2</div>
             </div>

@@ -50,7 +50,7 @@ export default function AuthCallbackPage() {
       ? supabase.auth.verifyOtp({ token_hash: tokenHash, type: type as "signup" | "magiclink" | "recovery" | "email_change" | "email" })
       : supabase.auth.exchangeCodeForSession(code!);
 
-    authPromise.then(({ error }) => {
+    authPromise.then(({ error }: { error: any }) => {
       if (error) {
         setErrorMsg(error.message);
         setStatus("error");
@@ -103,7 +103,7 @@ export default function AuthCallbackPage() {
           {/* Visible button in case auto-redirect or window.close() both fail */}
           <a
             href="/"
-            className="h-12 px-8 rounded-xl font-semibold text-stone-900 text-sm flex items-center justify-center"
+            className="h-12 px-8 rounded-xl font-semibold text-[#1a1917] text-sm flex items-center justify-center"
             style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
           >
             Open GraveLens

@@ -1098,7 +1098,7 @@ function AssignmentSheet({
             <button
               onClick={onSave}
               disabled={!value.trim()}
-              className="flex-1 h-12 rounded-xl font-semibold text-stone-900 text-sm disabled:opacity-40 transition-all active:scale-[0.98]"
+              className="flex-1 h-12 rounded-xl font-semibold text-[#1a1917] text-sm disabled:opacity-40 transition-all active:scale-[0.98]"
               style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
             >
               Save
@@ -1171,7 +1171,7 @@ function NearbyConfirmSheet({
           <div className="flex gap-3">
             <button
               onClick={onYes}
-              className="flex-1 h-12 rounded-xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.98]"
+              className="flex-1 h-12 rounded-xl font-semibold text-[#1a1917] text-sm transition-all active:scale-[0.98]"
               style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
             >
               Yes, apply to all
@@ -1483,7 +1483,7 @@ function EmptyState() {
       </div>
       <Link
         href="/"
-        className="mt-2 h-12 px-6 rounded-2xl flex items-center justify-center font-semibold text-stone-900 transition-all active:scale-[0.98]"
+        className="mt-2 h-12 px-6 rounded-2xl flex items-center justify-center font-semibold text-[#1a1917] transition-all active:scale-[0.98]"
         style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
       >
         Scan your first marker

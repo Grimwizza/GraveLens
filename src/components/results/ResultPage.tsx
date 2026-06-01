@@ -1452,7 +1452,7 @@ function PrimaryCard({
         <div className="flex gap-2 pt-1">
           <button
             onClick={handleSave}
-            className="flex-1 h-9 rounded-lg text-stone-900 text-sm font-semibold"
+            className="flex-1 h-9 rounded-lg text-[#1a1917] text-sm font-semibold"
             style={{ background: "var(--t-gold-500)" }}
           >
             Save
@@ -1882,7 +1882,7 @@ function InscriptionCard({
           <div className="flex gap-2">
             <button
               onClick={handleSave}
-              className="flex-1 h-9 rounded-lg text-stone-900 text-sm font-semibold"
+              className="flex-1 h-9 rounded-lg text-[#1a1917] text-sm font-semibold"
               style={{ background: "var(--t-gold-500)" }}
             >
               Save
@@ -2380,7 +2380,7 @@ function ResearchChecklistCard({
           const content = (
             <div className="flex items-start gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 transition-colors">
               {/* Step number */}
-              <span className="shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[0.65rem] font-bold text-stone-900" style={{ background: badge.color }}>
+              <span className="shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[0.65rem] font-bold text-[#1a1917]" style={{ background: badge.color }}>
                 {i + 1}
               </span>
               <div className="flex-1 min-w-0">
@@ -3159,7 +3159,7 @@ function StoryCard({
       {!audioDataUrl && !loadingPhase && (
         <button
           onClick={handleHearStory}
-          className="relative w-full flex items-center justify-center gap-3 h-14 rounded-2xl text-base font-bold text-stone-900 transition-all active:scale-[0.97] overflow-hidden"
+          className="relative w-full flex items-center justify-center gap-3 h-14 rounded-2xl text-base font-bold text-[#1a1917] transition-all active:scale-[0.97] overflow-hidden"
           style={{
             background: "linear-gradient(135deg, #eadd9a 0%, var(--t-gold-500) 50%, #9e7f33 100%)",
             boxShadow: "0 0 0 0 rgba(201,168,76,0.4)",
@@ -3204,11 +3204,11 @@ function StoryCard({
               aria-label={playing ? "Pause" : "Play"}
             >
               {playing ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--t-stone-900)" stroke="none">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#1a1917" stroke="none">
                   <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
                 </svg>
               ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--t-stone-900)" stroke="none">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#1a1917" stroke="none">
                   <polygon points="5 3 19 12 5 21 5 3"/>
                 </svg>
               )}
@@ -3583,7 +3583,7 @@ function ReviewPromptSheet({
               <button
                 onClick={() => { if (nameValue.trim()) onEnterName(nameValue.trim()); }}
                 disabled={!nameValue.trim()}
-                className="px-4 py-2.5 rounded-xl text-sm font-semibold text-stone-900 disabled:opacity-40"
+                className="px-4 py-2.5 rounded-xl text-sm font-semibold text-[#1a1917] disabled:opacity-40"
                 style={{ background: "var(--t-gold-500)" }}
               >
                 Save
@@ -3592,7 +3592,7 @@ function ReviewPromptSheet({
           ) : (
             <button
               onClick={() => setEntering(true)}
-              className="w-full py-3 rounded-2xl text-sm font-semibold text-stone-900"
+              className="w-full py-3 rounded-2xl text-sm font-semibold text-[#1a1917]"
               style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
             >
               Enter Name

@@ -118,7 +118,7 @@ export default function ProfileBadge() {
         aria-haspopup="dialog"
       >
         {user && initials ? (
-          <span className="text-[0.8rem] font-bold text-stone-900">{initials}</span>
+          <span className="text-[0.8rem] font-bold text-[#1a1917]">{initials}</span>
         ) : (
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--t-stone-500)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="8" r="4" />
@@ -153,7 +153,7 @@ export default function ProfileBadge() {
                   {/* User info */}
                   <div className="flex items-center gap-3 py-2">
                     <div
-                      className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-stone-900 shrink-0"
+                      className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-[#1a1917] shrink-0"
                       style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
                     >
                       {initials}
@@ -234,7 +234,7 @@ export default function ProfileBadge() {
                   </div>
                   <button
                     onClick={() => { close(); router.push("/login"); }}
-                    className="w-full h-12 rounded-2xl font-semibold text-stone-900 text-sm transition-all active:scale-[0.97] mt-2"
+                    className="w-full h-12 rounded-2xl font-semibold text-[#1a1917] text-sm transition-all active:scale-[0.97] mt-2"
                     style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
                   >
                     Sign In or Create Account

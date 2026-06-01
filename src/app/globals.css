@@ -164,6 +164,15 @@ body {
   -webkit-backdrop-filter: blur(24px) saturate(1.6);
 }
 
+/* Gold tinted frosted glass background — used by PWA install banners */
+@utility glass-gold {
+  background-color: rgba(var(--glass-bg-rgb), 0.82);
+  border: 1px solid rgba(201, 168, 76, 0.22);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+}
+
+
 /* Utility to ensure content isn't hidden under the safe area */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
