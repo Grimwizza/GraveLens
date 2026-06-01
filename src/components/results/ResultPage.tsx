@@ -3237,10 +3237,12 @@ function StoryCard({
   useEffect(() => {
     const el = audioRef.current;
     if (!el || !audioDataUrl) return;
-    // Only update src when not actively playing — the background blob→base64 swap
-    // updates audioDataUrl after playback has started; skip resetting src in that case.
-    if (!el.paused && el.currentTime > 0) return;
-    el.src = audioDataUrl;
+    // Only update src if not actively playing — setting src resets the media pipeline
+    // and would interrupt in-progress playback.
+    if (el.paused) {
+      el.src = audioDataUrl;
+    }
+    // Always wire event listeners — they're cleaned up and re-added on each change.
     const onTime  = () => { setCurrentTime(el.currentTime); setProgress(el.duration ? el.currentTime / el.duration : 0); };
     const onDur   = () => setDuration(el.duration || 0);
     const onEnded = () => { setPlaying(false); setProgress(0); setCurrentTime(0); el.currentTime = 0; };
@@ -3335,10 +3337,9 @@ function StoryCard({
         onStoryGenerated(epitaphSource, epitaphMeaning, script);
       }
 
-      // ── Optimisation 3: stream TTS, play from blob URL immediately ───────
-      // Stream chunks into memory. Once all arrive, create a Blob URL
-      // (URL.createObjectURL is synchronous and instant — no FileReader needed).
-      // Save base64 to IndexedDB in the background AFTER playback starts.
+      // ── TTS: fetch audio, play immediately via blob URL ──────────────────
+      // ttsRes.blob() drains the streamed OpenAI response into memory, then
+      // createObjectURL gives us a synchronous, instant src to hand the player.
       setLoadingPhase("recording");
       const ttsRes = await fetch("/api/tts", {
         method: "POST",
@@ -3347,16 +3348,23 @@ function StoryCard({
       });
       if (!ttsRes.ok) throw new Error("tts " + ttsRes.status);
 
-      // Consume the stream into a Blob (streaming from the server is already happening;
-      // ttsRes.blob() drains it and resolves as soon as the last byte arrives)
       const audioBlob = await ttsRes.blob();
-
-      // Instant: create an object URL and play — no FileReader conversion needed
       const blobUrl = URL.createObjectURL(audioBlob);
-      setAudioDataUrl(blobUrl);
-      setTimeout(() => audioRef.current?.play().catch(() => {}), 50);
 
-      // Background: convert to base64 and persist so future visits are cache-hits
+      // Set src and play directly on the DOM element — no setTimeout race condition.
+      // setAudioDataUrl triggers the useEffect which wires event listeners; the
+      // el.paused guard in that effect skips resetting src once we've started playing.
+      const el = audioRef.current;
+      if (el) {
+        el.src = blobUrl;
+        el.play().catch(() => {});
+      }
+      setAudioDataUrl(blobUrl);
+
+      // Background: convert to base64 and persist to IDB for future sessions.
+      // We do NOT revoke blobUrl or swap audioDataUrl here — swapping mid-session
+      // removes and fails to re-add event listeners, freezing the progress bar.
+      // The blobUrl is valid for this page session; next session loads from IDB.
       (async () => {
         try {
           const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -3366,11 +3374,7 @@ function StoryCard({
             reader.readAsDataURL(audioBlob);
           });
           await saveAudio(graveId, cacheKey, dataUrl);
-          // Swap the transient blob URL for the persistent data URL so the
-          // cached version is used when the audio element is re-initialized
-          URL.revokeObjectURL(blobUrl);
-          setAudioDataUrl(dataUrl);
-        } catch { /* non-fatal — in-memory blob URL still works for this session */ }
+        } catch { /* non-fatal — blobUrl keeps working for this session */ }
       })();
 
     } catch {
@@ -3428,7 +3432,7 @@ function StoryCard({
             style={{ borderColor: "var(--t-gold-500) transparent var(--t-gold-500) var(--t-gold-500)" }}
           />
           <span className="text-sm font-medium" style={{ color: "var(--t-gold-400)" }}>
-            {loadingPhase === "crafting" ? "Crafting your story…" : "Recording your voice…"}
+            {loadingPhase === "crafting" ? "Crafting my story…" : "Finding my voice…"}
           </span>
         </div>
       )}
