@@ -540,7 +540,33 @@ export default function ResultPage({ id }: { id: string }) {
 
     refreshingRef.current = true;
     setRefreshing(true);
-    const current = extractedData ?? { ...pending.extracted, ...(extractedOverride ?? {}) };
+
+    // ── Re-scan the image when user explicitly refreshes (no extractedData passed) ──
+    // This lets app-side prompt improvements take effect on existing scans.
+    let freshExtracted: ExtractedGraveData | undefined;
+    if (!extractedData && pending.photoDataUrl) {
+      try {
+        const commaIdx = pending.photoDataUrl.indexOf(",");
+        const header = pending.photoDataUrl.slice(0, commaIdx);
+        const imageBase64 = pending.photoDataUrl.slice(commaIdx + 1);
+        const mimeType = header.split(":")[1]?.split(";")[0] ?? "image/jpeg";
+        const analyzeRes = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64, mimeType }),
+        });
+        if (analyzeRes.ok) {
+          const { extracted } = await analyzeRes.json();
+          freshExtracted = extracted as ExtractedGraveData;
+          setPending((prev) => prev ? { ...prev, extracted: freshExtracted! } : prev);
+          const existing = await getGrave(pending.id);
+          if (existing) await saveGrave({ ...existing, extracted: freshExtracted! });
+        }
+      } catch { /* non-fatal — fall through with existing extracted */ }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    const current = extractedData ?? { ...(freshExtracted ?? pending.extracted), ...(extractedOverride ?? {}) };
     try {
       setResearchLoading(true);
       const res = await fetch("/api/lookup", {
