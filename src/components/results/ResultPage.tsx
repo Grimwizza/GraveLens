@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BottomNav from "@/components/layout/BottomNav";
 import { saveGrave, getGrave, getAllGraves, getPendingResult, deletePendingResult, deleteGrave, recordCemeteryVisit, saveAudio, getAudio, deleteAudio } from "@/lib/storage";
-import { inferGender, selectVoice, formatTime } from "@/lib/ttsUtils";
+import { inferGender, inferOrigin, selectVoice, formatTime } from "@/lib/ttsUtils";
 import { cemeteryId } from "@/lib/apis/cemetery";
 import { reverseGeocode } from "@/lib/apis/nominatim";
 import { checkAndUnlock, loadStats, type Achievement } from "@/lib/achievements";
@@ -3207,7 +3207,8 @@ function StoryCard({
   onStoryGenerated: (epitaphSource: string, epitaphMeaning: string, script: string) => void;
 }) {
   const gender = inferGender(extracted);
-  const voice  = selectVoice(gender, extracted.ageAtDeath);
+  const origin = inferOrigin(location, research);
+  const voice  = selectVoice(gender, extracted.ageAtDeath, origin);
   const cacheKey = `story_${voice}`;
 
   const [audioDataUrl, setAudioDataUrl]   = useState<string | null>(null);
