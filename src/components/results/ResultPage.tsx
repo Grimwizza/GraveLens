@@ -30,6 +30,13 @@ import type {
   PersonData,
 } from "@/types";
 
+function toNameCase(str: string): string {
+  if (!str) return str;
+  return str
+    .toLowerCase()
+    .replace(/(^|[\s\-'])([a-z])/g, (_, sep, c) => sep + c.toUpperCase());
+}
+
 interface PendingResult {
   id: string;
   photoDataUrl: string;
@@ -76,6 +83,8 @@ export default function ResultPage({ id }: { id: string }) {
   } | null>(null);
   const [deepRescanDone, setDeepRescanDone] = useState(false);
   const [deepRescanning, setDeepRescanning] = useState(false);
+  const [selectedPersonIdx, setSelectedPersonIdx] = useState(0);
+  const personResearchCacheRef = useRef<Map<number, ResearchData>>(new Map());
 
   useEffect(() => {
     getPendingResult(id).then(async (raw) => {
@@ -235,6 +244,7 @@ export default function ResultPage({ id }: { id: string }) {
               : undefined,
           };
           setResearch(researchData);
+          personResearchCacheRef.current.set(0, researchData);
           // Patch research into the already-saved record, re-reading first so we
           // don't clobber the cloud photoDataUrl/syncedAt if the upload finished first.
           getGrave(autoRecord.id).then((existing) => {
@@ -664,6 +674,8 @@ export default function ResultPage({ id }: { id: string }) {
             : undefined,
         };
         setResearch(researchData);
+        personResearchCacheRef.current.set(0, researchData);
+        setSelectedPersonIdx(0);
         setCulturalContext(null);
         const existing = await getGrave(pending.id);
         if (existing) await saveGrave({ ...existing, extracted: current, research: researchData });
@@ -674,6 +686,71 @@ export default function ResultPage({ id }: { id: string }) {
       setRefreshing(false);
     }
   }, [pending, extractedOverride, currentLocation]);
+
+  const handleSelectPerson = useCallback(async (idx: number) => {
+    if (idx === selectedPersonIdx || !pending) return;
+    setSelectedPersonIdx(idx);
+
+    const cached = personResearchCacheRef.current.get(idx);
+    if (cached) {
+      setResearch(cached);
+      setCulturalContext(cached.culturalContext ?? null);
+      return;
+    }
+
+    const people = pending.extracted.people ?? [];
+    const person = people[idx];
+    if (!person) return;
+
+    setResearchLoading(true);
+    try {
+      const res = await fetch("/api/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: person.name,
+          firstName: person.firstName,
+          lastName: person.lastName,
+          birthYear: person.birthYear,
+          deathYear: person.deathYear,
+          lat: currentLocation?.lat,
+          lng: currentLocation?.lng,
+          city: currentLocation?.city,
+          county: currentLocation?.county,
+          state: currentLocation?.state,
+          cemetery: currentLocation?.cemetery,
+          inscription: pending.extracted.inscription ?? "",
+          symbols: pending.extracted.symbols ?? [],
+        }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const researchData: ResearchData = {
+          newspapers:        d.newspapers ?? [],
+          naraRecords:       d.naraRecords ?? [],
+          landRecords:       d.landRecords ?? [],
+          historical:        d.historical ?? {},
+          militaryContext:   d.militaryContext ?? undefined,
+          localHistory:      d.localHistory ?? undefined,
+          familySearchHints: d.familySearchHints ?? undefined,
+          ssdi:              d.ssdi ?? undefined,
+          immigration:       d.immigration ?? undefined,
+          historicalCensus:  d.historicalCensus ?? undefined,
+          naraItemRecords:   d.naraItemRecords ?? undefined,
+          usGenWebRecords:   d.usGenWebRecords ?? undefined,
+          researchChecklist: d.researchChecklist ?? undefined,
+          cemetery: currentLocation?.cemetery
+            ? { name: currentLocation.cemetery, wikipediaUrl: d.cemeteryWikiUrl, location: currentLocation ?? undefined }
+            : undefined,
+        };
+        personResearchCacheRef.current.set(idx, researchData);
+        setResearch(researchData);
+        setCulturalContext(null);
+      }
+    } catch { /* non-fatal */ } finally {
+      setResearchLoading(false);
+    }
+  }, [selectedPersonIdx, pending, currentLocation]);
 
   const handleExtractedEdit = useCallback(async (patch: Partial<ExtractedGraveData>) => {
     if (!pending) return;
@@ -784,6 +861,11 @@ export default function ResultPage({ id }: { id: string }) {
   }
 
   const extracted: ExtractedGraveData = { ...pending.extracted, ...(extractedOverride ?? {}) };
+  const activePeople = extracted.people ?? [];
+  const activeExtracted: ExtractedGraveData =
+    selectedPersonIdx > 0 && activePeople[selectedPersonIdx]
+      ? { ...extracted, ...activePeople[selectedPersonIdx], people: extracted.people }
+      : extracted;
   const { photoDataUrl } = pending;
   const location = currentLocation;
 
@@ -817,7 +899,7 @@ export default function ResultPage({ id }: { id: string }) {
         </button>
 
         <span className="font-serif text-stone-200 text-base font-medium">
-          {extracted.name || "Unknown"}
+          {toNameCase(activeExtracted.name) || "Unknown"}
         </span>
 
         <div className="flex items-center gap-3">
@@ -905,12 +987,18 @@ export default function ResultPage({ id }: { id: string }) {
 
         <div className="flex flex-col gap-0 px-5 lg:px-8 lg:py-4">
           {/* Primary info card */}
-          <PrimaryCard extracted={extracted} onSave={handleExtractedEdit} />
+          <PrimaryCard
+            extracted={activeExtracted}
+            onSave={selectedPersonIdx === 0 ? handleExtractedEdit : undefined}
+            people={activePeople.length > 1 ? activePeople : undefined}
+            selectedPersonIdx={selectedPersonIdx}
+            onSelectPerson={handleSelectPerson}
+          />
 
           {/* Flagship: Hear Their Story */}
           <StoryCard
             graveId={pending.id}
-            extracted={extracted}
+            extracted={activeExtracted}
             research={research}
             location={location}
             onStoryGenerated={async (epitaphSource, epitaphMeaning, script) => {
@@ -946,7 +1034,7 @@ export default function ResultPage({ id }: { id: string }) {
           {(research?.historical || researchLoading) && (
             <HistoricalCard
               historical={research?.historical}
-              extracted={extracted}
+              extracted={activeExtracted}
               loading={researchLoading}
             />
           )}
@@ -1548,9 +1636,15 @@ function QualityIssueSheet({
 function PrimaryCard({
   extracted,
   onSave,
+  people,
+  selectedPersonIdx = 0,
+  onSelectPerson,
 }: {
   extracted: ExtractedGraveData;
   onSave?: (patch: Partial<ExtractedGraveData>) => void;
+  people?: PersonData[];
+  selectedPersonIdx?: number;
+  onSelectPerson?: (idx: number) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(extracted.name ?? "");
@@ -1624,10 +1718,29 @@ function PrimaryCard({
 
   return (
     <div className="py-6 animate-fade-up">
+      {/* Person picker — shown when marker has multiple people */}
+      {people && people.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-5">
+          {people.map((person, idx) => (
+            <button
+              key={idx}
+              onClick={() => onSelectPerson?.(idx)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                selectedPersonIdx === idx
+                  ? "bg-gold-500/15 border-gold-500/50 text-gold-400"
+                  : "bg-stone-800 border-stone-700 text-stone-400 active:border-stone-500"
+              }`}
+            >
+              {toNameCase(person.firstName || person.name) || `Person ${idx + 1}`}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-2">
         {extracted.name ? (
           <h1 className="font-serif text-3xl font-bold text-stone-50 leading-tight mb-3">
-            {extracted.name}
+            {toNameCase(extracted.name)}
           </h1>
         ) : (
           <h1 className="font-serif text-3xl font-bold text-stone-500 leading-tight mb-3 italic">

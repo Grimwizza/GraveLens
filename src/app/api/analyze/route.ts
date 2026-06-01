@@ -8,6 +8,26 @@ import { NextRequest, NextResponse } from "next/server";
 // Net result: ~72% cost reduction on clear markers, full quality on difficult ones.
 const MODEL_HAIKU = "claude-haiku-4-5-20251001";
 const MODEL_SONNET = "claude-sonnet-4-6";
+
+function toNameCase(str: string): string {
+  if (!str) return str;
+  return str
+    .toLowerCase()
+    .replace(/(^|[\s\-'])([a-z])/g, (_, sep, c) => sep + c.toUpperCase());
+}
+
+function normalizeExtractedNames(obj: Record<string, unknown>): void {
+  if (typeof obj.name === "string") obj.name = toNameCase(obj.name);
+  if (typeof obj.firstName === "string") obj.firstName = toNameCase(obj.firstName);
+  if (typeof obj.lastName === "string") obj.lastName = toNameCase(obj.lastName);
+  if (Array.isArray(obj.people)) {
+    for (const p of obj.people as Record<string, unknown>[]) {
+      if (typeof p.name === "string") p.name = toNameCase(p.name);
+      if (typeof p.firstName === "string") p.firstName = toNameCase(p.firstName);
+      if (typeof p.lastName === "string") p.lastName = toNameCase(p.lastName);
+    }
+  }
+}
 const MAX_TOKENS = 1024;
 
 const SYSTEM_PROMPT = `You are an expert at reading grave markers and historical headstones.
@@ -170,6 +190,7 @@ export async function POST(req: NextRequest) {
       extracted.analysisModel = MODEL_SONNET;
       extracted.isRescan = true;
       extracted.isDeepRescan = true;
+      normalizeExtractedNames(extracted);
       return NextResponse.json({ extracted, _model: MODEL_SONNET });
     }
 
@@ -188,6 +209,7 @@ export async function POST(req: NextRequest) {
       extracted.source = "claude";
       extracted.analysisModel = MODEL_SONNET;
       extracted.isRescan = true;
+      normalizeExtractedNames(extracted);
       return NextResponse.json({ extracted, _model: MODEL_SONNET });
     }
 
@@ -214,6 +236,7 @@ export async function POST(req: NextRequest) {
 
     extracted!.source = "claude";
     extracted!.analysisModel = usedModel;
+    normalizeExtractedNames(extracted!);
 
     return NextResponse.json({ extracted, _model: usedModel });
   } catch (error: unknown) {
