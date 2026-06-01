@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/benluebbert/Documents/Sites/GraveLens && npx tsc --noEmit 2>&1 | head -20",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

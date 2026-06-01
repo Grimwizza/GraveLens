@@ -35,8 +35,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## 6. Agent Skills — Auto-Apply Rules
 
-Skill definitions live in `.agent/skills/*/SKILL.md`. Apply these automatically:
+Skill definitions live in `.agent/skills/*/SKILL.md` (custom) and `.claude/skills/*/SKILL.md` (installed). Apply these automatically:
 
+* **`gravelens-domain`** — Read at the start of any session touching vision, storage, auth, or multi-person stone logic. Documents the project's non-obvious architecture so it doesn't need to be re-derived from source each session.
+* **`supabase`** — Read and apply when writing or modifying Supabase auth, RLS, migrations, storage, or realtime. Installed via `npx skills add`.
 * **`api_architect`** — Read and apply whenever writing or modifying any `fetch`, Supabase call, or third-party API integration. Enforce idempotency, retry logic, and meaningful error logging. Bare `catch(() => {})` blocks are a violation.
 * **`security_auditor`** — Read and apply before finalizing any route in `src/app/api/`. Check for OWASP Top 10, exposed secrets, and unvalidated user inputs. Halt and flag if secrets are found in source.
 * **`context_handoff`** — When the user asks for a handoff, summary, or the session is clearly running long: read this skill and generate a compressed `handoff.md` in the project root so the next session can resume instantly.
