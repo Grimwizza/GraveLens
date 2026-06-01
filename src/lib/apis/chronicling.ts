@@ -6,6 +6,33 @@ const BASE = "https://chroniclingamerica.loc.gov";
 // Searches outside this range will never return results.
 const ARCHIVE_END_YEAR = 1963;
 
+/**
+ * Build a URL-safe Chronicling America link.
+ * The API returns item.url as a relative path ("/lccn/…") but occasionally
+ * returns absolute URLs in some response variants — guard both cases.
+ */
+function toChronUrl(url: string | undefined): string {
+  if (!url) return `${BASE}/search/pages/results/`;
+  return url.startsWith("http") ? url : `${BASE}${url}`;
+}
+
+/**
+ * Find the portion of OCR text closest to the search term rather than
+ * returning the first 300 characters (which is usually the page banner).
+ */
+function extractContextSnippet(ocr: string, query: string, windowChars = 250): string {
+  const lower = ocr.toLowerCase();
+  const parts = query.trim().replace(/"/g, "").split(/\s+/);
+  // Prefer the last name (rightmost token) — most reliable in historical OCR
+  const searchFor = parts.length >= 2 ? parts[parts.length - 1].toLowerCase() : parts[0]?.toLowerCase() ?? "";
+  const idx = searchFor ? lower.indexOf(searchFor) : -1;
+  if (idx === -1) return ocr.slice(0, 300).replace(/\s+/g, " ").trim();
+  const start = Math.max(0, idx - 80);
+  const end = Math.min(ocr.length, idx + windowChars);
+  const raw = ocr.slice(start, end).replace(/\s+/g, " ").trim();
+  return (start > 0 ? "…" : "") + raw + (end < ocr.length ? "…" : "");
+}
+
 export async function searchNewspapers(
   name: string,
   deathYear: number | null,
@@ -60,10 +87,8 @@ export async function searchNewspapers(
       date: item.date ? formatChronDate(item.date) : "",
       newspaper: item.title ?? "",
       location: item.place_of_publication ?? "",
-      url: item.url ? `${BASE}${item.url}` : BASE,
-      snippet: item.ocr_eng
-        ? item.ocr_eng.slice(0, 300).replace(/\s+/g, " ").trim()
-        : "",
+      url: toChronUrl(item.url),
+      snippet: item.ocr_eng ? extractContextSnippet(item.ocr_eng, searchName) : "",
     }));
   } catch {
     return [];
@@ -132,10 +157,8 @@ export async function searchLocalAreaNews(
       date: item.date ? formatChronDate(item.date) : "",
       newspaper: item.title ?? "",
       location: item.place_of_publication ?? "",
-      url: item.url ? `${BASE}${item.url}` : BASE,
-      snippet: item.ocr_eng
-        ? item.ocr_eng.slice(0, 300).replace(/\s+/g, " ").trim()
-        : "",
+      url: toChronUrl(item.url),
+      snippet: item.ocr_eng ? extractContextSnippet(item.ocr_eng, geoTerm) : "",
     }));
   } catch {
     return [];

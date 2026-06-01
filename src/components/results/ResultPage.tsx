@@ -57,6 +57,8 @@ export default function ResultPage({ id }: { id: string }) {
   const [extractedOverride, setExtractedOverride] = useState<Partial<ExtractedGraveData> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const refreshingRef = useRef(false);
+  // Tracks which individual section is mid-refresh (null = none)
+  const [sectionRefreshing, setSectionRefreshing] = useState<string | null>(null);
   const [isPublic, setIsPublic] = useState(false);
   // Abort controller for the initial fresh-scan research fetch.
   // Cancelled the moment a user-triggered refresh starts so the old-name
@@ -641,6 +643,100 @@ export default function ResultPage({ id }: { id: string }) {
     }
   }, [pending, extractedOverride, currentLocation]);
 
+  // ── Per-section refresh handlers ────────────────────────────────────────────
+  // Each calls a lightweight API route that wraps only that section's lookup.
+  // Uses sectionRefreshing key to prevent concurrent section refreshes.
+
+  const handleRefreshNewspapers = useCallback(async () => {
+    if (!pending || sectionRefreshing) return;
+    const eff = { ...pending.extracted, ...(extractedOverride ?? {}) };
+    const people = eff.people ?? [];
+    const person = selectedPersonIdx > 0 && people[selectedPersonIdx]
+      ? { ...eff, ...people[selectedPersonIdx] } : eff;
+    setSectionRefreshing("newspapers");
+    try {
+      const res = await fetch("/api/newspapers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: person.name, deathYear: person.deathYear, state: currentLocation?.state }),
+      });
+      if (res.ok) {
+        const { newspapers } = await res.json();
+        setResearch((prev) => ({ ...(prev ?? {}), newspapers }));
+        const existing = await getGrave(pending.id);
+        if (existing) await saveGrave({ ...existing, research: { ...existing.research, newspapers } });
+      }
+    } catch { /* non-fatal */ } finally { setSectionRefreshing(null); }
+  }, [pending, sectionRefreshing, extractedOverride, selectedPersonIdx, currentLocation]);
+
+  const handleRefreshNara = useCallback(async () => {
+    if (!pending || sectionRefreshing) return;
+    const eff = { ...pending.extracted, ...(extractedOverride ?? {}) };
+    const people = eff.people ?? [];
+    const person = selectedPersonIdx > 0 && people[selectedPersonIdx]
+      ? { ...eff, ...people[selectedPersonIdx] } : eff;
+    setSectionRefreshing("nara");
+    try {
+      const res = await fetch("/api/nara", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: person.name, birthYear: person.birthYear, deathYear: person.deathYear }),
+      });
+      if (res.ok) {
+        const { naraRecords } = await res.json();
+        setResearch((prev) => ({ ...(prev ?? {}), naraRecords }));
+        const existing = await getGrave(pending.id);
+        if (existing) await saveGrave({ ...existing, research: { ...existing.research, naraRecords } });
+      }
+    } catch { /* non-fatal */ } finally { setSectionRefreshing(null); }
+  }, [pending, sectionRefreshing, extractedOverride, selectedPersonIdx]);
+
+  const handleRefreshFamilySearch = useCallback(async () => {
+    if (!pending || sectionRefreshing) return;
+    const eff = { ...pending.extracted, ...(extractedOverride ?? {}) };
+    const people = eff.people ?? [];
+    const person = selectedPersonIdx > 0 && people[selectedPersonIdx]
+      ? { ...eff, ...people[selectedPersonIdx] } : eff;
+    setSectionRefreshing("familysearch");
+    try {
+      const res = await fetch("/api/familysearch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firstName: person.firstName, lastName: person.lastName, birthYear: person.birthYear, deathYear: person.deathYear }),
+      });
+      if (res.ok) {
+        const { familySearchHints } = await res.json();
+        setResearch((prev) => ({ ...(prev ?? {}), familySearchHints }));
+        const existing = await getGrave(pending.id);
+        if (existing) await saveGrave({ ...existing, research: { ...existing.research, familySearchHints } });
+      }
+    } catch { /* non-fatal */ } finally { setSectionRefreshing(null); }
+  }, [pending, sectionRefreshing, extractedOverride, selectedPersonIdx]);
+
+  const handleRefreshSsdi = useCallback(async () => {
+    if (!pending || sectionRefreshing) return;
+    const eff = { ...pending.extracted, ...(extractedOverride ?? {}) };
+    const people = eff.people ?? [];
+    const person = selectedPersonIdx > 0 && people[selectedPersonIdx]
+      ? { ...eff, ...people[selectedPersonIdx] } : eff;
+    setSectionRefreshing("ssdi");
+    try {
+      const res = await fetch("/api/ssdi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firstName: person.firstName, lastName: person.lastName, birthYear: person.birthYear, deathYear: person.deathYear }),
+      });
+      if (res.ok) {
+        const { ssdi } = await res.json();
+        setResearch((prev) => ({ ...(prev ?? {}), ssdi }));
+        const existing = await getGrave(pending.id);
+        if (existing) await saveGrave({ ...existing, research: { ...existing.research, ssdi } });
+      }
+    } catch { /* non-fatal */ } finally { setSectionRefreshing(null); }
+  }, [pending, sectionRefreshing, extractedOverride, selectedPersonIdx]);
+
+  // ────────────────────────────────────────────────────────────────────────────
+
   // Tracks the in-flight person-switch fetch so rapid taps can cancel the prior one.
   const personFetchAbortRef = useRef<AbortController | null>(null);
 
@@ -1097,6 +1193,8 @@ export default function ResultPage({ id }: { id: string }) {
               title="Newspaper Archives"
               icon="📰"
               loading={researchLoading}
+              onRefresh={handleRefreshNewspapers}
+              refreshing={sectionRefreshing === "newspapers"}
               items={research?.newspapers?.map((n) => ({
                 title: n.newspaper,
                 subtitle: n.date,
@@ -1113,6 +1211,8 @@ export default function ResultPage({ id }: { id: string }) {
               title="National Archives"
               icon="🏛"
               loading={researchLoading}
+              onRefresh={handleRefreshNara}
+              refreshing={sectionRefreshing === "nara"}
               items={research?.naraRecords?.map((r) => ({
                 title: r.title,
                 subtitle: r.recordGroup ? `Record Group ${r.recordGroup}` : "",
@@ -1142,12 +1242,18 @@ export default function ResultPage({ id }: { id: string }) {
             <FamilySearchCard
               hints={research?.familySearchHints}
               loading={researchLoading}
+              onRefresh={handleRefreshFamilySearch}
+              refreshing={sectionRefreshing === "familysearch"}
             />
           ) : null}
 
           {/* F3: SSDI */}
           {research?.ssdi?.length ? (
-            <SSDICard records={research.ssdi} />
+            <SSDICard
+              records={research.ssdi}
+              onRefresh={handleRefreshSsdi}
+              refreshing={sectionRefreshing === "ssdi"}
+            />
           ) : null}
 
           {/* F4: Historical Census */}
@@ -1172,7 +1278,11 @@ export default function ResultPage({ id }: { id: string }) {
 
           {/* F6: Item-level military/enlistment records */}
           {research?.naraItemRecords?.length ? (
-            <NaraItemCard records={research.naraItemRecords} />
+            <NaraItemCard
+              records={research.naraItemRecords}
+              onRefresh={handleRefreshNara}
+              refreshing={sectionRefreshing === "nara"}
+            />
           ) : null}
 
           {/* F7: USGenWeb probate/deed/will */}
@@ -2006,6 +2116,8 @@ function RecordsCard({
   icon,
   loading,
   items,
+  onRefresh,
+  refreshing,
 }: {
   title: string;
   icon: string;
@@ -2016,11 +2128,13 @@ function RecordsCard({
     detail: string;
     url?: string;
   }>;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }) {
   if (loading && !items) {
     return (
       <div className="py-5 animate-fade-up">
-        <SectionHeader icon={icon} title={title} />
+        <SectionHeader icon={icon} title={title} onRefresh={onRefresh} refreshing={refreshing} />
         <div className="mt-3 space-y-2">
           <div className="h-14 shimmer rounded-xl" />
           <div className="h-14 shimmer rounded-xl" />
@@ -2033,7 +2147,7 @@ function RecordsCard({
 
   return (
     <div className="py-5 animate-fade-up">
-      <SectionHeader icon={icon} title={title} />
+      <SectionHeader icon={icon} title={title} onRefresh={onRefresh} refreshing={refreshing} />
       <ul className="mt-3 space-y-2">
         {items.map((item, i) => (
           <li key={i}>
@@ -2086,14 +2200,18 @@ function RecordItem({
 function FamilySearchCard({
   hints,
   loading,
+  onRefresh,
+  refreshing,
 }: {
   hints?: import("@/types").FamilySearchHint[];
   loading: boolean;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }) {
   if (loading && !hints) {
     return (
       <div className="py-5 animate-fade-up">
-        <SectionHeader icon="🌳" title="FamilySearch Records" />
+        <SectionHeader icon="🌳" title="FamilySearch Records" onRefresh={onRefresh} refreshing={refreshing} />
         <div className="mt-3 space-y-2">
           <div className="h-14 shimmer rounded-xl" />
           <div className="h-14 shimmer rounded-xl" />
@@ -2105,7 +2223,7 @@ function FamilySearchCard({
 
   return (
     <div className="py-5 animate-fade-up">
-      <SectionHeader icon="🌳" title="FamilySearch Records" />
+      <SectionHeader icon="🌳" title="FamilySearch Records" onRefresh={onRefresh} refreshing={refreshing} />
       <p className="text-stone-500 text-xs mt-1 mb-3">
         Free indexed records — 9 billion entries. Tap any result to view on FamilySearch.
       </p>
@@ -2162,11 +2280,19 @@ const CONFIDENCE_STYLE: Record<string, { color: string; bg: string; label: strin
   low:    { color: "#a07060", bg: "rgba(120,60,40,0.18)",  label: "Low confidence" },
 };
 
-function SSDICard({ records }: { records: import("@/types").SSDIRecord[] }) {
+function SSDICard({
+  records,
+  onRefresh,
+  refreshing,
+}: {
+  records: import("@/types").SSDIRecord[];
+  onRefresh?: () => void;
+  refreshing?: boolean;
+}) {
   if (!records.length) return null;
   return (
     <div className="py-5 animate-fade-up">
-      <SectionHeader icon="📋" title="Social Security Death Index" />
+      <SectionHeader icon="📋" title="Social Security Death Index" onRefresh={onRefresh} refreshing={refreshing} />
       <p className="text-stone-500 text-xs mt-1 mb-3">
         SSDI records (1936–2014) — confirms death date and last known state.
       </p>
@@ -2303,11 +2429,19 @@ function ImmigrationCard({ records }: { records: import("@/types").ImmigrationRe
 
 // ── NARA Item-Level Card (F6) ─────────────────────────────────────────────────
 
-function NaraItemCard({ records }: { records: import("@/types").NaraItemRecord[] }) {
+function NaraItemCard({
+  records,
+  onRefresh,
+  refreshing,
+}: {
+  records: import("@/types").NaraItemRecord[];
+  onRefresh?: () => void;
+  refreshing?: boolean;
+}) {
   if (!records.length) return null;
   return (
     <div className="py-5 animate-fade-up">
-      <SectionHeader icon="🎖" title="Military Item-Level Records" />
+      <SectionHeader icon="🎖" title="Military Item-Level Records" onRefresh={onRefresh} refreshing={refreshing} />
       <p className="text-stone-500 text-xs mt-1 mb-3">
         Enlistment, pension, and casualty records — direct links to digitized files.
       </p>
@@ -3566,13 +3700,36 @@ function ImmigrationJourneyCard({ records }: { records: import("@/types").Immigr
 
 // ── Section Header ────────────────────────────────────────────────────────────
 
-function SectionHeader({ icon, title }: { icon: string; title: string }) {
+function SectionHeader({
+  icon, title, onRefresh, refreshing,
+}: {
+  icon: string; title: string;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+}) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-base">{icon}</span>
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500">
-        {title}
-      </h2>
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <span className="text-base">{icon}</span>
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500">
+          {title}
+        </h2>
+      </div>
+      {onRefresh && (
+        <button
+          onClick={onRefresh}
+          disabled={refreshing}
+          aria-label={`Refresh ${title}`}
+          className="text-stone-500 active:text-stone-300 disabled:opacity-40 p-1 -mr-1"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+            strokeLinecap="round" strokeLinejoin="round" className={refreshing ? "animate-spin" : ""}>
+            <polyline points="23 4 23 10 17 10"/>
+            <polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
