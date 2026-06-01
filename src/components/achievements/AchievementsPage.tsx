@@ -246,7 +246,7 @@ function AchievementDetailSheet({
           {/* Title */}
           <h2
             className="font-serif text-2xl font-bold leading-tight mb-2"
-            style={{ color: unlocked ? "var(--t-gold-200)" : "#c8c0b8" }}
+            style={{ color: unlocked ? "var(--t-gold-500)" : "var(--t-stone-500)" }}
           >
             {achievement.title}
           </h2>

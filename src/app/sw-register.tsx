@@ -118,7 +118,7 @@ export default function ServiceWorkerRegister() {
           <polyline points="20 6 9 17 4 12" />
         </svg>
       </div>
-      <p className="text-sm font-medium" style={{ color: "#e8d9a0" }}>
+      <p className="text-sm font-medium text-stone-100">
         GraveLens updated to the latest version
       </p>
     </div>

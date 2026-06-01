@@ -2602,10 +2602,10 @@ function UsGenWebCard({ records }: { records: import("@/types").UsGenWebRecord[]
 
 // ── Research Checklist Card ───────────────────────────────────────────────────
 
-const PRIORITY_LABEL: Record<1 | 2 | 3, { label: string; color: string; bg: string }> = {
-  1: { label: "Do First",   color: "#e8a87c", bg: "rgba(180,90,40,0.2)" },
-  2: { label: "High Value", color: "var(--t-gold-500)", bg: "rgba(150,100,20,0.2)" },
-  3: { label: "Supplement", color: "#7a9a7a", bg: "rgba(50,90,50,0.2)" },
+const PRIORITY_LABEL: Record<1 | 2 | 3, { label: string; color: string; bg: string; textColor: string }> = {
+  1: { label: "Do First",   color: "#e8a87c", bg: "rgba(180,90,40,0.2)",  textColor: "var(--t-stone-200)" },
+  2: { label: "High Value", color: "var(--t-gold-500)", bg: "rgba(150,100,20,0.2)", textColor: "var(--t-gold-500)" },
+  3: { label: "Supplement", color: "#7a9a7a", bg: "rgba(50,90,50,0.2)",   textColor: "var(--t-stone-300)" },
 };
 
 function ResearchChecklistCard({
@@ -2636,7 +2636,7 @@ function ResearchChecklistCard({
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                   <span
                     className="text-[0.65rem] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide"
-                    style={{ background: badge.bg, color: badge.color }}
+                    style={{ background: badge.bg, color: badge.textColor }}
                   >
                     {badge.label}
                   </span>
