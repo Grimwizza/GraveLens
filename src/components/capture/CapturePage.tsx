@@ -584,7 +584,7 @@ function DesktopIdleState({ onUpload, onFileDrop }: { onUpload: () => void; onFi
         <button
           onClick={(e) => { e.stopPropagation(); onUpload(); }}
           className="px-6 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90"
-          style={{ background: "linear-gradient(135deg, #c9a84c 0%, #a07830 100%)", color: "var(--t-stone-900)" }}
+          style={{ background: "linear-gradient(135deg, #c9a84c 0%, #a07830 100%)", color: "#1a1917" }}
         >
           Browse Files
         </button>

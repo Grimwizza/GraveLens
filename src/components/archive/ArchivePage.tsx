@@ -945,7 +945,7 @@ export default function ArchivePage() {
                 </div>
                 <button
                   onClick={startAssignment}
-                  className="shrink-0 text-xs font-semibold text-stone-900 px-3 py-1.5 rounded-lg"
+                  className="shrink-0 text-xs font-semibold text-[#1a1917] px-3 py-1.5 rounded-lg"
                   style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
                 >
                   Assign
@@ -1573,7 +1573,7 @@ function GraveList({
                         if (name && onCemeteryEdit) onCemeteryEdit(grave.id, name).then(() => setEditingId(null));
                       }}
                       className="text-[0.75rem] font-semibold px-2 py-1 rounded"
-                      style={{ background: "var(--t-gold-500)", color: "var(--t-stone-900)" }}
+                      style={{ background: "var(--t-gold-500)", color: "#1a1917" }}
                     >
                       Save
                     </button>

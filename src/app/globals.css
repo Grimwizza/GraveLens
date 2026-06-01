@@ -105,6 +105,12 @@ html[data-theme="light"][data-high-contrast="true"] .text-stone-600 {
 html[data-theme="light"] body {
   color: var(--t-stone-50);
 }
+html[data-theme="light"] .text-stone-600 {
+  color: var(--t-stone-400) !important;
+}
+html[data-theme="light"] .text-stone-500 {
+  color: var(--t-stone-300) !important;
+}
 
 body {
   /*

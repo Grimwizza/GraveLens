@@ -159,7 +159,7 @@ export default function BottomNav() {
                 {showBadge && (
                   <span
                     className="absolute top-1 right-1 min-w-[16px] h-4 rounded-full text-[0.75rem] font-bold flex items-center justify-center px-1"
-                    style={{ background: "var(--t-gold-500)", color: "var(--t-stone-900)" }}
+                    style={{ background: "var(--t-gold-500)", color: "#1a1917" }}
                   >
                     {queueCount > 9 ? "9+" : queueCount}
                   </span>
@@ -188,7 +188,7 @@ export default function BottomNav() {
               aria-label="Take a photo"
             >
               <div className="absolute inset-[1px] rounded-full border border-white/30 pointer-events-none" />
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--t-stone-900)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 2px 2px rgba(255,255,255,0.4))" }}>
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#1a1917" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 2px 2px rgba(255,255,255,0.4))" }}>
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                 <circle cx="12" cy="13" r="4"/>
               </svg>

@@ -119,7 +119,7 @@ export default function DesktopNav() {
               {showBadge && (
                 <span
                   className="ml-auto min-w-[18px] h-[18px] rounded-full text-[0.7rem] font-bold flex items-center justify-center px-1"
-                  style={{ background: "var(--t-gold-500)", color: "var(--t-stone-900)" }}
+                  style={{ background: "var(--t-gold-500)", color: "#1a1917" }}
                 >
                   {queueCount > 9 ? "9+" : queueCount}
                 </span>
@@ -138,7 +138,7 @@ export default function DesktopNav() {
             background: isScanActive
               ? "linear-gradient(135deg, #eadd9a 0%, var(--t-gold-500) 50%, #9e7f33 100%)"
               : "linear-gradient(135deg, #c9a84c 0%, #a07830 100%)",
-            color: "var(--t-stone-900)",
+            color: "#1a1917",
           }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

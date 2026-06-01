@@ -138,7 +138,7 @@ export default function MapPage() {
                   setMenuOpen(false);
                 }}
                 className="flex-1 py-2 rounded-lg font-semibold text-sm active:scale-[0.97] transition-all"
-                style={{ background: "var(--t-gold-500)", color: "var(--t-stone-900)" }}
+                style={{ background: "var(--t-gold-500)", color: "#1a1917" }}
               >
                 Search
               </button>
