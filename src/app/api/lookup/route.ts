@@ -24,6 +24,8 @@ import { searchUsGenWebRecords } from "@/lib/apis/usgenweb";
 import { getSoundex } from "@/lib/phonetic";
 import { buildResearchChecklist } from "@/lib/researchChecklist";
 import type { ResearchData, GeoLocation, NaraItemRecord, UsGenWebRecord } from "@/types";
+import { createClient } from "@/lib/supabase/server";
+import { checkLocalHistoryCache, saveLocalHistoryCache } from "@/lib/community";
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
@@ -52,6 +54,14 @@ export async function POST(req: NextRequest) {
     // ── Phonetic normalization ──────────────────────────────────────────────
     const surnameSoundex = lastName ? getSoundex(lastName) : "";
 
+    const supabase = await createClient();
+
+    // ── Check local history cache ───────────────────────────────────────────
+    let cachedHistory = null;
+    if (hasCoords) {
+      cachedHistory = await checkLocalHistoryCache(supabase, lat, lng).catch(() => null);
+    }
+
     // ── Tier 1: All free-API lookups in parallel ────────────────────────────
     const [
       newspapers,
@@ -77,13 +87,14 @@ export async function POST(req: NextRequest) {
       searchLandPatents(lastName, firstName, state),
       getHistoricalContext(birthYear, deathYear, state),
       searchCemeteryWikipedia(cemetery),
-      getCityContext(city, county, state),
-      getDecadeSnapshots(state, birthYear, deathYear),
-      searchLocalAreaNews(city, county, state, birthYear, deathYear),
-      hasCoords ? searchNrhpSites(lat, lng, birthYear, deathYear) : Promise.resolve([]),
-      hasCoords ? getCountyPopulation(lat, lng, birthYear, deathYear) : Promise.resolve([]),
-      getSanbornMapUrl(city, state, deathYear),
-      hasCoords ? getLocalWikidataEvents(lat, lng, birthYear, deathYear) : Promise.resolve([]),
+      // Cacheable local history inputs: bypassed on cache hit
+      !cachedHistory ? getCityContext(city, county, state) : Promise.resolve({}),
+      !cachedHistory ? getDecadeSnapshots(state, birthYear, deathYear) : Promise.resolve([]),
+      !cachedHistory ? searchLocalAreaNews(city, county, state, birthYear, deathYear) : Promise.resolve([]),
+      (!cachedHistory && hasCoords) ? searchNrhpSites(lat, lng, birthYear, deathYear) : Promise.resolve([]),
+      (!cachedHistory && hasCoords) ? getCountyPopulation(lat, lng, birthYear, deathYear) : Promise.resolve([]),
+      !cachedHistory ? getSanbornMapUrl(city, state, deathYear) : Promise.resolve(undefined),
+      (!cachedHistory && hasCoords) ? getLocalWikidataEvents(lat, lng, birthYear, deathYear) : Promise.resolve([]),
       // F1: FamilySearch record hints
       searchFamilySearchHints(firstName, lastName, birthYear, deathYear),
       // F3: SSDI — only 1936–2014 deaths
@@ -108,35 +119,41 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── Resolve parallel results ────────────────────────────────────────────
-    const cityCtx      = cityContext.status      === "fulfilled" ? cityContext.value      : {};
-    const snapshots    = decadeSnapshots.status  === "fulfilled" ? decadeSnapshots.value  : [];
-    const localNews    = localNewspaper.status   === "fulfilled" ? localNewspaper.value   : [];
-    const nrhp         = nrhpSites.status        === "fulfilled" ? nrhpSites.value        : [];
-    const census       = censusPopulation.status === "fulfilled" ? censusPopulation.value : [];
-    const sanborn      = sanbornMapUrl.status    === "fulfilled" ? sanbornMapUrl.value    : undefined;
-    const wikiEvents   = wikidataEvents.status   === "fulfilled" ? wikidataEvents.value   : [];
-    const fsHints      = familySearchHints.status === "fulfilled" ? familySearchHints.value : [];
-    const ssdi         = ssdiRecords.status        === "fulfilled" ? ssdiRecords.value        : [];
-    const immigration  = immigrationRecords.status === "fulfilled" ? immigrationRecords.value : [];
-    const histCensus   = historicalCensusRecords.status === "fulfilled" ? historicalCensusRecords.value : [];
-    const notables     = birthYearNotables.status  === "fulfilled" ? birthYearNotables.value  : [];
+    // ── Resolve cacheable local history ─────────────────────────────────────
+    let localHistory: any = {};
+    if (cachedHistory) {
+      localHistory = cachedHistory.localHistory || {};
+    } else {
+      const cityCtx      = cityContext.status      === "fulfilled" ? (cityContext.value as any)      : {};
+      const snapshots    = decadeSnapshots.status  === "fulfilled" ? (decadeSnapshots.value as any)  : [];
+      const localNews    = localNewspaper.status   === "fulfilled" ? (localNewspaper.value as any)   : [];
+      const nrhp         = nrhpSites.status        === "fulfilled" ? (nrhpSites.value as any)        : [];
+      const census       = censusPopulation.status === "fulfilled" ? (censusPopulation.value as any) : [];
+      const sanborn      = sanbornMapUrl.status    === "fulfilled" ? (sanbornMapUrl.value as any)    : undefined;
+      const wikiEvents   = wikidataEvents.status   === "fulfilled" ? (wikidataEvents.value as any)   : [];
 
-    const localHistory = {
-      ...(cityCtx.cityArticle   ? { cityArticle:   cityCtx.cityArticle   } : {}),
-      ...(cityCtx.countyArticle ? { countyArticle: cityCtx.countyArticle } : {}),
-      ...(snapshots.length   > 0 ? { decadeSnapshots: snapshots   } : {}),
-      ...(localNews.length   > 0 ? { localNewspaper:  localNews   } : {}),
-      ...(nrhp.length        > 0 ? { nrhpSites:       nrhp        } : {}),
-      ...(census.length      > 0 ? { censusPopulation: census     } : {}),
-      ...(sanborn               ? { sanbornMapUrl:    sanborn     } : {}),
-      ...(wikiEvents.length  > 0 ? { wikidataEvents:  wikiEvents  } : {}),
-    };
+      localHistory = {
+        ...(cityCtx.cityArticle   ? { cityArticle:   cityCtx.cityArticle   } : {}),
+        ...(cityCtx.countyArticle ? { countyArticle: cityCtx.countyArticle } : {}),
+        ...(snapshots.length   > 0 ? { decadeSnapshots: snapshots   } : {}),
+        ...(localNews.length   > 0 ? { localNewspaper:  localNews   } : {}),
+        ...(nrhp.length        > 0 ? { nrhpSites:       nrhp        } : {}),
+        ...(census.length      > 0 ? { censusPopulation: census     } : {}),
+        ...(sanborn               ? { sanbornMapUrl:    sanborn     } : {}),
+        ...(wikiEvents.length  > 0 ? { wikidataEvents:  wikiEvents  } : {}),
+      };
+
+      if (hasCoords) {
+        await saveLocalHistoryCache(supabase, lat, lng, {
+          localHistory,
+          wikidataEvents: wikiEvents,
+          nrhpSites: nrhp,
+        }).catch((err) => console.error("[local-history-cache-save] failed:", err));
+      }
+    }
 
     // ── Tier 3: Conditional lookups requiring Tier 1/2 results ─────────────
-    // Run F6 (enlistment) and F7 (USGenWeb) in parallel.
-    // F6 needs militaryContext.likelyConflict; F7 needs land records + pre-1920 death.
-    const landCount = (landRecords.status === "fulfilled" ? landRecords.value : []).length;
+    const landCount = (landRecords.status === "fulfilled" ? (landRecords.value as any) : []).length;
     const [enlistmentResult, usGenWebResult] = await Promise.allSettled([
       // F6: Item-level military records
       militaryContext?.likelyConflict
@@ -152,14 +169,14 @@ export async function POST(req: NextRequest) {
 
     // ── F8: Research Checklist — deterministic, zero-cost ──────────────────
     const partialResearch: ResearchData = {
-      newspapers:       newspapers.status    === "fulfilled" ? newspapers.value    : [],
-      naraRecords:      naraRecords.status   === "fulfilled" ? naraRecords.value   : [],
-      landRecords:      landRecords.status   === "fulfilled" ? landRecords.value   : [],
+      newspapers:       newspapers.status    === "fulfilled" ? (newspapers.value as any)    : [],
+      naraRecords:      naraRecords.status   === "fulfilled" ? (naraRecords.value as any)   : [],
+      landRecords:      landRecords.status   === "fulfilled" ? (landRecords.value as any)   : [],
       militaryContext:  militaryContext ?? undefined,
-      familySearchHints: fsHints.length > 0 ? fsHints : undefined,
-      ssdi:             ssdi.length     > 0 ? ssdi     : undefined,
-      immigration:      immigration.length > 0 ? immigration : undefined,
-      historicalCensus: histCensus.length > 0 ? histCensus : undefined,
+      familySearchHints: familySearchHints.status === "fulfilled" ? (familySearchHints.value as any) : undefined,
+      ssdi:             ssdiRecords.status   === "fulfilled" ? (ssdiRecords.value as any)   : undefined,
+      immigration:      immigrationRecords.status === "fulfilled" ? (immigrationRecords.value as any) : undefined,
+      historicalCensus: historicalCensusRecords.status === "fulfilled" ? (historicalCensusRecords.value as any) : undefined,
     };
     const partialLocation: GeoLocation = { lat: lat ?? 0, lng: lng ?? 0, city, county, state };
     const researchChecklist = buildResearchChecklist(
@@ -167,6 +184,8 @@ export async function POST(req: NextRequest) {
       partialResearch,
       partialLocation
     );
+
+    const notables = birthYearNotables.status === "fulfilled" ? birthYearNotables.value : [];
 
     return NextResponse.json({
       newspapers:         newspapers.status    === "fulfilled" ? newspapers.value    : [],
@@ -176,10 +195,10 @@ export async function POST(req: NextRequest) {
       cemeteryWikiUrl:    cemeteryWikiUrl.status === "fulfilled" ? cemeteryWikiUrl.value : undefined,
       militaryContext,
       localHistory:       Object.keys(localHistory).length > 0 ? localHistory : undefined,
-      familySearchHints:  fsHints.length    > 0 ? fsHints    : undefined,
-      ssdi:               ssdi.length       > 0 ? ssdi       : undefined,
-      immigration:        immigration.length > 0 ? immigration : undefined,
-      historicalCensus:   histCensus.length      > 0 ? histCensus      : undefined,
+      familySearchHints:  familySearchHints.status === "fulfilled" && (familySearchHints.value as any).length > 0 ? familySearchHints.value : undefined,
+      ssdi:               ssdiRecords.status        === "fulfilled" && (ssdiRecords.value as any).length        > 0 ? ssdiRecords.value        : undefined,
+      immigration:        immigrationRecords.status === "fulfilled" && (immigrationRecords.value as any).length > 0 ? immigrationRecords.value : undefined,
+      historicalCensus:   historicalCensusRecords.status === "fulfilled" && (historicalCensusRecords.value as any).length > 0 ? historicalCensusRecords.value : undefined,
       naraItemRecords:    naraItemRecords.length > 0 ? naraItemRecords : undefined,
       usGenWebRecords:    usGenWebRecords.length > 0 ? usGenWebRecords : undefined,
       birthYearNotables:  notables.length        > 0 ? notables        : undefined,
@@ -191,4 +210,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Lookup failed" }, { status: 500 });
   }
 }
+
 

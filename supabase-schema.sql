@@ -183,6 +183,14 @@ create policy "Authenticated users read history cache"
   on public.local_history_cache for select
   to authenticated using (true);
 
+create policy "Authenticated users insert history cache"
+  on public.local_history_cache for insert
+  to authenticated with check (true);
+
+create policy "Authenticated users update history cache"
+  on public.local_history_cache for update
+  to authenticated using (true);
+
 
 -- ── Cemetery research cache ───────────────────────────────────
 -- Shared cemetery metadata to avoid re-fetching Wikipedia/OSM data.
@@ -205,6 +213,15 @@ alter table public.cemetery_cache enable row level security;
 create policy "Authenticated users read cemetery cache"
   on public.cemetery_cache for select
   to authenticated using (true);
+
+create policy "Authenticated users insert cemetery cache"
+  on public.cemetery_cache for insert
+  to authenticated with check (true);
+
+create policy "Authenticated users update cemetery cache"
+  on public.cemetery_cache for update
+  to authenticated using (true);
+
 
 
 -- ── Military context cache ────────────────────────────────────

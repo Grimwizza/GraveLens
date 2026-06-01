@@ -21,7 +21,7 @@ export function cemeteryId(name: string, lat: number, lng: number, osmId?: strin
 
 // ── Overpass detail query ─────────────────────────────────────────────────
 
-interface OsmCemeteryDetail {
+export interface OsmCemeteryDetail {
   osmId?: string;
   openingHours?: string;
   phone?: string;
@@ -32,7 +32,7 @@ interface OsmCemeteryDetail {
   wikipedia?: string;
 }
 
-async function fetchOsmCemeteryDetails(
+export async function fetchOsmCemeteryDetails(
   lat: number,
   lng: number
 ): Promise<OsmCemeteryDetail> {
