@@ -858,21 +858,18 @@ export default function ResultPage({ id }: { id: string }) {
             {extracted.confidence && (
               <div className="absolute top-3 right-3">
                 <span
-                  className="px-2 py-0.5 rounded-full text-xs font-medium"
+                  className="px-2.5 py-1 rounded-full text-xs font-semibold"
                   style={{
-                    background:
-                      extracted.confidence === "high"
-                        ? "#5c7a5c40"
-                        : extracted.confidence === "medium"
-                        ? "#a07830 40"
-                        : "#8b3a3a40",
+                    background: "rgba(10, 9, 8, 0.72)",
+                    backdropFilter: "blur(6px)",
+                    WebkitBackdropFilter: "blur(6px)",
+                    border: "1px solid currentColor",
                     color:
                       extracted.confidence === "high"
-                        ? "#7a9a7a"
+                        ? "#92cc92"
                         : extracted.confidence === "medium"
-                        ? "var(--t-gold-400)"
-                        : "#c07070",
-                    border: "1px solid currentColor",
+                        ? "var(--t-gold-300)"
+                        : "#e88888",
                   }}
                 >
                   {extracted.confidence === "high"
@@ -1127,22 +1124,18 @@ export default function ResultPage({ id }: { id: string }) {
         {extracted.confidence && (
           <div className="absolute top-4 right-4">
             <span
-              className="px-2 py-0.5 rounded-full text-xs font-medium"
+              className="px-2.5 py-1 rounded-full text-xs font-semibold"
               style={{
-                background:
-                  extracted.confidence === "high"
-                    ? "#5c7a5c40"
-                    : extracted.confidence === "medium"
-                    ? "#a0783040"
-                    : "#8b3a3a40",
+                background: "rgba(10, 9, 8, 0.72)",
+                backdropFilter: "blur(6px)",
+                WebkitBackdropFilter: "blur(6px)",
+                border: "1px solid currentColor",
                 color:
                   extracted.confidence === "high"
-                    ? "#7a9a7a"
+                    ? "#92cc92"
                     : extracted.confidence === "medium"
-                    ? "var(--t-gold-400)"
-                    : "#c07070",
-                border: "1px solid currentColor",
-                backdropFilter: "blur(4px)",
+                    ? "var(--t-gold-300)"
+                    : "#e88888",
               }}
             >
               {extracted.confidence === "high"
