@@ -9,28 +9,35 @@ const QUEUE_STORE = "queue";
 const CEMETERY_STORE = "cemeteries";
 const AUDIO_STORE = "audio";
 
-async function getDB(): Promise<IDBPDatabase> {
-  return openDB(DB_NAME, DB_VERSION, {
-    upgrade(db, oldVersion, newVersion) {
-      console.log(`[Storage] Upgrading DB from ${oldVersion} to ${newVersion}`);
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
-        store.createIndex("timestamp", "timestamp");
-      }
-      if (!db.objectStoreNames.contains(PENDING_STORE)) {
-        db.createObjectStore(PENDING_STORE, { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains(QUEUE_STORE)) {
-        db.createObjectStore(QUEUE_STORE, { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains(CEMETERY_STORE)) {
-        db.createObjectStore(CEMETERY_STORE, { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains(AUDIO_STORE)) {
-        db.createObjectStore(AUDIO_STORE, { keyPath: "id" });
-      }
-    },
-  });
+// Singleton promise — DB is opened once per session and reused.
+// Avoids re-scheduling the upgrade transaction on every operation.
+let _dbPromise: Promise<IDBPDatabase> | null = null;
+
+function getDB(): Promise<IDBPDatabase> {
+  if (!_dbPromise) {
+    _dbPromise = openDB(DB_NAME, DB_VERSION, {
+      upgrade(db, oldVersion, newVersion) {
+        console.log(`[Storage] Upgrading DB from ${oldVersion} to ${newVersion}`);
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
+          store.createIndex("timestamp", "timestamp");
+        }
+        if (!db.objectStoreNames.contains(PENDING_STORE)) {
+          db.createObjectStore(PENDING_STORE, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(QUEUE_STORE)) {
+          db.createObjectStore(QUEUE_STORE, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(CEMETERY_STORE)) {
+          db.createObjectStore(CEMETERY_STORE, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(AUDIO_STORE)) {
+          db.createObjectStore(AUDIO_STORE, { keyPath: "id" });
+        }
+      },
+    });
+  }
+  return _dbPromise;
 }
 
 // ── Saved archive ─────────────────────────────────────────────────────────
@@ -52,8 +59,10 @@ export async function getAllGraves(): Promise<GraveRecord[]> {
       console.error(`[Storage] Store ${STORE_NAME} missing!`);
       return [];
     }
-    const records = await db.getAll(STORE_NAME);
-    return records.sort((a, b) => b.timestamp - a.timestamp);
+    // Use the timestamp index so IDB handles ordering natively (O(n) reverse
+    // beats O(n log n) JS sort for large archives).
+    const records = await db.getAllFromIndex(STORE_NAME, "timestamp");
+    return records.reverse(); // index is ascending; reverse for newest-first
   } catch (err) {
     console.error("[Storage] Failed to get all graves:", err);
     throw err;

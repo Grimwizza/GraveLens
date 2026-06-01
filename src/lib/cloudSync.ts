@@ -11,7 +11,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GraveRecord } from "@/types";
-import { getAllGraves, saveGrave } from "@/lib/storage";
+import { getAllGraves, getGrave, saveGrave } from "@/lib/storage";
 import {
   loadUnlocks,
   loadStats,
@@ -173,10 +173,15 @@ export async function syncLocalToCloud(
             record.id,
             record.photoDataUrl
           );
-          await upsertGrave(supabase, userId, record, photoUrl);
+
+          // Re-read from IDB before writing to cloud so any research data
+          // fetched concurrently during the photo upload is not clobbered.
+          const fresh = await getGrave(record.id);
+          const latest = fresh ?? record;
+          await upsertGrave(supabase, userId, latest, photoUrl);
 
           // Update local copy with the CDN URL so images load from cloud
-          await saveGrave({ ...record, photoDataUrl: photoUrl, syncedAt: Date.now() });
+          await saveGrave({ ...latest, photoDataUrl: photoUrl, syncedAt: Date.now() });
           synced++;
         } catch (err) {
           console.warn(`[Sync] Failed to sync grave ${record.id}:`, err);

@@ -121,12 +121,12 @@ create policy "Users manage own profile"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- Community read: authenticated users can read any profile
--- (sensitive columns like show_username are filtered in app layer)
-create policy "Community can read profiles"
+-- Community read: authenticated users can read profiles that have opted in to
+-- community visibility (show_username = true). Users can always read their own.
+create policy "Community can read public profiles"
   on public.user_profiles for select
   to authenticated
-  using (true);
+  using (show_username = true or auth.uid() = user_id);
 
 
 -- ── User relationships (friends / blocks) ─────────────────────
@@ -272,11 +272,20 @@ create policy "Authenticated users update grave index"
 
 create or replace function public.increment_grave_contributor(hash text)
 returns void
-language sql
+language plpgsql
 security definer
 as $$
+begin
+  -- Guard: reject unauthenticated callers.
+  -- SECURITY DEFINER functions are callable by all roles (including anon)
+  -- by default, so an explicit auth check is required here.
+  if auth.uid() is null then
+    raise exception 'Unauthorized' using errcode = 'insufficient_privilege';
+  end if;
+
   update public.grave_identity_index
   set contributor_count = contributor_count + 1,
       confirmed_at      = now()
   where identity_hash = hash;
+end;
 $$;

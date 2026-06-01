@@ -92,7 +92,7 @@ function unsharpMask(
     }
   }
 
-  for (let i = 0; i < data.length - 3; i += 4) {
+  for (let i = 0; i < data.length; i += 4) {
     data[i]     = Math.min(255, Math.max(0, data[i]     + amount * (data[i]     - blurred[i])));
     data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + amount * (data[i + 1] - blurred[i + 1])));
     data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + amount * (data[i + 2] - blurred[i + 2])));
