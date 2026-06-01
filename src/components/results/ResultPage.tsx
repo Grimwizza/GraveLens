@@ -14,6 +14,7 @@ import { uploadPhoto, upsertGrave, pushExplorerPoints } from "@/lib/cloudSync";
 import { setGravePublic } from "@/lib/community";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import { interpretSymbols } from "@/lib/apis/symbols";
+import { getLandmarkEvents } from "@/lib/apis/wikipedia";
 import { SHOW_COMMUNITY_FEATURES } from "@/lib/config";
 import ProfileBadge from "@/components/auth/ProfileBadge";
 import DesktopNav from "@/components/layout/DesktopNav";
@@ -90,8 +91,25 @@ export default function ResultPage({ id }: { id: string }) {
           location: archived.location,
           timestamp: archived.timestamp,
         });
-        setResearch(archived.research ?? {});
-        setCulturalContext(archived.research?.culturalContext ?? null);
+
+        // Backfill lifetimeLandmarks for records saved before the feature existed
+        // or where the lookup couldn't compute them. Pure computation — no API call.
+        let archivedResearch = archived.research ?? {};
+        const by = archived.extracted.birthYear;
+        const dy = archived.extracted.deathYear;
+        if (archivedResearch.historical && !archivedResearch.historical.lifetimeLandmarks && by != null && dy != null && dy > by) {
+          const landmarks = getLandmarkEvents(by, dy);
+          if (landmarks.length > 0) {
+            archivedResearch = {
+              ...archivedResearch,
+              historical: { ...archivedResearch.historical, lifetimeLandmarks: landmarks },
+            };
+            saveGrave({ ...archived, research: archivedResearch }).catch(() => {});
+          }
+        }
+
+        setResearch(archivedResearch);
+        setCulturalContext(archivedResearch?.culturalContext ?? null);
         setTags(archived.tags ?? []);
         setIsPublic(archived.isPublic ?? false);
         setSaved(true);

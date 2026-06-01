@@ -106,7 +106,7 @@ const LANDMARK_EVENTS: Array<{ year: number; event: string }> = [
   { year: 2020, event: "COVID-19 pandemic; George Floyd killed, sparking nationwide protests" },
 ];
 
-function getLandmarkEvents(
+export function getLandmarkEvents(
   birthYear: number,
   deathYear: number
 ): LifetimeLandmark[] {
