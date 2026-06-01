@@ -331,6 +331,8 @@ export interface GraveRecord {
   syncedAt?: number; // Unix ms — set after a successful cloud sync
   /** Whether this grave is shared with the community. Default false. */
   isPublic?: boolean;
+  /** True when the scan returned an empty name or low confidence and the user deferred manual entry. */
+  needsReview?: boolean;
   /** Optional note shown to community members on the map. */
   communityNote?: string;
 }

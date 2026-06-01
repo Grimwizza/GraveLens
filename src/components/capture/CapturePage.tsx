@@ -12,6 +12,7 @@ import { reverseGeocode } from "@/lib/apis/nominatim";
 import { takePendingCaptureFile } from "@/lib/pendingCapture";
 import type { ExtractedGraveData, GeoLocation } from "@/types";
 import ReliefCapture from "./ReliefCapture";
+import { localContrastBoost, unsharpMask } from "@/lib/relief";
 
 type Phase = "idle" | "processing" | "queued" | "pro_prompt" | "degraded_prompt";
 
@@ -927,13 +928,14 @@ function resizeForStorage(dataUrl: string): Promise<string> {
 
 
 /**
- * Preprocess an image for Claude: contrast stretch + unsharp mask + resize.
- * Keeps the longest edge ≤ 1024 px at 78% JPEG quality.
- * Contrast stretch and sharpening improve legibility on weathered stone.
+ * Preprocess an image for Claude: contrast stretch → CLAHE-lite → unsharp mask → resize.
+ * Keeps the longest edge ≤ 1568 px (Claude's native max) at 78% JPEG quality.
+ * The three-step pipeline matches the Relief Lens processing path and significantly
+ * improves legibility on weathered, faded, or low-contrast stone engravings.
  */
 function preprocessAndResize(
   dataUrl: string,
-  maxPx = 1024,
+  maxPx = 1568,
   quality = 0.78
 ): Promise<{ base64: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
@@ -943,7 +945,6 @@ function preprocessAndResize(
       const w = Math.round(img.width * scale);
       const h = Math.round(img.height * scale);
 
-      // Draw at target size
       const canvas = document.createElement("canvas");
       canvas.width = w;
       canvas.height = h;
@@ -951,9 +952,10 @@ function preprocessAndResize(
       if (!ctx) return reject(new Error("Canvas unavailable"));
       ctx.drawImage(img, 0, 0, w, h);
 
-      // ── Contrast stretch ──────────────────────────────────────────────────
       const imageData = ctx.getImageData(0, 0, w, h);
       const data = imageData.data;
+
+      // ── 1. Global contrast stretch ────────────────────────────────────────
       let min = 255, max = 0;
       for (let i = 0; i < data.length; i += 4) {
         const luma = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
@@ -966,24 +968,14 @@ function preprocessAndResize(
         data[i + 1] = Math.min(255, ((data[i + 1] - min) / range) * 255);
         data[i + 2] = Math.min(255, ((data[i + 2] - min) / range) * 255);
       }
+
+      // ── 2. CLAHE-lite: local contrast boost (8×8 tile grid) ───────────────
+      localContrastBoost(data, w, h);
+
+      // ── 3. Unsharp mask (0.5 strength) ────────────────────────────────────
+      unsharpMask(data, w, h, 0.5);
+
       ctx.putImageData(imageData, 0, 0);
-
-      // ── Unsharp mask (overlay at low opacity) ─────────────────────────────
-      // Blur a copy then composite: original + (original - blurred) * amount
-      const blurCanvas = document.createElement("canvas");
-      blurCanvas.width = w;
-      blurCanvas.height = h;
-      const blurCtx = blurCanvas.getContext("2d");
-      if (blurCtx) {
-        blurCtx.filter = "blur(1px)";
-        blurCtx.drawImage(canvas, 0, 0);
-        ctx.globalCompositeOperation = "overlay";
-        ctx.globalAlpha = 0.25;
-        ctx.drawImage(blurCanvas, 0, 0);
-        ctx.globalCompositeOperation = "source-over";
-        ctx.globalAlpha = 1;
-      }
-
       const resized = canvas.toDataURL("image/jpeg", quality);
       resolve({ base64: resized.split(",")[1], mimeType: "image/jpeg" });
     };

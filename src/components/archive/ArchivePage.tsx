@@ -456,9 +456,14 @@ export default function ArchivePage() {
     return Array.from(map.values()).sort((a, b) => b.lastVisited - a.lastVisited);
   }, [graves, cemeteries]);
 
+  // ── Working Scans: records flagged for manual completion ─────────────────
+  const workingScans = useMemo(() => graves.filter((g) => g.needsReview), [graves]);
+
   // ── Filtered + sorted graves ──────────────────────────────────────────────
   const filteredGraves = useMemo(() => {
     let result = graves.filter((g) => {
+      // Exclude records flagged for manual review — shown in Working Scans section instead
+      if (g.needsReview) return false;
       // Exclude records that represent a place (cemetery/graveyard), not an individual marker
       const mType = g.extracted?.markerType?.toLowerCase() ?? "";
       if (PLACE_MARKER_TYPES.has(mType)) return false;
@@ -787,6 +792,49 @@ export default function ArchivePage() {
           <EmptyState />
         ) : archiveTab === "markers" ? (
           <>
+            {/* Working Scans — records that need manual completion */}
+            {workingScans.length > 0 && (
+              <div className="mx-4 mt-4 mb-1">
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-stone-500">
+                    Working Scans · {workingScans.length}
+                  </p>
+                </div>
+                <div className="rounded-2xl overflow-hidden border border-stone-700/60">
+                  {workingScans.map((g, i) => (
+                    <a
+                      key={g.id}
+                      href={`/result/${g.id}`}
+                      className={`flex items-center gap-3 px-3 py-3 active:bg-white/5 ${i > 0 ? "border-t border-stone-800" : ""}`}
+                      style={{ background: "rgba(var(--glass-bg-rgb), 0.5)" }}
+                    >
+                      {/* Thumbnail */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={g.photoDataUrl}
+                        alt=""
+                        className="w-12 h-12 rounded-xl object-cover shrink-0 opacity-80"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-stone-300 text-sm font-medium truncate">
+                          {g.extracted.inscription?.slice(0, 40) || "Unread marker"}
+                        </p>
+                        <p className="text-stone-500 text-xs mt-0.5 truncate">
+                          {[g.location?.cemetery, g.location?.city, g.location?.state].filter(Boolean).join(", ") || "Location unknown"}
+                        </p>
+                      </div>
+                      <span className="text-xs font-medium shrink-0 px-2.5 py-1 rounded-full" style={{ background: "rgba(201,168,76,0.12)", color: "var(--t-gold-500)" }}>
+                        Complete →
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Assignment banner */}
             {showAssignBanner && (
               <div className="mx-4 mt-4 mb-1 flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border border-gold-500/30 bg-gold-500/5 animate-fade-in">

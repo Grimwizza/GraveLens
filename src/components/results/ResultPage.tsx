@@ -73,6 +73,8 @@ export default function ResultPage({ id }: { id: string }) {
 
   const [selectedPersonIdx, setSelectedPersonIdx] = useState(0);
   const personResearchCacheRef = useRef<Map<number, ResearchData>>(new Map());
+  const [reviewPrompt, setReviewPrompt] = useState(false);
+  const reviewPromptShownRef = useRef(false);
 
   useEffect(() => {
     getPendingResult(id).then(async (raw) => {
@@ -280,6 +282,13 @@ export default function ResultPage({ id }: { id: string }) {
     } catch { /* non-fatal */ }
   }, [pending]);
 
+  const handleSaveForLater = useCallback(async () => {
+    setReviewPrompt(false);
+    if (!pending) return;
+    const existing = await getGrave(pending.id);
+    if (existing) await saveGrave({ ...existing, needsReview: true });
+  }, [pending]);
+
   const handleShare = useCallback(async () => {
     if (!pending) return;
     const record: GraveRecord = {
@@ -424,6 +433,17 @@ export default function ResultPage({ id }: { id: string }) {
     if (!pending || researchLoading || culturalContext) return;
     if (!extracted?.birthYear && !extracted?.deathYear) return;
     handleLoadCultural();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [researchLoading]);
+
+  // Show review prompt once for fresh scans where name is empty or confidence is low
+  useEffect(() => {
+    if (!pending || researchLoading || reviewPromptShownRef.current) return;
+    const current = { ...pending.extracted, ...(extractedOverride ?? {}) };
+    if (!current.name || current.confidence === "low") {
+      reviewPromptShownRef.current = true;
+      setReviewPrompt(true);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [researchLoading]);
 
@@ -704,7 +724,9 @@ export default function ResultPage({ id }: { id: string }) {
     // Persist to DB — don't let a missing record block the research refresh
     const existing = await getGrave(pending.id);
     if (existing) {
-      await saveGrave({ ...existing, extracted: next });
+      // Clear needsReview if a name is now present
+      const reviewCleared = existing.needsReview && !!next.name;
+      await saveGrave({ ...existing, extracted: next, ...(reviewCleared ? { needsReview: false } : {}) });
 
       // Push to cloud so the manual edit overwrites stale cloud data on other devices
       (async () => {
@@ -1144,6 +1166,17 @@ export default function ResultPage({ id }: { id: string }) {
       </aside>
 
       </div>{/* end desktop split wrapper */}
+
+      {/* Review prompt — shown when name is empty or confidence is low */}
+      {reviewPrompt && (
+        <ReviewPromptSheet
+          onEnterName={(name) => {
+            setReviewPrompt(false);
+            handleExtractedEdit({ name });
+          }}
+          onSaveLater={handleSaveForLater}
+        />
+      )}
 
       {/* Share sheet fallback */}
       {shareOpen && (
@@ -3462,6 +3495,83 @@ function SectionHeader({ icon, title }: { icon: string; title: string }) {
       <h2 className="text-xs font-semibold uppercase tracking-widest text-stone-500">
         {title}
       </h2>
+    </div>
+  );
+}
+
+// ── Review Prompt Sheet ───────────────────────────────────────────────────────
+
+function ReviewPromptSheet({
+  onEnterName,
+  onSaveLater,
+}: {
+  onEnterName: (name: string) => void;
+  onSaveLater: () => void;
+}) {
+  const [nameValue, setNameValue] = useState("");
+  const [entering, setEntering] = useState(false);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end lg:items-center justify-center lg:p-6">
+      <div className="absolute inset-0 bg-stone-950/70 backdrop-blur-sm" onClick={onSaveLater} />
+      <div
+        className="relative w-full max-w-sm rounded-t-3xl lg:rounded-2xl flex flex-col overflow-hidden"
+        style={{
+          background: "rgba(var(--glass-bg-rgb), 0.98)",
+          border: "1px solid var(--t-stone-700)",
+          paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))",
+        }}
+      >
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-stone-700" />
+        </div>
+        <div className="px-5 pt-3 pb-4">
+          <p className="text-stone-100 font-semibold text-base leading-snug">
+            Couldn&apos;t read the name
+          </p>
+          <p className="text-stone-400 text-sm mt-1 leading-relaxed">
+            Enter the name now to start research, or save this scan to <span className="text-stone-300 font-medium">Working Scans</span> to complete later.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 px-5">
+          {entering ? (
+            <div className="flex gap-2">
+              <input
+                autoFocus
+                type="text"
+                value={nameValue}
+                onChange={(e) => setNameValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && nameValue.trim()) onEnterName(nameValue.trim()); }}
+                placeholder="Full name as inscribed"
+                className="flex-1 bg-stone-800 text-stone-100 text-sm rounded-xl px-3 py-2.5 border border-stone-600 focus:outline-none focus:border-stone-400"
+              />
+              <button
+                onClick={() => { if (nameValue.trim()) onEnterName(nameValue.trim()); }}
+                disabled={!nameValue.trim()}
+                className="px-4 py-2.5 rounded-xl text-sm font-semibold text-stone-900 disabled:opacity-40"
+                style={{ background: "var(--t-gold-500)" }}
+              >
+                Save
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setEntering(true)}
+              className="w-full py-3 rounded-2xl text-sm font-semibold text-stone-900"
+              style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
+            >
+              Enter Name
+            </button>
+          )}
+          <button
+            onClick={onSaveLater}
+            className="w-full py-3 rounded-2xl text-sm font-medium text-stone-400 border border-stone-700"
+          >
+            Save to Working Scans — complete later
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
