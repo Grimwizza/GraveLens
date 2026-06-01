@@ -140,9 +140,51 @@ async function callClaude(
   return JSON.parse(rawJson);
 }
 
+// In-memory rate limiter storage
+const rateLimitMap = new Map<string, number[]>();
+const LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const MAX_REQUESTS = 20;
+
+function isRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const timestamps = rateLimitMap.get(userId) || [];
+
+  // Filter out timestamps older than 1 hour
+  const recent = timestamps.filter(t => now - t < LIMIT_WINDOW_MS);
+
+  if (recent.length >= MAX_REQUESTS) {
+    rateLimitMap.set(userId, recent);
+    return true;
+  }
+
+  recent.push(now);
+  rateLimitMap.set(userId, recent);
+
+  // Basic cleanup: if map gets too large, prune old entries
+  if (rateLimitMap.size > 1000) {
+    for (const [key, ts] of rateLimitMap.entries()) {
+      const filtered = ts.filter(t => now - t < LIMIT_WINDOW_MS);
+      if (filtered.length === 0) {
+        rateLimitMap.delete(key);
+      } else {
+        rateLimitMap.set(key, filtered);
+      }
+    }
+  }
+
+  return false;
+}
+
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+
+  if (isRateLimited(auth.userId)) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: { "Retry-After": "60" } }
+    );
+  }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -207,10 +249,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ extracted, _model: usedModel });
   } catch (error: unknown) {
     console.error("Claude analysis error:", error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStatus = (error as { status?: number })?.status || 500;
     return NextResponse.json(
-      { error: "Analysis failed", details: errorMessage },
+      { error: "Analysis failed" },
       { status: errorStatus }
     );
   }

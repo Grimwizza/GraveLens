@@ -203,6 +203,19 @@ export async function recordCemeteryVisit(
 // ── Audio cache ────────────────────────────────────────────────────────────
 
 export async function saveAudio(graveId: string, voice: string, dataUrl: string): Promise<void> {
+  // Non-blocking quota check — warn at 80% so the user can cloud-sync before
+  // the browser starts silently evicting IDB data.
+  if (typeof navigator !== "undefined" && navigator.storage?.estimate) {
+    navigator.storage.estimate().then(({ usage = 0, quota = Infinity }) => {
+      if (usage / quota > 0.80) {
+        console.warn(
+          `[Storage] IDB at ${Math.round((usage / quota) * 100)}% of quota` +
+          ` (${Math.round(usage / 1024 / 1024)} MB / ${Math.round(quota / 1024 / 1024)} MB).` +
+          ` Consider syncing to cloud to free space.`
+        );
+      }
+    }).catch(() => { /* estimate not available in all contexts */ });
+  }
   const db = await getDB();
   await db.put(AUDIO_STORE, { id: `${graveId}_${voice}`, dataUrl, createdAt: Date.now() });
 }

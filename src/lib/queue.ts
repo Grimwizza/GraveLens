@@ -247,5 +247,36 @@ export function startQueueProcessor(): () => void {
   };
 }
 
+export async function retryQueueItem(id: string): Promise<void> {
+  const items = await getQueuedItems();
+  const item = items.find((i) => i.id === id);
+  if (item) {
+    item.retries = 0;
+    item.status = "pending";
+    await updateQueueItem(item);
+    notifyQueueChanged();
+    processQueue();
+  }
+}
+
+export async function retryAllFailedItems(): Promise<void> {
+  const items = await getQueuedItems();
+  const failed = items.filter((i) => i.status === "failed");
+  for (const item of failed) {
+    item.retries = 0;
+    item.status = "pending";
+    await updateQueueItem(item);
+  }
+  if (failed.length > 0) {
+    notifyQueueChanged();
+    processQueue();
+  }
+}
+
+export async function deleteQueueItem(id: string): Promise<void> {
+  await removeFromQueue(id);
+  notifyQueueChanged();
+}
+
 // Re-export generateId so callers can create IDs without importing exif directly
 export { generateId };

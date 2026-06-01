@@ -424,19 +424,12 @@ export async function upsertGraveIdentityIndex(
   identityHash: string,
   researchSnapshot: unknown
 ): Promise<void> {
-  // Try insert first
-  const { error: insertError } = await supabase
-    .from("grave_identity_index")
-    .insert({
-      identity_hash: identityHash,
-      research_snapshot: researchSnapshot,
-      contributor_count: 1,
-      confirmed_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-    });
-
-  if (!insertError) return; // first scan — done
-
-  // Already exists — increment contributor_count
-  await supabase.rpc("increment_grave_contributor", { hash: identityHash });
+  const { error } = await supabase.rpc("upsert_grave_identity", {
+    hash: identityHash,
+    snapshot: researchSnapshot,
+  });
+  if (error) {
+    console.error("[Community] Failed to upsert grave identity:", error);
+    throw error;
+  }
 }

@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import PageShell from "@/components/layout/PageShell";
-import { getAllGraves, deleteGrave, saveGrave, getAllCemeteries, deleteCemetery, saveCemetery } from "@/lib/storage";
+import { getAllGraves, deleteGrave, saveGrave, getAllCemeteries, deleteCemetery, saveCemetery, getQueuedItems } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/browser";
 import { fetchAllFromCloud, deleteFromCloud } from "@/lib/cloudSync";
-import type { GraveRecord, CemeteryRecord } from "@/types";
+import type { GraveRecord, CemeteryRecord, QueuedCapture } from "@/types";
+import { QUEUE_CHANGED_EVENT } from "@/lib/queue";
 import Link from "next/link";
 import ThematicIllustration from "@/components/ui/ThematicIllustration";
 import { reverseGeocode } from "@/lib/apis/nominatim";
@@ -89,6 +90,8 @@ export default function ArchivePage() {
     name: string;
     graves: GraveRecord[];
   } | null>(null);
+
+  const [failedQueueItems, setFailedQueueItems] = useState<QueuedCapture[]>([]);
 
   // Filter / sort state
   const [sortField, setSortField] = useState<SortField>("deathYear");
@@ -199,6 +202,27 @@ export default function ArchivePage() {
   useEffect(() => {
     getAllCemeteries().then(setCemeteries).catch(() => {});
   }, []);
+
+  const loadFailedQueue = useCallback(() => {
+    getQueuedItems()
+      .then((items) => {
+        const failed = items.filter((item) => item.status === "failed");
+        setFailedQueueItems(failed);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadFailedQueue();
+
+    const onQueueChanged = () => {
+      loadFailedQueue();
+    };
+    window.addEventListener(QUEUE_CHANGED_EVENT, onQueueChanged);
+    return () => {
+      window.removeEventListener(QUEUE_CHANGED_EVENT, onQueueChanged);
+    };
+  }, [loadFailedQueue]);
 
 
   // ── Cemetery enrichment ──────────────────────────────────────────────────
@@ -830,6 +854,77 @@ export default function ArchivePage() {
                         Complete →
                       </span>
                     </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Failed Uploads — records that failed to process/upload */}
+            {failedQueueItems.length > 0 && (
+              <div className="mx-4 mt-4 mb-1">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <div className="flex items-center gap-2">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-stone-500">
+                      Failed Scans · {failedQueueItems.length}
+                    </p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const { retryAllFailedItems } = await import("@/lib/queue");
+                      retryAllFailedItems();
+                    }}
+                    className="text-xs text-gold-400 font-medium active:scale-95 transition-all"
+                  >
+                    Retry All
+                  </button>
+                </div>
+                <div className="rounded-2xl overflow-hidden border border-red-900/30">
+                  {failedQueueItems.map((item, i) => (
+                    <div
+                      key={item.id}
+                      className={`flex items-center gap-3 px-3 py-3 ${i > 0 ? "border-t border-stone-850" : ""}`}
+                      style={{ background: "rgba(239, 68, 68, 0.05)" }}
+                    >
+                      {/* Thumbnail */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={item.photoDataUrl}
+                        alt=""
+                        className="w-12 h-12 rounded-xl object-cover shrink-0 opacity-70 border border-red-950/40"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-stone-300 text-sm font-medium truncate">
+                          Offline Capture
+                        </p>
+                        <p className="text-red-400 text-xs mt-0.5 truncate">
+                          Analysis failed after {item.retries} attempts
+                        </p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          onClick={async () => {
+                            const { retryQueueItem } = await import("@/lib/queue");
+                            await retryQueueItem(item.id);
+                          }}
+                          className="text-xs font-medium px-2.5 py-1 rounded-lg bg-stone-850 text-stone-300 hover:bg-stone-800 active:scale-95 transition-all"
+                        >
+                          Retry
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const { deleteQueueItem } = await import("@/lib/queue");
+                            await deleteQueueItem(item.id);
+                          }}
+                          className="text-xs font-medium px-2 py-1 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-950/45 active:scale-95 transition-all"
+                          aria-label="Delete"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>

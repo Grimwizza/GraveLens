@@ -183,14 +183,6 @@ create policy "Authenticated users read history cache"
   on public.local_history_cache for select
   to authenticated using (true);
 
-create policy "Authenticated users write history cache"
-  on public.local_history_cache for insert
-  to authenticated with check (true);
-
-create policy "Authenticated users update history cache"
-  on public.local_history_cache for update
-  to authenticated using (true);
-
 
 -- ── Cemetery research cache ───────────────────────────────────
 -- Shared cemetery metadata to avoid re-fetching Wikipedia/OSM data.
@@ -212,14 +204,6 @@ alter table public.cemetery_cache enable row level security;
 
 create policy "Authenticated users read cemetery cache"
   on public.cemetery_cache for select
-  to authenticated using (true);
-
-create policy "Authenticated users write cemetery cache"
-  on public.cemetery_cache for insert
-  to authenticated with check (true);
-
-create policy "Authenticated users update cemetery cache"
-  on public.cemetery_cache for update
   to authenticated using (true);
 
 
@@ -258,14 +242,6 @@ create policy "Authenticated users read grave index"
   on public.grave_identity_index for select
   to authenticated using (true);
 
-create policy "Authenticated users write grave index"
-  on public.grave_identity_index for insert
-  to authenticated with check (true);
-
-create policy "Authenticated users update grave index"
-  on public.grave_identity_index for update
-  to authenticated using (true);
-
 
 -- ── RPC: increment grave contributor count ───────────────────
 -- Called when a second user scans the same grave.
@@ -287,5 +263,28 @@ begin
   set contributor_count = contributor_count + 1,
       confirmed_at      = now()
   where identity_hash = hash;
+end;
+$$;
+
+
+-- ── RPC: upsert grave identity ───────────────────────────────
+-- Called to register a new scan or increment contributor count securely.
+
+create or replace function public.upsert_grave_identity(hash text, snapshot jsonb)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  -- Guard: reject unauthenticated callers.
+  if auth.uid() is null then
+    raise exception 'Unauthorized' using errcode = 'insufficient_privilege';
+  end if;
+
+  insert into public.grave_identity_index (identity_hash, research_snapshot, contributor_count, confirmed_at, expires_at)
+  values (hash, snapshot, 1, now(), now() + interval '365 days')
+  on conflict (identity_hash) do update
+  set contributor_count = public.grave_identity_index.contributor_count + 1,
+      confirmed_at = now();
 end;
 $$;
