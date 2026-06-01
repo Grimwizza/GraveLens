@@ -32,4 +32,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 * **Architectural Guardrails:** Act as the Senior Lead. If the "vibe" or direction provided creates technical debt or security holes, flag it immediately before writing the code.
 * **Implicit Handling:** Automatically include robust error handling, basic logging, and edge-case management. The user should not have to "police" the quality of the logic.
 * **DRY & Modular:** Proactively refactor repeated logic into reusable hooks or components. Focus on building a "system," not just a collection of scripts.
+
+## 6. Agent Skills — Auto-Apply Rules
+
+Skill definitions live in `.agent/skills/*/SKILL.md`. Apply these automatically:
+
+* **`api_architect`** — Read and apply whenever writing or modifying any `fetch`, Supabase call, or third-party API integration. Enforce idempotency, retry logic, and meaningful error logging. Bare `catch(() => {})` blocks are a violation.
+* **`security_auditor`** — Read and apply before finalizing any route in `src/app/api/`. Check for OWASP Top 10, exposed secrets, and unvalidated user inputs. Halt and flag if secrets are found in source.
+* **`context_handoff`** — When the user asks for a handoff, summary, or the session is clearly running long: read this skill and generate a compressed `handoff.md` in the project root so the next session can resume instantly.
+* **`e2e_value_verification`** — When the user asks "does this work?" or "test this flow": read and apply. Simulate aggressive user paths, not just happy paths.
+* **`git_pr_workflow`** — When the user asks to commit or open a PR: read and apply. Use Conventional Commits format and `gh pr create`.
 <!-- END:nextjs-agent-rules -->

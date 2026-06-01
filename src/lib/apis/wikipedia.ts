@@ -147,7 +147,7 @@ async function fetchYearEvents(
 
   // 1. Try state-specific article first (e.g. "1884 in Iowa")
   if (state) {
-    const stateSlug = state.trim().replace(/\s+/g, "_");
+    const stateSlug = encodeURIComponent(state.trim().replace(/\s+/g, "_"));
     try {
       const res = await fetch(
         `https://en.wikipedia.org/api/rest_v1/page/summary/${year}_in_${stateSlug}`,

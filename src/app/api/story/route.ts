@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/apiAuth";
 
 const MODEL = "claude-haiku-4-5-20251001";
 const MAX_TOKENS = 1200;
@@ -227,6 +228,9 @@ Based on all the above, return JSON with exactly these fields:
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "API key missing" }, { status: 500 });

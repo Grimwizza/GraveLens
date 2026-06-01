@@ -7,16 +7,26 @@ import type { WikidataEvent, NotableFigure } from "@/types";
 
 const SPARQL_ENDPOINT = "https://query.wikidata.org/sparql";
 
+// Reject anything that isn't a real finite number — prevents SPARQL injection
+// from crafted API payloads where typed params may carry non-numeric runtime values.
+function safeNum(val: unknown): number | null {
+  return typeof val === "number" && Number.isFinite(val) ? val : null;
+}
+
 export async function getLocalWikidataEvents(
   lat: number,
   lng: number,
   birthYear: number | null,
   deathYear: number | null
 ): Promise<WikidataEvent[]> {
-  if (!lat || !lng || !birthYear || !deathYear) return [];
+  const safeLat  = safeNum(lat);
+  const safeLng  = safeNum(lng);
+  const safeBirth = safeNum(birthYear);
+  const safeDeath = safeNum(deathYear);
+  if (safeLat === null || safeLng === null || safeBirth === null || safeDeath === null) return [];
 
   // WKT format: Point(longitude latitude)
-  const point = `Point(${lng} ${lat})`;
+  const point = `Point(${safeLng} ${safeLat})`;
   const radiusKm = 50;
 
   const query = `
@@ -27,7 +37,7 @@ SELECT DISTINCT ?item ?itemLabel ?date ?desc WHERE {
     bd:serviceParam wikibase:radius "${radiusKm}" .
   }
   ?item wdt:P585 ?date .
-  FILTER(YEAR(?date) >= ${birthYear} && YEAR(?date) <= ${deathYear})
+  FILTER(YEAR(?date) >= ${safeBirth} && YEAR(?date) <= ${safeDeath})
   FILTER NOT EXISTS { ?item wdt:P1435 wd:Q652150 }
   OPTIONAL { ?item schema:description ?desc FILTER(LANG(?desc) = "en") }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
@@ -114,16 +124,23 @@ export async function getNotableFiguresInBounds(
   east: number,
   minSitelinks = 2
 ): Promise<NotableFigure[]> {
+  const safeSouth = safeNum(south);
+  const safeWest  = safeNum(west);
+  const safeNorth = safeNum(north);
+  const safeEast  = safeNum(east);
+  const safeLinks = safeNum(minSitelinks);
+  if (safeSouth === null || safeWest === null || safeNorth === null || safeEast === null || safeLinks === null) return [];
+
   const query = `
 SELECT DISTINCT ?item ?itemLabel ?coords ?occupation ?occupationLabel ?wikipedia WHERE {
   SERVICE wikibase:box {
     ?item wdt:P625 ?coords .
-    bd:serviceParam wikibase:cornerSouthWest "Point(${west} ${south})"^^geo:wktLiteral .
-    bd:serviceParam wikibase:cornerNorthEast "Point(${east} ${north})"^^geo:wktLiteral .
+    bd:serviceParam wikibase:cornerSouthWest "Point(${safeWest} ${safeSouth})"^^geo:wktLiteral .
+    bd:serviceParam wikibase:cornerNorthEast "Point(${safeEast} ${safeNorth})"^^geo:wktLiteral .
   }
   ?item wdt:P119 ?burialPlace .
   ?item wikibase:sitelinks ?sitelinks .
-  FILTER(?sitelinks >= ${minSitelinks})
+  FILTER(?sitelinks >= ${safeLinks})
 
   OPTIONAL { ?item wdt:P106 ?occupation . }
   OPTIONAL {
@@ -193,12 +210,13 @@ LIMIT 100`.trim();
 export async function getBirthYearNotables(
   year: number
 ): Promise<Array<{ name: string; description?: string; wikipediaUrl?: string }>> {
-  if (!year || year < 1400 || year > new Date().getFullYear()) return [];
+  const safeYear = safeNum(year);
+  if (safeYear === null || safeYear < 1400 || safeYear > new Date().getFullYear()) return [];
 
   const query = `
 SELECT DISTINCT ?person ?personLabel ?desc ?wikipedia WHERE {
   ?person wdt:P569 ?dob .
-  FILTER(YEAR(?dob) = ${year})
+  FILTER(YEAR(?dob) = ${safeYear})
   ?person wdt:P31 wd:Q5 .
   ?person wikibase:sitelinks ?sitelinks .
   FILTER(?sitelinks >= 15)

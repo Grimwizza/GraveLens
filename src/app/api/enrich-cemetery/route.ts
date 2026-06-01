@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/apiAuth";
 import { enrichCemetery } from "@/lib/apis/cemetery";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const { name, lat, lng, city, state } = await req.json();
     if (!name || typeof lat !== "number" || typeof lng !== "number") {

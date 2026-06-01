@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/apiAuth";
 
 // Two-tier model strategy:
 //   Haiku   — fast, cheap (~$0.003/scan). Used on every request.
@@ -145,6 +146,9 @@ async function callClaude(
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -153,10 +157,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // ~8 MB raw image ceiling — base64 expands 3 bytes → 4 chars, so 8 MB ≈ 10.7 M chars.
+  // Claude's own limit is 5 MB; this catches malicious oversized payloads before they reach the API.
+  const MAX_BASE64_CHARS = 10_700_000;
+
   try {
     const { imageBase64, mimeType } = await req.json();
     if (!imageBase64) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
+    }
+    if (typeof imageBase64 !== "string" || imageBase64.length > MAX_BASE64_CHARS) {
+      return NextResponse.json({ error: "Image too large" }, { status: 413 });
     }
 
     const validMime = ["image/jpeg", "image/png", "image/webp", "image/gif"];

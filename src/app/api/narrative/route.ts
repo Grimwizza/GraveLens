@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/apiAuth";
 
 // Uses Haiku — this is a creative writing task, not vision analysis.
 // Haiku produces excellent narrative prose at ~$0.003/call.
@@ -105,6 +106,9 @@ Based on the above, return JSON with exactly these fields:
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return NextResponse.json(

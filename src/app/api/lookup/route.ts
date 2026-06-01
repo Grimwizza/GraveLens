@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/apiAuth";
 import { searchNewspapers, searchLocalAreaNews } from "@/lib/apis/chronicling";
 import { searchNaraRecords } from "@/lib/apis/nara";
 import { searchLandPatents } from "@/lib/apis/blm";
@@ -25,6 +26,9 @@ import { buildResearchChecklist } from "@/lib/researchChecklist";
 import type { ResearchData, GeoLocation, NaraItemRecord, UsGenWebRecord } from "@/types";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const {
       name, firstName, lastName,
