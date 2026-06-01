@@ -13,6 +13,7 @@ import {
   saveGrave,
 } from "@/lib/storage";
 import { generateId } from "@/lib/exif";
+import { localContrastBoost, unsharpMask } from "@/lib/relief";
 import type { QueuedCapture, ExtractedGraveData, ResearchData, GraveRecord } from "@/types";
 
 const MAX_RETRIES = 3;
@@ -36,7 +37,8 @@ function notifyQueueChanged() {
 
 /**
  * Preprocess a stored data URL for sending to Claude:
- * contrast stretch + resize to ≤ 1024 px.
+ * contrast stretch → CLAHE-lite → unsharp mask → resize to ≤ 1568 px.
+ * Matches the pipeline used by live captures in CapturePage.
  */
 function preprocessForClaude(
   dataUrl: string
@@ -44,7 +46,7 @@ function preprocessForClaude(
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const maxPx = 1024;
+      const maxPx = 1568;
       const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
       const w = Math.round(img.width * scale);
       const h = Math.round(img.height * scale);
@@ -56,9 +58,10 @@ function preprocessForClaude(
       if (!ctx) return reject(new Error("Canvas unavailable"));
       ctx.drawImage(img, 0, 0, w, h);
 
-      // Contrast stretch
       const imageData = ctx.getImageData(0, 0, w, h);
       const data = imageData.data;
+
+      // 1. Global contrast stretch
       let min = 255, max = 0;
       for (let i = 0; i < data.length; i += 4) {
         const luma = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
@@ -71,8 +74,14 @@ function preprocessForClaude(
         data[i + 1] = Math.min(255, ((data[i + 1] - min) / range) * 255);
         data[i + 2] = Math.min(255, ((data[i + 2] - min) / range) * 255);
       }
-      ctx.putImageData(imageData, 0, 0);
 
+      // 2. CLAHE-lite: local contrast boost (8×8 tile grid)
+      localContrastBoost(data, w, h);
+
+      // 3. Unsharp mask (0.5 strength)
+      unsharpMask(data, w, h, 0.5);
+
+      ctx.putImageData(imageData, 0, 0);
       const resized = canvas.toDataURL("image/jpeg", 0.78);
       resolve({ base64: resized.split(",")[1], mimeType: "image/jpeg" });
     };

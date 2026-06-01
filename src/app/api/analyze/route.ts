@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
       !extracted ||
       extracted.confidence === "low" ||
       !extracted.name ||
-      (!extracted.birthYear && !extracted.deathYear);
+      (extracted.birthYear == null && extracted.deathYear == null);
 
     if (needsEscalation) {
       usedModel = MODEL_SONNET;

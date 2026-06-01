@@ -805,7 +805,7 @@ export default function ArchivePage() {
                 </div>
                 <div className="rounded-2xl overflow-hidden border border-stone-700/60">
                   {workingScans.map((g, i) => (
-                    <a
+                    <Link
                       key={g.id}
                       href={`/result/${g.id}`}
                       className={`flex items-center gap-3 px-3 py-3 active:bg-white/5 ${i > 0 ? "border-t border-stone-800" : ""}`}
@@ -829,7 +829,7 @@ export default function ArchivePage() {
                       <span className="text-xs font-medium shrink-0 px-2.5 py-1 rounded-full" style={{ background: "rgba(201,168,76,0.12)", color: "var(--t-gold-500)" }}>
                         Complete →
                       </span>
-                    </a>
+                    </Link>
                   ))}
                 </div>
               </div>

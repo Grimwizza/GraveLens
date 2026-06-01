@@ -4,13 +4,13 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BottomNav from "@/components/layout/BottomNav";
-import { saveGrave, getGrave, getAllGraves, getPendingResult, deletePendingResult, deleteGrave, recordCemeteryVisit, saveAudio, getAudio, deleteAudio } from "@/lib/storage";
+import { saveGrave, getGrave, getAllGraves, getPendingResult, deletePendingResult, recordCemeteryVisit, saveAudio, getAudio } from "@/lib/storage";
 import { inferGender, inferOrigin, selectVoice, formatTime } from "@/lib/ttsUtils";
 import { cemeteryId } from "@/lib/apis/cemetery";
 import { reverseGeocode } from "@/lib/apis/nominatim";
 import { checkAndUnlock, loadStats, type Achievement } from "@/lib/achievements";
 import { createClient } from "@/lib/supabase/browser";
-import { uploadPhoto, upsertGrave, pushExplorerPoints, deleteFromCloud } from "@/lib/cloudSync";
+import { uploadPhoto, upsertGrave, pushExplorerPoints } from "@/lib/cloudSync";
 import { setGravePublic } from "@/lib/community";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import { interpretSymbols } from "@/lib/apis/symbols";
@@ -73,6 +73,9 @@ export default function ResultPage({ id }: { id: string }) {
 
   const [selectedPersonIdx, setSelectedPersonIdx] = useState(0);
   const personResearchCacheRef = useRef<Map<number, ResearchData>>(new Map());
+  // Tracks the full merged ExtractedGraveData for the currently selected person.
+  // Null means person 0 (primary) — callers fall back to pending.extracted.
+  const [selectedPersonData, setSelectedPersonData] = useState<ExtractedGraveData | null>(null);
   const [reviewPrompt, setReviewPrompt] = useState(false);
   const reviewPromptShownRef = useRef(false);
 
@@ -286,7 +289,15 @@ export default function ResultPage({ id }: { id: string }) {
     setReviewPrompt(false);
     if (!pending) return;
     const existing = await getGrave(pending.id);
-    if (existing) await saveGrave({ ...existing, needsReview: true });
+    await saveGrave({ ...(existing ?? {
+      id: pending.id,
+      timestamp: pending.timestamp,
+      photoDataUrl: pending.photoDataUrl,
+      location: pending.location ?? { lat: 0, lng: 0 },
+      extracted: pending.extracted,
+      research: {},
+      tags: [],
+    }), needsReview: true });
   }, [pending]);
 
   const handleShare = useCallback(async () => {
@@ -311,16 +322,17 @@ export default function ResultPage({ id }: { id: string }) {
     if (!pending || culturalLoading) return;
     setCulturalLoading(true);
     try {
-      const { extracted, location } = pending;
+      const personExtracted = selectedPersonData ?? pending.extracted;
+      const location = locationOverride ?? pending.location;
       const res = await fetch("/api/cultural", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: "summary",
-          name: extracted.name,
-          birthYear: extracted.birthYear,
-          deathYear: extracted.deathYear,
-          ageAtDeath: extracted.ageAtDeath,
+          name: personExtracted.name,
+          birthYear: personExtracted.birthYear,
+          deathYear: personExtracted.deathYear,
+          ageAtDeath: personExtracted.ageAtDeath,
           city: location?.city,
           state: location?.state,
         }),
@@ -335,7 +347,7 @@ export default function ResultPage({ id }: { id: string }) {
     } finally {
       setCulturalLoading(false);
     }
-  }, [pending, culturalLoading]);
+  }, [pending, culturalLoading, selectedPersonData, locationOverride]);
 
   const autoExpandAllCategories = useCallback(async (
     ctx: CulturalContext,
@@ -394,7 +406,8 @@ export default function ResultPage({ id }: { id: string }) {
     if (!pending || expandingCategory || !culturalContext) return;
     setExpandingCategory(categoryId);
     try {
-      const { extracted, location } = pending;
+      const personExtracted = selectedPersonData ?? pending.extracted;
+      const location = locationOverride ?? pending.location;
       const res = await fetch("/api/cultural", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -402,10 +415,10 @@ export default function ResultPage({ id }: { id: string }) {
           mode: "expand",
           categoryId,
           categoryLabel,
-          name: extracted.name,
-          birthYear: extracted.birthYear,
-          deathYear: extracted.deathYear,
-          ageAtDeath: extracted.ageAtDeath,
+          name: personExtracted.name,
+          birthYear: personExtracted.birthYear,
+          deathYear: personExtracted.deathYear,
+          ageAtDeath: personExtracted.ageAtDeath,
           city: location?.city,
           state: location?.state,
         }),
@@ -425,7 +438,7 @@ export default function ResultPage({ id }: { id: string }) {
     } finally {
       setExpandingCategory(null);
     }
-  }, [pending, expandingCategory, culturalContext]);
+  }, [pending, expandingCategory, culturalContext, selectedPersonData, locationOverride]);
 
 
   // Auto-load cultural context once the main research fetch completes
@@ -436,7 +449,9 @@ export default function ResultPage({ id }: { id: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [researchLoading]);
 
-  // Show review prompt once for fresh scans where name is empty or confidence is low
+  // Show review prompt when name is empty or confidence is low.
+  // Runs on both fresh scans (researchLoading flip) and archived needsReview
+  // records (pending populates but researchLoading never changes).
   useEffect(() => {
     if (!pending || researchLoading || reviewPromptShownRef.current) return;
     const current = { ...pending.extracted, ...(extractedOverride ?? {}) };
@@ -445,7 +460,7 @@ export default function ResultPage({ id }: { id: string }) {
       setReviewPrompt(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [researchLoading]);
+  }, [pending, researchLoading]);
 
   const currentLocation = locationOverride ?? pending?.location ?? null;
 
@@ -567,6 +582,7 @@ export default function ResultPage({ id }: { id: string }) {
           historicalCensus:  d.historicalCensus ?? undefined,
           naraItemRecords:   d.naraItemRecords ?? undefined,
           usGenWebRecords:   d.usGenWebRecords ?? undefined,
+          birthYearNotables: d.birthYearNotables ?? undefined,
           researchChecklist: d.researchChecklist ?? undefined,
           cemetery: effectiveLocation?.cemetery
             ? { name: effectiveLocation.cemetery, wikipediaUrl: d.cemeteryWikiUrl, location: effectiveLocation ?? undefined }
@@ -586,9 +602,30 @@ export default function ResultPage({ id }: { id: string }) {
     }
   }, [pending, extractedOverride, currentLocation]);
 
+  // Tracks the in-flight person-switch fetch so rapid taps can cancel the prior one.
+  const personFetchAbortRef = useRef<AbortController | null>(null);
+
   const handleSelectPerson = useCallback(async (idx: number) => {
     if (idx === selectedPersonIdx || !pending) return;
+
+    // Cancel any still-in-flight fetch for a previous person switch
+    personFetchAbortRef.current?.abort();
+
     setSelectedPersonIdx(idx);
+
+    const people = pending.extracted.people ?? [];
+    const person = people[idx];
+    // Update selectedPersonData so cultural context callbacks use the right person
+    if (idx === 0 || !person) {
+      setSelectedPersonData(null);
+    } else {
+      setSelectedPersonData({
+        ...pending.extracted,
+        ...(extractedOverride ?? {}),
+        ...person,
+        people: pending.extracted.people,
+      });
+    }
 
     const cached = personResearchCacheRef.current.get(idx);
     if (cached) {
@@ -597,15 +634,17 @@ export default function ResultPage({ id }: { id: string }) {
       return;
     }
 
-    const people = pending.extracted.people ?? [];
-    const person = people[idx];
     if (!person) return;
+
+    const abort = new AbortController();
+    personFetchAbortRef.current = abort;
 
     setResearchLoading(true);
     try {
       const res = await fetch("/api/lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abort.signal,
         body: JSON.stringify({
           name: person.name,
           firstName: person.firstName,
@@ -637,19 +676,26 @@ export default function ResultPage({ id }: { id: string }) {
           historicalCensus:  d.historicalCensus ?? undefined,
           naraItemRecords:   d.naraItemRecords ?? undefined,
           usGenWebRecords:   d.usGenWebRecords ?? undefined,
+          birthYearNotables: d.birthYearNotables ?? undefined,
           researchChecklist: d.researchChecklist ?? undefined,
+          culturalContext:   d.culturalContext ?? undefined,
           cemetery: currentLocation?.cemetery
             ? { name: currentLocation.cemetery, wikipediaUrl: d.cemeteryWikiUrl, location: currentLocation ?? undefined }
             : undefined,
         };
         personResearchCacheRef.current.set(idx, researchData);
         setResearch(researchData);
-        setCulturalContext(null);
+        setCulturalContext(researchData.culturalContext ?? null);
       }
-    } catch { /* non-fatal */ } finally {
-      setResearchLoading(false);
+    } catch (err) {
+      // Ignore intentional cancellations from rapid person switching
+      if ((err as { name?: string })?.name !== "AbortError") {
+        /* non-fatal network error — leave previous research visible */
+      }
+    } finally {
+      if (!abort.signal.aborted) setResearchLoading(false);
     }
-  }, [selectedPersonIdx, pending, currentLocation]);
+  }, [selectedPersonIdx, pending, currentLocation, extractedOverride]);
 
   const handleExtractedEdit = useCallback(async (patch: Partial<ExtractedGraveData>) => {
     if (!pending) return;
