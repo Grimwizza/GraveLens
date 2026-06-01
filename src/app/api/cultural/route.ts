@@ -112,6 +112,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { mode, categoryId, categoryLabel, ...person } = body;
 
+    // Allowlist mode and categoryId to prevent unexpected code paths
+    // and prompt injection via unchecked interpolation into AI prompts.
+    const VALID_MODES = ["summary", "expand"] as const;
+    const VALID_CATEGORY_IDS = ["popculture", "transport", "homelife", "health", "communication"];
+    if (!VALID_MODES.includes(mode)) {
+      return NextResponse.json({ error: "Invalid mode" }, { status: 400 });
+    }
+    if (mode === "expand" && !VALID_CATEGORY_IDS.includes(categoryId)) {
+      return NextResponse.json({ error: "Invalid categoryId" }, { status: 400 });
+    }
+
     const prompt =
       mode === "expand"
         ? expandPrompt(person, categoryId, categoryLabel)
@@ -139,7 +150,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[/api/cultural]", err);
     return NextResponse.json(
-      { error: "Cultural context generation failed", details: String(err) },
+      { error: "Cultural context generation failed" },
       { status: 500 }
     );
   }

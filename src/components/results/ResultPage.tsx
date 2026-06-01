@@ -18,6 +18,7 @@ import { SHOW_COMMUNITY_FEATURES } from "@/lib/config";
 import ProfileBadge from "@/components/auth/ProfileBadge";
 import DesktopNav from "@/components/layout/DesktopNav";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { toNameCase } from "@/lib/nameUtils";
 import type {
   GraveRecord,
   ResearchData,
@@ -28,12 +29,6 @@ import type {
   PersonData,
 } from "@/types";
 
-function toNameCase(str: string): string {
-  if (!str) return str;
-  return str
-    .toLowerCase()
-    .replace(/(^|[\s\-'])([a-z])/g, (_, sep, c) => sep + c.toUpperCase());
-}
 
 interface PendingResult {
   id: string;

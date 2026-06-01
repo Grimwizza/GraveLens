@@ -238,6 +238,16 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+
+    // Cap string fields that feed directly into the prompt to bound token spend.
+    // A single oversized inscription could push a Haiku call into Sonnet territory.
+    if (typeof body.inscription === "string") {
+      body.inscription = body.inscription.slice(0, 2000);
+    }
+    if (Array.isArray(body.culturalSummary)) {
+      body.culturalSummary = body.culturalSummary.slice(0, 10);
+    }
+
     const client = new Anthropic({ apiKey });
 
     const message = await client.messages.create({
@@ -259,7 +269,7 @@ export async function POST(req: NextRequest) {
   } catch (error: unknown) {
     console.error("[story]", error);
     return NextResponse.json(
-      { error: "Story generation failed", details: error instanceof Error ? error.message : String(error) },
+      { error: "Story generation failed" },
       { status: 500 }
     );
   }

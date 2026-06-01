@@ -148,9 +148,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   } catch (error: unknown) {
     console.error("Narrative generation error:", error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: "Narrative generation failed", details: errorMessage },
+      { error: "Narrative generation failed" },
       { status: 500 }
     );
   }

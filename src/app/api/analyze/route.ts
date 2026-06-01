@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/apiAuth";
+import { toNameCase } from "@/lib/nameUtils";
 
 // Two-tier model strategy:
 //   Haiku   — fast, cheap (~$0.003/scan). Used on every request.
@@ -11,12 +12,6 @@ const MODEL_SONNET = "claude-sonnet-4-6";
 const MAX_TOKENS_HAIKU  = 1024;
 const MAX_TOKENS_SONNET = 2048; // extra headroom for multi-person stones + chain-of-thought
 
-function toNameCase(str: string): string {
-  if (!str) return str;
-  return str
-    .toLowerCase()
-    .replace(/(^|[\s\-'])([a-z])/g, (_, sep, c) => sep + c.toUpperCase());
-}
 
 function normalizeExtractedNames(obj: Record<string, unknown>): void {
   if (typeof obj.name === "string") obj.name = toNameCase(obj.name);
