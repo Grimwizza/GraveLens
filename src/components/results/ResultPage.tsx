@@ -1180,6 +1180,7 @@ export default function ResultPage({ id }: { id: string }) {
             research={research}
             location={location}
             personIdx={selectedPersonIdx}
+            researchReady={!researchLoading && !!culturalContext}
             onStoryGenerated={async (epitaphSource, epitaphMeaning, script) => {
               // Only persist to archive for person 0 — secondary persons' scripts are ephemeral
               if (selectedPersonIdx === 0) {
@@ -3332,6 +3333,7 @@ function StoryCard({
   research,
   location,
   personIdx = 0,
+  researchReady = false,
   onStoryGenerated,
 }: {
   graveId: string;
@@ -3339,6 +3341,8 @@ function StoryCard({
   research: ResearchData | null;
   location: GeoLocation | null;
   personIdx?: number;
+  /** True when research + cultural context are both loaded — triggers background pre-gen */
+  researchReady?: boolean;
   onStoryGenerated: (epitaphSource: string, epitaphMeaning: string, script: string) => void;
 }) {
   const gender = inferGender(extracted);
@@ -3358,7 +3362,8 @@ function StoryCard({
   const [progress, setProgress]           = useState(0);
   const [currentTime, setCurrentTime]     = useState(0);
   const [duration, setDuration]           = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioRef  = useRef<HTMLAudioElement | null>(null);
+  const preGenRef = useRef<AbortController | null>(null);
 
   const hasEnoughData = !!(extracted.birthYear || extracted.deathYear || extracted.name);
   if (!hasEnoughData) return null;
@@ -3402,7 +3407,107 @@ function StoryCard({
     };
   }, [audioDataUrl]);
 
+  // ── Background pre-generation ─────────────────────────────────────────────
+  // Fires once when research + cultural context are both ready (researchReady=true).
+  // Generates story + TTS silently so audio is already cached when user taps.
+  // Aborted immediately on unmount (navigation away) to avoid orphaned requests.
+  useEffect(() => {
+    if (!researchReady) return;
+    if (personIdx !== 0) return;           // secondary persons only on explicit tap
+    if (audioDataUrl || scriptText) return; // already have audio or script in state
+    if (!hasEnoughData) return;
+    if (!research?.culturalContext) return; // cultural context must be in memory
+
+    const abort = new AbortController();
+    preGenRef.current = abort;
+
+    (async () => {
+      try {
+        let script: string;
+        let epitaphSource = "";
+        let epitaphMeaning = "";
+
+        if (research?.storyScript) {
+          script = research.storyScript;
+          epitaphSource = research.epitaphSource ?? "";
+          epitaphMeaning = research.epitaphMeaning ?? "";
+        } else {
+          const storyRes = await fetch("/api/story", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: abort.signal,
+            body: JSON.stringify({
+              name: extracted.name,
+              birthDate: extracted.birthDate,
+              deathDate: extracted.deathDate,
+              birthYear: extracted.birthYear,
+              deathYear: extracted.deathYear,
+              ageAtDeath: extracted.ageAtDeath,
+              inscription: extracted.inscription,
+              epitaph: extracted.epitaph,
+              symbols: extracted.symbols ?? [],
+              city: location?.city,
+              state: location?.state,
+              country: location?.country,
+              cemetery: location?.cemetery,
+              historical: research?.historical,
+              militaryContext: research?.militaryContext,
+              culturalSummary: (research.culturalContext as { categories?: unknown[] } | null)?.categories ?? [],
+              ssdi: research?.ssdi?.filter((r) => r.matchConfidence === "high").slice(0, 1),
+              historicalCensus: research?.historicalCensus?.slice(0, 2),
+              immigration: research?.immigration?.slice(0, 1),
+              symbolMeanings: (() => {
+                const syms = extracted.symbols ?? [];
+                if (!syms.length) return undefined;
+                const map = interpretSymbols(syms);
+                return syms.map((s) => {
+                  const interp = map.get(s.toLowerCase());
+                  return interp ? { symbol: s, meaning: interp.meaning, category: interp.category } : null;
+                }).filter(Boolean);
+              })(),
+            }),
+          });
+          if (abort.signal.aborted || !storyRes.ok) return;
+          ({ script, epitaphSource = "", epitaphMeaning = "" } = await storyRes.json());
+          setScriptText(script);
+          onStoryGenerated(epitaphSource, epitaphMeaning, script);
+        }
+
+        const ttsRes = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: abort.signal,
+          body: JSON.stringify({ text: script, voice }),
+        });
+        if (abort.signal.aborted || !ttsRes.ok) return;
+
+        const audioBlob = await ttsRes.blob();
+        if (abort.signal.aborted) return;
+
+        // Save to IDB and expose as a data URL (no auto-play in background mode)
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload  = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(audioBlob);
+        });
+        await saveAudio(graveId, cacheKey, dataUrl);
+        if (!abort.signal.aborted) setAudioDataUrl(dataUrl);
+      } catch {
+        // Abort errors are expected on unmount — all others are non-fatal
+      }
+    })();
+
+    return () => { abort.abort(); preGenRef.current = null; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [researchReady, personIdx]);
+
   const handleHearStory = async () => {
+    // Cancel any in-flight background pre-gen to avoid a race where both
+    // compete to write the same IDB key at the same time.
+    preGenRef.current?.abort();
+    preGenRef.current = null;
+
     setHasError(false);
     setLoadingPhase("crafting");
     try {

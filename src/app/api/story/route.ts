@@ -3,21 +3,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/apiAuth";
 
 const MODEL = "claude-haiku-4-5-20251001";
-const MAX_TOKENS = 1200;
+const MAX_TOKENS = 700; // 200–250 word output fits well under 700 tokens
 
 const SYSTEM_PROMPT = `You are writing a first-person spoken monologue for a grave marker audio guide.
-Write 400–500 words as if the deceased is narrating their own life.
+Write 200–250 words as if the deceased is narrating their own life.
 
 Core rules:
 - Speak naturally in first person throughout — "I", "my", "we"
-- Weave in the era's historical events they lived through at specific ages
-- Include the feel of daily life in their era — what they would have seen, heard, used
-- End with their death: "I died in [year] at [age] years old…" or similar
-- If they outlived the average lifespan, note that warmly; if they died young, make it poignant
-- Speak with warmth, dignity, and historical authenticity
+- Open with the birth year, end with the death — arc the whole life in the middle
+- Weave in one or two vivid historical details from their era
 - Write for the ear, not the eye — short sentences, vivid images, no lists or headers
+- Speak with warmth, dignity, and historical authenticity
 - If an epitaph is provided, identify its source and meaning in the separate JSON fields
-- If symbol meanings are provided, reference them naturally near the close of the narrative — they reveal what the family chose to say about this person in stone
+- If symbol meanings are provided, reference one naturally near the close
 - Return ONLY valid JSON — no markdown, no explanation, no code fences
 
 LOCATION RULE: The city/state/country provided is ONLY where this person is buried — not necessarily where they were born or lived.
@@ -26,11 +24,9 @@ Instead begin with the year: "I was born in [year], into a world…" or "The yea
 You may reference the burial location only as where they rest: "I came to rest here in [cemetery/state]."
 
 MILITARY RULE: Only include military content if "militaryConfirmed: true" appears in the data.
-If militaryConfirmed is false or absent, do NOT mention military service — even if you could infer it from dates.
 Silence on unconfirmed service is more honest than speculation.
 
-RECORDS RULE: If census, SSDI, or immigration records appear in the "Confirmed biographical records" section below,
-treat those as verified facts and weave them naturally into the narrative.
+RECORDS RULE: If census, SSDI, or immigration records appear below, treat those as verified facts.
 They may confirm birthplace, occupation, immigration origin, last residence, and more.`;
 
 interface CulturalCategory { id: string; summary: string; }
@@ -220,7 +216,7 @@ function buildPrompt(params: {
 Based on all the above, return JSON with exactly these fields:
 
 {
-  "script": "The 400–500 word first-person monologue, written to be spoken aloud.",
+  "script": "The 200–250 word first-person monologue, written to be spoken aloud.",
   "epitaphSource": "If the epitaph is from a known source (Bible verse, hymn, poem, literary work), identify it here. Otherwise empty string.",
   "epitaphMeaning": "1–2 sentences on what this epitaph meant to families of that era. Empty string if no epitaph."
 }`
