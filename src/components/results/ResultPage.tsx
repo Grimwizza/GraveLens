@@ -1386,14 +1386,14 @@ export default function ResultPage({ id }: { id: string }) {
               </div>
               <button
                 onClick={() => handleTogglePublic(!isPublic)}
-                className="shrink-0 w-11 h-6 rounded-full relative transition-colors duration-200"
+                className="shrink-0 w-11 h-6 rounded-full relative overflow-hidden transition-colors duration-200"
                 style={{ background: isPublic ? "#c97c6b" : "#3a3733" }}
                 role="switch"
                 aria-checked={isPublic}
               >
                 <span
-                  className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
-                  style={{ transform: isPublic ? "translateX(1.25rem)" : "translateX(0.125rem)" }}
+                  className="absolute left-0 top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
+                  style={{ transform: isPublic ? "translateX(1.375rem)" : "translateX(0.125rem)" }}
                 />
               </button>
             </div>
