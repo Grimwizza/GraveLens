@@ -26,39 +26,54 @@ async function applyEditsToDataUrl(
   rotation: number,
   crop: CropRect,
 ): Promise<string> {
-  const img = await new Promise<HTMLImageElement>((res, rej) => {
-    const i = new Image();
-    i.onload = () => res(i);
-    i.onerror = rej;
-    i.src = srcDataUrl;
-  });
+  // Remote URLs (CDN-synced photos) taint the canvas when drawn, which blocks
+  // toDataURL(). Fetch the bytes first and hand the browser a same-origin
+  // blob: URL so the canvas stays clean.
+  let blobUrl: string | null = null;
+  const src = srcDataUrl.startsWith("data:") ? srcDataUrl : await (async () => {
+    const resp = await fetch(srcDataUrl);
+    const blob = await resp.blob();
+    blobUrl = URL.createObjectURL(blob);
+    return blobUrl;
+  })();
 
-  const nw = img.naturalWidth;
-  const nh = img.naturalHeight;
-  // After rotation, effective dimensions may be swapped
-  const rW = rotation % 2 === 0 ? nw : nh;
-  const rH = rotation % 2 === 0 ? nh : nw;
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = rej;
+      i.src = src;
+    });
 
-  // Step 1: draw the rotated image onto a temp canvas
-  const tmp = document.createElement("canvas");
-  tmp.width = rW;
-  tmp.height = rH;
-  const tc = tmp.getContext("2d")!;
-  tc.translate(rW / 2, rH / 2);
-  tc.rotate(rotation * Math.PI / 2);
-  tc.drawImage(img, -nw / 2, -nh / 2);
+    const nw = img.naturalWidth;
+    const nh = img.naturalHeight;
+    // After rotation, effective dimensions may be swapped
+    const rW = rotation % 2 === 0 ? nw : nh;
+    const rH = rotation % 2 === 0 ? nh : nw;
 
-  // Step 2: crop from the rotated canvas
-  const cx = Math.round(crop.x * rW);
-  const cy = Math.round(crop.y * rH);
-  const cw = Math.max(1, Math.round(crop.w * rW));
-  const ch = Math.max(1, Math.round(crop.h * rH));
-  const out = document.createElement("canvas");
-  out.width = cw;
-  out.height = ch;
-  out.getContext("2d")!.drawImage(tmp, cx, cy, cw, ch, 0, 0, cw, ch);
+    // Step 1: draw the rotated image onto a temp canvas
+    const tmp = document.createElement("canvas");
+    tmp.width = rW;
+    tmp.height = rH;
+    const tc = tmp.getContext("2d")!;
+    tc.translate(rW / 2, rH / 2);
+    tc.rotate(rotation * Math.PI / 2);
+    tc.drawImage(img, -nw / 2, -nh / 2);
 
-  return out.toDataURL("image/jpeg", 0.92);
+    // Step 2: crop from the rotated canvas
+    const cx = Math.round(crop.x * rW);
+    const cy = Math.round(crop.y * rH);
+    const cw = Math.max(1, Math.round(crop.w * rW));
+    const ch = Math.max(1, Math.round(crop.h * rH));
+    const out = document.createElement("canvas");
+    out.width = cw;
+    out.height = ch;
+    out.getContext("2d")!.drawImage(tmp, cx, cy, cw, ch, 0, 0, cw, ch);
+
+    return out.toDataURL("image/jpeg", 0.92);
+  } finally {
+    if (blobUrl) URL.revokeObjectURL(blobUrl);
+  }
 }
 
 function clamp(v: number, lo: number, hi: number) {
@@ -80,6 +95,7 @@ export default function PhotoEditorModal({
   const [cropRect, setCropRect] = useState<CropRect>({ x: 0, y: 0, w: 1, h: 1 });
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState(false);
 
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -146,11 +162,14 @@ export default function PhotoEditorModal({
 
   const handleApply = useCallback(async () => {
     setApplying(true);
+    setApplyError(false);
     try {
       const edited = await applyEditsToDataUrl(photoDataUrl, rotation, cropRect);
       const resized = await resizeForStorage(edited);
       await onSave(resized);
-    } catch {
+    } catch (err) {
+      console.error("[PhotoEditor] apply failed:", err);
+      setApplyError(true);
       setApplying(false);
     }
   }, [photoDataUrl, rotation, cropRect, onSave]);
@@ -175,7 +194,10 @@ export default function PhotoEditorModal({
           </svg>
           Cancel
         </button>
+        <span className="flex flex-col items-center">
         <span className="text-stone-400 text-xs uppercase tracking-widest font-semibold">Edit Photo</span>
+        {applyError && <span className="text-red-400 text-[0.65rem] mt-0.5">Failed — try again</span>}
+      </span>
         <button
           onClick={handleApply}
           disabled={applying}
