@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import PageShell from "@/components/layout/PageShell";
 import { getAllGraves } from "@/lib/storage";
@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/browser";
 import { fetchCommunityGravesInBounds } from "@/lib/community";
 import { SHOW_COMMUNITY_FEATURES } from "@/lib/config";
+import { TourMode, type TourEvent } from "@/lib/tourMode";
 
 const ArchiveMap = dynamic(() => import("./ArchiveMap"), { ssr: false });
 
@@ -31,6 +32,50 @@ export default function MapPage() {
   });
   const [findTrigger, setFindTrigger] = useState(0);
   const [hasManualResults, setHasManualResults] = useState(false);
+
+  // Ghost Tour
+  const [tourActive, setTourActive] = useState(false);
+  const [tourError, setTourError] = useState<string | null>(null);
+  const [tourToast, setTourToast] = useState<{ grave: GraveRecord; status: TourEvent["type"] } | null>(null);
+  const tourRef = useRef<TourMode | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleTourEvent = useCallback((e: TourEvent) => {
+    setTourToast({ grave: e.grave, status: e.type });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setTourToast(null), 8000);
+  }, []);
+
+  const toggleTour = useCallback(async () => {
+    if (tourActive) {
+      tourRef.current?.stop();
+      tourRef.current = null;
+      setTourActive(false);
+      setTourToast(null);
+      setTourError(null);
+      return;
+    }
+    setTourError(null);
+    const tour = new TourMode(handleTourEvent);
+    tour.updateGraves(graves);
+    try {
+      await tour.start();
+      tourRef.current = tour;
+      setTourActive(true);
+    } catch {
+      setTourError("Location access is required for Ghost Tour.");
+    }
+  }, [tourActive, graves, handleTourEvent]);
+
+  // Keep tour's grave list fresh
+  useEffect(() => {
+    tourRef.current?.updateGraves(graves);
+  }, [graves]);
+
+  // Clean up tour on unmount
+  useEffect(() => {
+    return () => { tourRef.current?.stop(); if (toastTimerRef.current) clearTimeout(toastTimerRef.current); };
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 2000);
@@ -79,18 +124,42 @@ export default function MapPage() {
       customMainClasses="w-full h-full relative"
       headerTitleActions={null}
       headerActions={
-        <button
-          onClick={() => setMenuOpen((o) => !o)}
-          className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
-            menuOpen ? "bg-stone-700" : "bg-stone-800"
-          }`}
-          aria-label="Discovery and Search"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={menuOpen ? "var(--t-gold-500)" : "var(--t-stone-500)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Ghost Tour toggle */}
+          <button
+            onClick={toggleTour}
+            title={tourActive ? "Stop Ghost Tour" : "Start Ghost Tour — plays audio as you walk"}
+            className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
+            style={{
+              background: tourActive ? "rgba(201,168,76,0.2)" : "rgba(42,40,38,1)",
+              border: tourActive ? "1px solid rgba(201,168,76,0.5)" : "1px solid transparent",
+            }}
+            aria-label="Ghost Tour mode"
+          >
+            {tourActive ? (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+              </svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6a6560" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+              </svg>
+            )}
+          </button>
+
+          <button
+            onClick={() => setMenuOpen((o) => !o)}
+            className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
+              menuOpen ? "bg-stone-700" : "bg-stone-800"
+            }`}
+            aria-label="Discovery and Search"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={menuOpen ? "var(--t-gold-500)" : "var(--t-stone-500)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </button>
+        </div>
       }
       headerPanels={
         menuOpen && (
@@ -179,6 +248,52 @@ export default function MapPage() {
           }}
           onClearFind={() => setFindTrigger(0)}
         />
+      )}
+
+      {/* Ghost Tour: active banner */}
+      {tourActive && !tourToast && (
+        <div
+          className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium animate-fade-in"
+          style={{ background: "rgba(10,9,8,0.88)", border: "1px solid rgba(201,168,76,0.4)", color: "var(--t-gold-400)", backdropFilter: "blur(8px)" }}
+        >
+          <span className="w-2 h-2 rounded-full bg-[var(--t-gold-500)] animate-pulse" />
+          Ghost Tour active — walk to a grave
+        </div>
+      )}
+
+      {/* Ghost Tour: grave entered toast */}
+      {tourToast && (
+        <div
+          className="absolute bottom-24 left-4 right-4 z-40 flex items-center gap-3 px-4 py-3 rounded-2xl animate-fade-in"
+          style={{ background: "rgba(10,9,8,0.92)", border: "1px solid rgba(201,168,76,0.3)", backdropFilter: "blur(12px)" }}
+        >
+          <span className="text-2xl shrink-0">
+            {tourToast.status === "playing" ? "🔊" : tourToast.status === "no_audio" ? "🔇" : "⚠️"}
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="font-serif text-stone-100 text-sm font-semibold truncate">
+              {tourToast.grave.extracted.name || "Unknown"}
+            </p>
+            <p className="text-stone-400 text-xs mt-0.5">
+              {tourToast.status === "playing" ? "Now playing their story…"
+               : tourToast.status === "no_audio" ? "No story recorded — tap the grave to generate one"
+               : "Playback error — try tapping the grave"}
+            </p>
+          </div>
+          <button onClick={() => setTourToast(null)} className="w-6 h-6 flex items-center justify-center text-stone-500 shrink-0">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      )}
+
+      {/* Ghost Tour: permission error */}
+      {tourError && (
+        <div
+          className="absolute bottom-24 left-4 right-4 z-40 px-4 py-3 rounded-2xl animate-fade-in text-sm text-red-300"
+          style={{ background: "rgba(10,9,8,0.92)", border: "1px solid rgba(220,60,60,0.3)", backdropFilter: "blur(8px)" }}
+        >
+          {tourError}
+        </div>
       )}
     </PageShell>
   );

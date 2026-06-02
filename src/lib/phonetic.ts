@@ -242,3 +242,58 @@ export function phoneticCodes(name: string): string[] {
   const [mp, ma] = getMetaphone(name);
   return [...new Set([soundex, mp, ma].filter(Boolean))];
 }
+
+// ── Common surname variant patterns ───────────────────────────────────────────
+// Ordered: most likely Americanization first.
+const VARIANT_RULES: Array<[RegExp, string]> = [
+  // Germanic
+  [/^SCH/i,    "S"],      // Schmidt → Smit/Smith
+  [/MANN$/i,   "MAN"],    // Neumann → Newman
+  [/STEIN$/i,  "STONE"],  // Goldstein → Goldstone
+  [/BERG$/i,   "BERG"],   // unchanged — just confirm
+  [/^VON /i,   ""],       // Von Müller → Müller
+  // Slavic
+  [/SKI$/i,    "SKY"],    // Kowalski → Kowalsky
+  [/WICZ$/i,   "WITZ"],   // Lewandowicz → Lewandowitz
+  [/CZ$/i,     "CH"],     // Lubicz → Lubich
+  // Romance
+  [/OWSKI$/i,  "OWSKI"],  // handled via Soundex
+  [/DE\s/i,    ""],       // De la Cruz → Cruz
+  // English phonetics
+  [/PH/g,      "F"],      // Phelps → Felps
+  [/CK/g,      "K"],      // Hicks → Hiks (reverse variant)
+  [/IE$/i,     "Y"],      // Gallie → Gally
+  [/Y$/i,      "EY"],     // Murphy → Murphey
+  [/ER$/i,     "AR"],     // Parker sound variant
+];
+
+/**
+ * Returns plausible spelling variants for a surname — common Americanizations,
+ * phonetic simplifications, and prefix drops. Useful for "also try" prompts.
+ * Deduplicates and excludes the original.
+ */
+export function variantsFor(name: string): string[] {
+  if (!name || name.length < 3) return [];
+  const variants = new Set<string>();
+  const upper = name.toUpperCase();
+
+  for (const [pattern, replacement] of VARIANT_RULES) {
+    if (pattern.test(upper)) {
+      const v = upper.replace(pattern, replacement).trim();
+      if (v && v !== upper && v.length >= 2) {
+        // Titlecase it
+        variants.add(v.charAt(0) + v.slice(1).toLowerCase());
+      }
+    }
+  }
+
+  // Double-consonant simplification: "tt" → "t", "ll" → "l", etc.
+  const simplified = name.replace(/(.)\1+/g, "$1");
+  if (simplified !== name && simplified.length >= 2) variants.add(simplified);
+
+  // Remove common prefixes: Mc/Mac/O'
+  const dePrefixed = name.replace(/^(Mc|Mac|O')/i, "");
+  if (dePrefixed !== name && dePrefixed.length >= 2) variants.add(dePrefixed);
+
+  return [...variants].filter((v) => v.toLowerCase() !== name.toLowerCase()).slice(0, 4);
+}

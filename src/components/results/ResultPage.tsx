@@ -21,6 +21,7 @@ import ProfileBadge from "@/components/auth/ProfileBadge";
 import DesktopNav from "@/components/layout/DesktopNav";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { toNameCase } from "@/lib/nameUtils";
+import { detectConflicts } from "@/lib/conflictDetector";
 import type {
   GraveRecord,
   ResearchData,
@@ -1106,15 +1107,19 @@ export default function ResultPage({ id }: { id: string }) {
             extracted={activeExtracted}
             research={research}
             location={location}
+            personIdx={selectedPersonIdx}
             onStoryGenerated={async (epitaphSource, epitaphMeaning, script) => {
-              setResearch((prev) => ({ ...(prev ?? {}), epitaphSource, epitaphMeaning, storyScript: script }));
-              if (pending) {
-                const existing = await getGrave(pending.id);
-                if (existing) {
-                  await saveGrave({
-                    ...existing,
-                    research: { ...existing.research, epitaphSource, epitaphMeaning, storyScript: script },
-                  });
+              // Only persist to archive for person 0 — secondary persons' scripts are ephemeral
+              if (selectedPersonIdx === 0) {
+                setResearch((prev) => ({ ...(prev ?? {}), epitaphSource, epitaphMeaning, storyScript: script }));
+                if (pending) {
+                  const existing = await getGrave(pending.id);
+                  if (existing) {
+                    await saveGrave({
+                      ...existing,
+                      research: { ...existing.research, epitaphSource, epitaphMeaning, storyScript: script },
+                    });
+                  }
                 }
               }
             }}
@@ -1322,6 +1327,16 @@ export default function ResultPage({ id }: { id: string }) {
           {(research?.researchChecklist?.items?.length || researchLoading) ? (
             <ResearchChecklistCard checklist={research?.researchChecklist} loading={researchLoading} />
           ) : null}
+
+          {/* F9: External search links (Find A Grave, BillionGraves) */}
+          {!researchLoading && activeExtracted.name && (
+            <ExternalLinksCard extracted={activeExtracted} location={location} research={research} />
+          )}
+
+          {/* F10: Cross-source conflict warning */}
+          {!researchLoading && research && (
+            <ConflictWarningCard extracted={activeExtracted} research={research} />
+          )}
         </div>
 
         <div className="mx-5 lg:mx-8 mt-4">
@@ -3250,23 +3265,28 @@ function StoryCard({
   extracted,
   research,
   location,
+  personIdx = 0,
   onStoryGenerated,
 }: {
   graveId: string;
   extracted: ExtractedGraveData;
   research: ResearchData | null;
   location: GeoLocation | null;
+  personIdx?: number;
   onStoryGenerated: (epitaphSource: string, epitaphMeaning: string, script: string) => void;
 }) {
   const gender = inferGender(extracted);
   const origin = inferOrigin(location, research);
   const voice  = selectVoice(gender, extracted.ageAtDeath, origin);
-  const cacheKey = `story_${voice}`;
+  // Include person index in cache key so each person's audio is stored separately
+  const cacheKey = personIdx === 0 ? `story_${voice}` : `story_${voice}_p${personIdx}`;
+  // Only pre-load the persisted script for person 0; secondary persons always regenerate
+  const initialScript = personIdx === 0 ? (research?.storyScript ?? null) : null;
 
   const [audioDataUrl, setAudioDataUrl]   = useState<string | null>(null);
   const [loadingPhase, setLoadingPhase]   = useState<null | "crafting" | "recording">(null);
   const [hasError, setHasError]           = useState(false);
-  const [scriptText, setScriptText]       = useState<string | null>(research?.storyScript ?? null);
+  const [scriptText, setScriptText]       = useState<string | null>(initialScript);
   const [scriptOpen, setScriptOpen]       = useState(false);
   const [playing, setPlaying]             = useState(false);
   const [progress, setProgress]           = useState(0);
@@ -3277,14 +3297,15 @@ function StoryCard({
   const hasEnoughData = !!(extracted.birthYear || extracted.deathYear || extracted.name);
   if (!hasEnoughData) return null;
 
-  // Load cached audio on mount
+  // Load cached audio on mount; reset script when person changes
   useEffect(() => {
+    setScriptText(personIdx === 0 ? (research?.storyScript ?? null) : null);
+    setAudioDataUrl(null);
     getAudio(graveId, cacheKey).then((cached) => {
       if (cached) setAudioDataUrl(cached);
     }).catch(() => {});
-    if (research?.storyScript) setScriptText(research.storyScript);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graveId, cacheKey]);
+  }, [graveId, cacheKey, personIdx]);
 
   // Wire audio events
   useEffect(() => {
@@ -3839,6 +3860,158 @@ function ImmigrationJourneyCard({ records }: { records: import("@/types").Immigr
           <p className="text-stone-600 text-[0.7rem] italic mt-2">{r.collection}</p>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Conflict Warning Card ─────────────────────────────────────────────────────
+
+function ConflictWarningCard({
+  extracted,
+  research,
+}: {
+  extracted: ExtractedGraveData;
+  research: ResearchData;
+}) {
+  const [open, setOpen] = useState(false);
+  const conflicts = detectConflicts(extracted, research);
+  if (conflicts.length === 0) return null;
+
+  const FIELD_LABEL: Record<string, string> = {
+    birthYear: "Birth year",
+    deathYear: "Death year",
+    name: "Name",
+  };
+
+  return (
+    <div className="py-5 animate-fade-up">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-start gap-3 p-3 rounded-xl border transition-colors text-left"
+        style={{ background: "rgba(220,60,40,0.06)", borderColor: "rgba(220,60,40,0.25)" }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e88888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold" style={{ color: "#e88888" }}>
+            {conflicts.length === 1 ? "1 date conflict detected" : `${conflicts.length} date conflicts detected`}
+          </p>
+          <p className="text-xs text-stone-500 mt-0.5">
+            Sources disagree — verify before citing. Tap to review.
+          </p>
+        </div>
+        <svg
+          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6a6560" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-1 transition-transform"
+          style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+        >
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-2 animate-fade-in">
+          {conflicts.map((c, i) => (
+            <div key={i} className="p-3 rounded-xl bg-stone-800 border border-stone-700">
+              <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-1.5">{FIELD_LABEL[c.field] ?? c.field}</p>
+              <div className="flex flex-wrap gap-x-6 gap-y-1">
+                <div>
+                  <p className="text-[0.7rem] text-stone-500">{c.source1}</p>
+                  <p className="text-stone-200 text-sm font-medium">{c.value1}</p>
+                </div>
+                <div>
+                  <p className="text-[0.7rem] text-stone-500">{c.source2}</p>
+                  <p className="text-stone-200 text-sm font-medium">{c.value2}</p>
+                </div>
+              </div>
+              {c.deltaYears != null && (
+                <p className="text-xs text-stone-500 mt-1.5">{c.deltaYears} year{c.deltaYears !== 1 ? "s" : ""} apart — check primary sources to confirm.</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── External Links Card ───────────────────────────────────────────────────────
+
+function ExternalLinksCard({
+  extracted,
+  location,
+  research,
+}: {
+  extracted: ExtractedGraveData;
+  location: GeoLocation | null;
+  research: ResearchData | null;
+}) {
+  const firstName  = extracted.firstName ?? extracted.name?.split(" ")[0] ?? "";
+  const lastName   = extracted.lastName  ?? extracted.name?.split(" ").slice(-1)[0] ?? "";
+  const deathYear  = extracted.deathYear ?? "";
+  const state      = location?.state ?? "";
+
+  const fagUrl = `https://www.findagrave.com/memorial/search?firstname=${encodeURIComponent(firstName)}&lastname=${encodeURIComponent(lastName)}${deathYear ? `&death=${deathYear}` : ""}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
+  const bgUrl  = `https://billiongraves.com/search/results#given_names=${encodeURIComponent(firstName)}&family_names=${encodeURIComponent(lastName)}${deathYear ? `&year_of_death=${deathYear}` : ""}`;
+  const fsUrl  = `https://www.familysearch.org/search/record/results?q.givenName=${encodeURIComponent(firstName)}&q.surname=${encodeURIComponent(lastName)}${deathYear ? `&q.deathLikeDate.from=${deathYear}&q.deathLikeDate.to=${deathYear}` : ""}`;
+
+  const links = [
+    { label: "Find A Grave",    sub: "200M+ memorials, photos, family connections", url: fagUrl, icon: "🪦" },
+    { label: "BillionGraves",   sub: "GPS-indexed grave photos from volunteers",    url: bgUrl,  icon: "📍" },
+    { label: "FamilySearch",    sub: "9 billion indexed records — free access",     url: fsUrl,  icon: "🌳" },
+  ];
+
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="🔗" title="Search Other Databases" />
+      <p className="text-stone-500 text-xs mt-1 mb-3">
+        Pre-filled searches in major genealogy databases — opens in your browser.
+      </p>
+      <ul className="space-y-2">
+        {links.map(({ label, sub, url, icon }) => (
+          <li key={label}>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
+            >
+              <span className="text-xl shrink-0">{icon}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-stone-200 text-sm font-medium">{label}</p>
+                <p className="text-stone-500 text-xs mt-0.5">{sub}</p>
+              </div>
+              <p className="text-xs shrink-0" style={{ color: "var(--t-gold-500)" }}>Search →</p>
+            </a>
+          </li>
+        ))}
+      </ul>
+
+      {/* Surname variant hints */}
+      {research?.surnameVariants && research.surnameVariants.length > 0 && (
+        <div className="mt-4">
+          <p className="text-xs text-stone-500 uppercase tracking-widest mb-2">Also try alternate spellings</p>
+          <div className="flex flex-wrap gap-2">
+            {research.surnameVariants.map((variant) => {
+              const variantFirst = extracted.firstName ?? "";
+              const varUrl = `https://www.findagrave.com/memorial/search?firstname=${encodeURIComponent(variantFirst)}&lastname=${encodeURIComponent(variant)}${deathYear ? `&death=${deathYear}` : ""}`;
+              return (
+                <a
+                  key={variant}
+                  href={varUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors active:opacity-80"
+                  style={{ borderColor: "rgba(201,168,76,0.3)", color: "var(--t-gold-400)", background: "rgba(201,168,76,0.06)" }}
+                >
+                  {variantFirst} <strong>{variant}</strong> →
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

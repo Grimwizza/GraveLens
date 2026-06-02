@@ -21,7 +21,7 @@ import { searchHistoricalCensus } from "@/lib/apis/historicalCensus";
 import { searchEnlistmentRecords } from "@/lib/apis/nara";
 import { searchUsGenWebRecords } from "@/lib/apis/usgenweb";
 
-import { getSoundex } from "@/lib/phonetic";
+import { getSoundex, variantsFor } from "@/lib/phonetic";
 import { buildResearchChecklist } from "@/lib/researchChecklist";
 import type { ResearchData, GeoLocation, NaraItemRecord, UsGenWebRecord } from "@/types";
 import { createClient } from "@/lib/supabase/server";
@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
 
     // ── Phonetic normalization ──────────────────────────────────────────────
     const surnameSoundex = lastName ? getSoundex(lastName) : "";
+    const surnameVariants = lastName ? variantsFor(lastName) : [];
 
     const supabase = await createClient();
 
@@ -204,6 +205,7 @@ export async function POST(req: NextRequest) {
       birthYearNotables:  notables.length        > 0 ? notables        : undefined,
       researchChecklist,
       surnameSoundex:     surnameSoundex || undefined,
+      surnameVariants:    surnameVariants.length > 0 ? surnameVariants : undefined,
     });
   } catch (error) {
     console.error("Lookup error:", error);

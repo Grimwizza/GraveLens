@@ -59,6 +59,27 @@ function findLearnedCemetery(lat: number, lng: number): string | undefined {
   return loadLearned().find((e) => distanceMeters(lat, lng, e.lat, e.lng) < PROXIMITY_METERS)?.name;
 }
 
+// ── Cemetery completion goals ──────────────────────────────────────────────
+const GOALS_KEY = "gl_cemetery_goals";
+function loadGoals(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(GOALS_KEY) ?? "{}"); }
+  catch { return {}; }
+}
+function saveGoal(cemeteryId: string, total: number): void {
+  try {
+    const goals = loadGoals();
+    goals[cemeteryId] = total;
+    localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
+  } catch { /* ignore */ }
+}
+function removeGoal(cemeteryId: string): void {
+  try {
+    const goals = loadGoals();
+    delete goals[cemeteryId];
+    localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
+  } catch { /* ignore */ }
+}
+
 function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6_371_000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -1717,6 +1738,11 @@ function CemeterySection({
 }) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [goals, setGoals] = useState<Record<string, number>>(() =>
+    typeof window !== "undefined" ? loadGoals() : {}
+  );
+  const [goalEditing, setGoalEditing] = useState<string | null>(null);
+  const [goalInput, setGoalInput] = useState("");
 
   if (cemeteries.length === 0) {
     return (
@@ -1834,6 +1860,88 @@ function CemeterySection({
                 )}
               </div>
             </div>
+
+            {/* Completion tracker */}
+            {(() => {
+              const goal = goals[c.id];
+              const pct = goal ? Math.min(100, Math.round((graveCount / goal) * 100)) : null;
+              const isEditingGoal = goalEditing === c.id;
+
+              return (
+                <div className="flex flex-col gap-2">
+                  {goal && pct !== null && (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-stone-400">
+                          {graveCount} of {goal} documented
+                        </span>
+                        <span className="text-xs font-semibold" style={{ color: pct >= 100 ? "#92cc92" : "var(--t-gold-500)" }}>
+                          {pct}%
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-stone-700">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${pct}%`,
+                            background: pct >= 100 ? "#92cc92" : "var(--t-gold-500)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {isEditingGoal ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={goalInput}
+                        onChange={(e) => setGoalInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const n = parseInt(goalInput, 10);
+                            if (n > 0) { saveGoal(c.id, n); setGoals((g) => ({ ...g, [c.id]: n })); }
+                            setGoalEditing(null); setGoalInput("");
+                          }
+                          if (e.key === "Escape") { setGoalEditing(null); setGoalInput(""); }
+                        }}
+                        placeholder="e.g. 250"
+                        className="flex-1 bg-stone-700 border border-stone-600 text-stone-100 text-xs rounded-lg px-3 py-2 outline-none placeholder:text-stone-500"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => {
+                          const n = parseInt(goalInput, 10);
+                          if (n > 0) { saveGoal(c.id, n); setGoals((g) => ({ ...g, [c.id]: n })); }
+                          setGoalEditing(null); setGoalInput("");
+                        }}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold"
+                        style={{ background: "var(--t-gold-500)", color: "#1a1917" }}
+                      >
+                        Set
+                      </button>
+                      {goal && (
+                        <button
+                          onClick={() => { removeGoal(c.id); setGoals((g) => { const n = { ...g }; delete n[c.id]; return n; }); setGoalEditing(null); setGoalInput(""); }}
+                          className="px-2 py-2 rounded-lg text-xs text-stone-500 active:text-red-400"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setGoalEditing(c.id); setGoalInput(goal ? String(goal) : ""); }}
+                      className="self-start text-xs text-stone-500 active:text-stone-300 transition-colors flex items-center gap-1"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+                      </svg>
+                      {goal ? "Edit goal" : "Set documentation goal"}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Hours, phone, website, Wikipedia */}
             {(c.openingHours || c.phone || c.website || c.wikipediaUrl) && (
