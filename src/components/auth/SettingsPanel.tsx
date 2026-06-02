@@ -10,6 +10,7 @@ import {
   type MapStyle,
   type SearchRadius,
   type LocationPref,
+  type AnalysisMode,
 } from "@/lib/settings";
 import { getAllGraves, getAllCemeteries } from "@/lib/storage";
 import { useAuth } from "@/lib/auth";
@@ -120,6 +121,7 @@ export default function SettingsPanel({ onClose }: Props) {
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
   const [clearDone, setClearDone] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -223,6 +225,42 @@ export default function SettingsPanel({ onClose }: Props) {
     } catch {
       setClearing(false);
       setClearConfirm(false);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    setExportingCsv(true);
+    try {
+      const graves = await getAllGraves();
+      const header = ["Name", "Birth Year", "Death Year", "Age at Death", "Cemetery", "City", "State", "Latitude", "Longitude", "Inscription"];
+      const escape = (v: string | number | null | undefined) => {
+        const s = String(v ?? "");
+        return s.includes(",") || s.includes('"') || s.includes("\n")
+          ? `"${s.replace(/"/g, '""')}"`
+          : s;
+      };
+      const rows = graves.map((g) => [
+        escape(g.extracted?.name),
+        escape(g.extracted?.birthYear),
+        escape(g.extracted?.deathYear),
+        escape(g.extracted?.ageAtDeath),
+        escape(g.location?.cemetery),
+        escape(g.location?.city),
+        escape(g.location?.state),
+        escape(g.location?.lat),
+        escape(g.location?.lng),
+        escape(g.extracted?.inscription?.slice(0, 200)),
+      ]);
+      const csv = [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `gravelens-archive-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportingCsv(false);
     }
   };
 
@@ -482,6 +520,39 @@ export default function SettingsPanel({ onClose }: Props) {
             </>
           )}
 
+          {/* ── CAPTURE ──────────────────────────────────────────────── */}
+          <SectionHeader
+            title="Capture"
+            icon={
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="13" r="4"/>
+                <path d="M5 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1"/>
+                <path d="M9 7l1-3h4l1 3"/>
+              </svg>
+            }
+          />
+          <div className="mx-5 rounded-2xl overflow-hidden border border-stone-800/80 mb-1">
+            <Row>
+              <Label title="Show Photo Tips" sub="Display lighting & framing hints on the scan screen" />
+              <Toggle on={settings.showPhotoTips} onChange={(v) => update("showPhotoTips", v)} />
+            </Row>
+            <Row>
+              <Label title="Auto-Save Scans" sub="Save every scan to your archive without prompting" />
+              <Toggle on={settings.autoSaveToArchive} onChange={(v) => update("autoSaveToArchive", v)} />
+            </Row>
+            <Row>
+              <Label title="Analysis Mode" sub="Fast uses less AI cost; Thorough always escalates to the best model" />
+              <SegmentControl<AnalysisMode>
+                value={settings.analysisMode}
+                onChange={(v) => update("analysisMode", v)}
+                options={[
+                  { value: "fast", label: "Fast" },
+                  { value: "thorough", label: "Thorough" },
+                ]}
+              />
+            </Row>
+          </div>
+
           {/* ── PRIVACY & DATA ────────────────────────────────────────── */}
           <SectionHeader
             title="Privacy & Data"
@@ -493,7 +564,7 @@ export default function SettingsPanel({ onClose }: Props) {
             }
           />
           <div className="mx-5 rounded-2xl overflow-hidden border border-stone-800/80 mb-6">
-            {/* Export */}
+            {/* Export JSON */}
             <Row>
               <Label
                 title="Export Archive"
@@ -513,7 +584,31 @@ export default function SettingsPanel({ onClose }: Props) {
                     <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
                   </svg>
                 )}
-                Export
+                JSON
+              </button>
+            </Row>
+
+            {/* Export CSV */}
+            <Row>
+              <Label
+                title="Export as Spreadsheet"
+                sub="Download graves as CSV for Excel or Sheets"
+              />
+              <button
+                onClick={handleExportCsv}
+                disabled={exportingCsv}
+                className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 disabled:opacity-50"
+                style={{ background: "rgba(201,168,76,0.12)", color: "var(--t-gold-500)", border: "1px solid rgba(201,168,76,0.25)" }}
+              >
+                {exportingCsv ? (
+                  <div className="w-3 h-3 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--t-gold-500) transparent var(--t-gold-500) var(--t-gold-500)" }} />
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                )}
+                CSV
               </button>
             </Row>
 

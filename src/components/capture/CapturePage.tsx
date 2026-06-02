@@ -14,6 +14,8 @@ import type { ExtractedGraveData, GeoLocation } from "@/types";
 import ReliefCapture from "./ReliefCapture";
 import { localContrastBoost, unsharpMask } from "@/lib/relief";
 import { resizeForStorage } from "@/lib/imageUtils";
+import OnboardingCarousel from "@/components/onboarding/OnboardingCarousel";
+import { loadSettings } from "@/lib/settings";
 
 type Phase = "idle" | "processing" | "queued" | "pro_prompt" | "degraded_prompt";
 
@@ -352,6 +354,7 @@ export default function CapturePage() {
 
   return (
     <PageShell showLogo={true} customMainClasses="items-center px-5 pb-28" backgroundClass="bg-transparent">
+      <OnboardingCarousel />
       {/* Main content */}
       {isReliefActive ? (
         <ReliefCapture 
@@ -370,6 +373,7 @@ export default function CapturePage() {
               <IdleState
                 onUpload={() => fileInputRef.current?.click()}
                 onCapture={() => cameraInputRef.current?.click()}
+                showTips={loadSettings().showPhotoTips}
               />
             )
           )}
@@ -455,13 +459,24 @@ export default function CapturePage() {
 
 // ── Idle state ─────────────────────────────────────────────────────────────
 
+const PHOTO_TIPS = [
+  { icon: "☁️", text: "Overcast light or open shade — direct sun creates harsh shadows" },
+  { icon: "📐", text: "Shoot straight-on, not from an angle" },
+  { icon: "🔲", text: "Fill the frame — the inscription should be the whole photo" },
+  { icon: "💧", text: "Wetting a dry stone with water can sharpen contrast" },
+];
+
 function IdleState({
   onUpload,
   onCapture,
+  showTips = true,
 }: {
   onUpload: () => void;
   onCapture: () => void;
+  showTips?: boolean;
 }) {
+  const [tipsOpen, setTipsOpen] = useState(false);
+
   return (
     <div className="flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 pt-2 pb-0 sm:pb-4 justify-between" style={{ paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
       {/* Graphic + text — takes all available space and centers content within it */}
@@ -520,7 +535,41 @@ function IdleState({
       </div>
 
       {/* Action buttons — anchored to bottom */}
-      <div className="flex flex-col items-center gap-6 w-full pt-4 mt-auto mb-28">
+      <div className="flex flex-col items-center gap-3 w-full pt-4 mt-auto mb-28">
+        {/* Tips toggle */}
+        {showTips && <button
+          onClick={() => setTipsOpen((o) => !o)}
+          className="flex items-center gap-1.5 text-xs text-stone-500 active:text-stone-300 transition-colors py-1"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          Tips for better scans
+          <svg
+            width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+            style={{ transform: tipsOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}
+          >
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>}
+
+        {/* Tips panel */}
+        {tipsOpen && (
+          <div
+            className="w-full rounded-2xl p-4 flex flex-col gap-2.5 animate-fade-in"
+            style={{ background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.15)" }}
+          >
+            {PHOTO_TIPS.map((tip) => (
+              <div key={tip.text} className="flex items-start gap-2.5">
+                <span className="text-sm mt-px leading-none">{tip.icon}</span>
+                <span className="text-xs text-stone-400 leading-relaxed">{tip.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <button
           onClick={onUpload}
           className="flex items-center justify-center gap-3 w-full h-12 rounded-2xl border border-stone-600 text-stone-200 font-medium text-base transition-all active:scale-[0.97] bg-stone-800/50"

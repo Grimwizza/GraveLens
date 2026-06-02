@@ -8,6 +8,7 @@ export type Theme = "dark" | "system" | "light";
 export type MapStyle = "standard" | "satellite" | "terrain";
 export type SearchRadius = 1 | 5 | 10 | 25;
 export type LocationPref = "always" | "ask" | "never";
+export type AnalysisMode = "fast" | "thorough";
 
 export interface AppSettings {
   // Display
@@ -22,6 +23,11 @@ export interface AppSettings {
 
   // Scan
   saveLocation: LocationPref;
+
+  // Capture
+  autoSaveToArchive: boolean;
+  analysisMode: AnalysisMode;
+  showPhotoTips: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -32,6 +38,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultSearchRadius: 5,
   autoDiscover: true,
   saveLocation: "always",
+  autoSaveToArchive: false,
+  analysisMode: "fast",
+  showPhotoTips: true,
 };
 
 const STORAGE_KEY = "gl_settings";

@@ -1085,29 +1085,7 @@ export default function ResultPage({ id }: { id: string }) {
               </svg>
             </div>
             {extracted.confidence && (
-              <div className="absolute top-3 right-3">
-                <span
-                  className="px-2.5 py-1 rounded-full text-xs font-semibold"
-                  style={{
-                    background: "rgba(10, 9, 8, 0.72)",
-                    backdropFilter: "blur(6px)",
-                    WebkitBackdropFilter: "blur(6px)",
-                    border: "1px solid currentColor",
-                    color:
-                      extracted.confidence === "high"
-                        ? "#92cc92"
-                        : extracted.confidence === "medium"
-                        ? "var(--t-gold-300)"
-                        : "#e88888",
-                  }}
-                >
-                  {extracted.confidence === "high"
-                    ? "High confidence"
-                    : extracted.confidence === "medium"
-                    ? "Medium confidence"
-                    : "Low confidence — verify manually"}
-                </span>
-              </div>
+              <ConfidenceBadge confidence={extracted.confidence} offsetClass="top-3 right-3" />
             )}
           </div>
         </div>
@@ -1296,17 +1274,18 @@ export default function ResultPage({ id }: { id: string }) {
           ) : null}
 
           {/* F3: SSDI */}
-          {research?.ssdi?.length ? (
+          {(research?.ssdi?.length || researchLoading) ? (
             <SSDICard
-              records={research.ssdi}
+              records={research?.ssdi ?? []}
+              loading={researchLoading}
               onRefresh={handleRefreshSsdi}
               refreshing={sectionRefreshing === "ssdi"}
             />
           ) : null}
 
           {/* F4: Historical Census */}
-          {research?.historicalCensus?.length ? (
-            <HistoricalCensusCard records={research.historicalCensus} />
+          {(research?.historicalCensus?.length || researchLoading) ? (
+            <HistoricalCensusCard records={research?.historicalCensus ?? []} loading={researchLoading} />
           ) : null}
 
           {/* Household members from census */}
@@ -1315,8 +1294,8 @@ export default function ResultPage({ id }: { id: string }) {
           ) : null}
 
           {/* F5: Immigration records */}
-          {research?.immigration?.length ? (
-            <ImmigrationCard records={research.immigration} />
+          {(research?.immigration?.length || researchLoading) ? (
+            <ImmigrationCard records={research?.immigration ?? []} loading={researchLoading} />
           ) : null}
 
           {/* Immigration journey visual */}
@@ -1325,22 +1304,23 @@ export default function ResultPage({ id }: { id: string }) {
           ) : null}
 
           {/* F6: Item-level military/enlistment records */}
-          {research?.naraItemRecords?.length ? (
+          {(research?.naraItemRecords?.length || researchLoading) ? (
             <NaraItemCard
-              records={research.naraItemRecords}
+              records={research?.naraItemRecords ?? []}
+              loading={researchLoading}
               onRefresh={handleRefreshNara}
               refreshing={sectionRefreshing === "nara"}
             />
           ) : null}
 
           {/* F7: USGenWeb probate/deed/will */}
-          {research?.usGenWebRecords?.length ? (
-            <UsGenWebCard records={research.usGenWebRecords} />
+          {(research?.usGenWebRecords?.length || researchLoading) ? (
+            <UsGenWebCard records={research?.usGenWebRecords ?? []} loading={researchLoading} />
           ) : null}
 
           {/* F8: Research Checklist */}
-          {research?.researchChecklist?.items?.length ? (
-            <ResearchChecklistCard checklist={research.researchChecklist} />
+          {(research?.researchChecklist?.items?.length || researchLoading) ? (
+            <ResearchChecklistCard checklist={research?.researchChecklist} loading={researchLoading} />
           ) : null}
         </div>
 
@@ -1365,29 +1345,7 @@ export default function ResultPage({ id }: { id: string }) {
         />
         {/* Confidence badge */}
         {extracted.confidence && (
-          <div className="absolute top-4 right-4">
-            <span
-              className="px-2.5 py-1 rounded-full text-xs font-semibold"
-              style={{
-                background: "rgba(10, 9, 8, 0.72)",
-                backdropFilter: "blur(6px)",
-                WebkitBackdropFilter: "blur(6px)",
-                border: "1px solid currentColor",
-                color:
-                  extracted.confidence === "high"
-                    ? "#92cc92"
-                    : extracted.confidence === "medium"
-                    ? "var(--t-gold-300)"
-                    : "#e88888",
-              }}
-            >
-              {extracted.confidence === "high"
-                ? "High confidence"
-                : extracted.confidence === "medium"
-                ? "Medium confidence"
-                : "Low confidence — verify manually"}
-            </span>
-          </div>
+          <ConfidenceBadge confidence={extracted.confidence} offsetClass="top-4 right-4" />
         )}
         {/* Expand to fullscreen */}
         <button
@@ -2367,13 +2325,27 @@ const CONFIDENCE_STYLE: Record<string, { color: string; bg: string; label: strin
 
 function SSDICard({
   records,
+  loading,
   onRefresh,
   refreshing,
 }: {
   records: import("@/types").SSDIRecord[];
+  loading?: boolean;
   onRefresh?: () => void;
   refreshing?: boolean;
 }) {
+  if (loading && !records.length) {
+    return (
+      <div className="py-5 animate-fade-up">
+        <SectionHeader icon="📋" title="Social Security Death Index" />
+        <div className="mt-3 space-y-2">
+          <div className="h-4 shimmer rounded w-3/4" />
+          <div className="h-4 shimmer rounded w-1/2" />
+          <div className="h-4 shimmer rounded w-2/3" />
+        </div>
+      </div>
+    );
+  }
   if (!records.length) return null;
   return (
     <div className="py-5 animate-fade-up">
@@ -2420,7 +2392,19 @@ function SSDICard({
 
 // ── Historical Census Card (F4) ───────────────────────────────────────────────
 
-function HistoricalCensusCard({ records }: { records: import("@/types").HistoricalCensusRecord[] }) {
+function HistoricalCensusCard({ records, loading }: { records: import("@/types").HistoricalCensusRecord[]; loading?: boolean }) {
+  if (loading && !records.length) {
+    return (
+      <div className="py-5 animate-fade-up">
+        <SectionHeader icon="📊" title="Historical Census Records" />
+        <div className="mt-3 space-y-2">
+          <div className="h-4 shimmer rounded w-5/6" />
+          <div className="h-4 shimmer rounded w-3/4" />
+          <div className="h-4 shimmer rounded w-2/3" />
+        </div>
+      </div>
+    );
+  }
   if (!records.length) return null;
   return (
     <div className="py-5 animate-fade-up">
@@ -2471,7 +2455,19 @@ function HistoricalCensusCard({ records }: { records: import("@/types").Historic
 
 // ── Immigration Card (F5) ─────────────────────────────────────────────────────
 
-function ImmigrationCard({ records }: { records: import("@/types").ImmigrationRecord[] }) {
+function ImmigrationCard({ records, loading }: { records: import("@/types").ImmigrationRecord[]; loading?: boolean }) {
+  if (loading && !records.length) {
+    return (
+      <div className="py-5 animate-fade-up">
+        <SectionHeader icon="⚓" title="Immigration & Passenger Records" />
+        <div className="mt-3 space-y-2">
+          <div className="h-4 shimmer rounded w-2/3" />
+          <div className="h-4 shimmer rounded w-5/6" />
+          <div className="h-4 shimmer rounded w-1/2" />
+        </div>
+      </div>
+    );
+  }
   if (!records.length) return null;
   return (
     <div className="py-5 animate-fade-up">
@@ -2516,13 +2512,27 @@ function ImmigrationCard({ records }: { records: import("@/types").ImmigrationRe
 
 function NaraItemCard({
   records,
+  loading,
   onRefresh,
   refreshing,
 }: {
   records: import("@/types").NaraItemRecord[];
+  loading?: boolean;
   onRefresh?: () => void;
   refreshing?: boolean;
 }) {
+  if (loading && !records.length) {
+    return (
+      <div className="py-5 animate-fade-up">
+        <SectionHeader icon="🎖" title="Military Item-Level Records" />
+        <div className="mt-3 space-y-2">
+          <div className="h-4 shimmer rounded w-3/4" />
+          <div className="h-4 shimmer rounded w-5/6" />
+          <div className="h-4 shimmer rounded w-1/2" />
+        </div>
+      </div>
+    );
+  }
   if (!records.length) return null;
   return (
     <div className="py-5 animate-fade-up">
@@ -2577,7 +2587,18 @@ const RECORD_TYPE_LABEL: Record<string, string> = {
   general:   "County Archive",
 };
 
-function UsGenWebCard({ records }: { records: import("@/types").UsGenWebRecord[] }) {
+function UsGenWebCard({ records, loading }: { records: import("@/types").UsGenWebRecord[]; loading?: boolean }) {
+  if (loading && !records.length) {
+    return (
+      <div className="py-5 animate-fade-up">
+        <SectionHeader icon="📜" title="Probate & Deed Records (USGenWeb)" />
+        <div className="mt-3 space-y-2">
+          <div className="h-4 shimmer rounded w-2/3" />
+          <div className="h-4 shimmer rounded w-1/2" />
+        </div>
+      </div>
+    );
+  }
   if (!records.length) return null;
   return (
     <div className="py-5 animate-fade-up">
@@ -2625,9 +2646,25 @@ const PRIORITY_LABEL: Record<1 | 2 | 3, { label: string; color: string; bg: stri
 
 function ResearchChecklistCard({
   checklist,
+  loading,
 }: {
-  checklist: import("@/types").ResearchChecklist;
+  checklist?: import("@/types").ResearchChecklist;
+  loading?: boolean;
 }) {
+  if (loading && !checklist?.items.length) {
+    return (
+      <div className="py-5 animate-fade-up">
+        <SectionHeader icon="🔍" title="What to Research Next" />
+        <div className="mt-3 space-y-2">
+          <div className="h-4 shimmer rounded w-full" />
+          <div className="h-4 shimmer rounded w-5/6" />
+          <div className="h-4 shimmer rounded w-3/4" />
+          <div className="h-4 shimmer rounded w-full" />
+        </div>
+      </div>
+    );
+  }
+  if (!checklist) return null;
   const { items } = checklist;
   if (!items.length) return null;
 
@@ -3802,6 +3839,65 @@ function ImmigrationJourneyCard({ records }: { records: import("@/types").Immigr
           <p className="text-stone-600 text-[0.7rem] italic mt-2">{r.collection}</p>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Confidence Badge ─────────────────────────────────────────────────────────
+
+const CONFIDENCE_INFO: Record<string, { color: string; tip: string }> = {
+  high:   { color: "#92cc92",              tip: "Claude read the inscription clearly. Name and dates are reliable." },
+  medium: { color: "var(--t-gold-300)",    tip: "Most details were extracted, but some may be incomplete. Re-scan in better light if needed." },
+  low:    { color: "#e88888",              tip: "The inscription was hard to read. Verify details manually and consider re-scanning." },
+};
+
+function ConfidenceBadge({ confidence, offsetClass = "top-3 right-3" }: { confidence: string; offsetClass?: string }) {
+  const [open, setOpen] = useState(false);
+  const info = CONFIDENCE_INFO[confidence];
+  if (!info) return null;
+
+  const label =
+    confidence === "high"   ? "High confidence" :
+    confidence === "medium" ? "Medium confidence" :
+    "Low confidence";
+
+  return (
+    <div className={`absolute ${offsetClass}`}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold"
+        style={{
+          background: "rgba(10, 9, 8, 0.72)",
+          backdropFilter: "blur(6px)",
+          WebkitBackdropFilter: "blur(6px)",
+          border: "1px solid currentColor",
+          color: info.color,
+        }}
+        aria-label={`Confidence: ${label}`}
+      >
+        {label}
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className="absolute right-0 top-full mt-2 z-50 w-56 rounded-xl px-3.5 py-3 text-xs text-stone-300 leading-relaxed shadow-xl"
+            style={{ background: "#1c1b19", border: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <p className="font-semibold mb-1" style={{ color: info.color }}>{label}</p>
+            <p>{info.tip}</p>
+            {confidence !== "high" && (
+              <p className="mt-1.5 text-stone-500">Tap the refresh icon to re-analyze after re-scanning.</p>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
