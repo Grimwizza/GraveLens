@@ -3361,21 +3361,26 @@ function StoryCard({
 
       {/* Idle: flagship CTA button */}
       {!audioDataUrl && !loadingPhase && (
-        <button
-          onClick={handleHearStory}
-          className="relative w-full flex items-center justify-center gap-3 h-14 rounded-2xl text-base font-bold text-[#1a1917] transition-all active:scale-[0.97] overflow-hidden"
-          style={{
-            background: "linear-gradient(135deg, #eadd9a 0%, var(--t-gold-500) 50%, #9e7f33 100%)",
-            boxShadow: "0 0 0 0 rgba(201,168,76,0.4)",
-            animation: "pulse-gold 2.5s ease-in-out infinite",
-          }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
-          </svg>
-          {hasError ? "Try again — hear their story" : "Hear their story"}
-        </button>
+        <>
+          <button
+            onClick={handleHearStory}
+            className="relative w-full flex items-center justify-center gap-3 h-14 rounded-2xl text-base font-bold text-[#1a1917] transition-all active:scale-[0.97] overflow-hidden"
+            style={{
+              background: "linear-gradient(135deg, #eadd9a 0%, var(--t-gold-500) 50%, #9e7f33 100%)",
+              boxShadow: "0 0 0 0 rgba(201,168,76,0.4)",
+              animation: "pulse-gold 2.5s ease-in-out infinite",
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            </svg>
+            {hasError ? "Try again — hear their story" : "Hear their story"}
+          </button>
+          <p className="text-stone-500 text-xs text-center mt-2 leading-relaxed px-2">
+            A fictional first-person narrative inspired by the name, place, and dates on this marker — meant to evoke the era, not recount verified facts about this individual.
+          </p>
+        </>
       )}
 
       {/* Loading states */}
@@ -3416,6 +3421,24 @@ function StoryCard({
                   <polygon points="5 3 19 12 5 21 5 3"/>
                 </svg>
               )}
+            </button>
+            <button
+              onClick={() => {
+                const el = audioRef.current;
+                if (!el) return;
+                el.pause();
+                el.currentTime = 0;
+                setPlaying(false);
+                setProgress(0);
+                setCurrentTime(0);
+              }}
+              className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-stone-400 active:text-stone-200 transition-all active:scale-90"
+              style={{ background: "rgba(255,255,255,0.06)" }}
+              aria-label="Stop"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <rect x="4" y="4" width="16" height="16" rx="2"/>
+              </svg>
             </button>
             <div className="flex-1 flex flex-col gap-1 min-w-0">
               <input
