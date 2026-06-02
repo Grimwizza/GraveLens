@@ -1609,6 +1609,21 @@ export default function ResultPage({ id }: { id: string }) {
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
+/**
+ * Return the most accurate age-at-death for display.
+ * When both birthYear and deathYear are known, their difference is the ground
+ * truth (±1 for pre-birthday deaths). If the inscribed ageAtDeath disagrees
+ * by more than 1 year it was likely misread — use the computed value instead.
+ */
+function resolveAge(extracted: ExtractedGraveData): number | null {
+  const { ageAtDeath, birthYear, deathYear } = extracted;
+  if (birthYear != null && deathYear != null && deathYear > birthYear) {
+    const computed = deathYear - birthYear;
+    if (ageAtDeath == null || Math.abs(ageAtDeath - computed) > 1) return computed;
+  }
+  return ageAtDeath ?? null;
+}
+
 function PrimaryCard({
   extracted,
   onSave,
@@ -1746,10 +1761,10 @@ function PrimaryCard({
             </p>
           </div>
         )}
-        {extracted.ageAtDeath && (
+        {resolveAge(extracted) != null && (
           <div>
             <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">Age</p>
-            <p className="text-stone-200 font-medium">{extracted.ageAtDeath} years</p>
+            <p className="text-stone-200 font-medium">{resolveAge(extracted)} years</p>
           </div>
         )}
         {extracted.markerType && extracted.markerType !== "headstone" && (
@@ -1945,13 +1960,13 @@ function HistoricalCard({
                 <p className="text-stone-300 text-sm">{historical.deathEra}</p>
               </div>
             )}
-            {historical.lifeExpectancyAtDeath && extracted.ageAtDeath && (
+            {historical.lifeExpectancyAtDeath && resolveAge(extracted) != null && (
               <div>
                 <p className="text-xs text-stone-500 uppercase tracking-widest mb-0.5">Life expectancy then</p>
                 <p className="text-stone-300 text-sm">
                   ~{historical.lifeExpectancyAtDeath} yrs
                   <span className="text-stone-500 ml-1">
-                    (lived to {extracted.ageAtDeath})
+                    (lived to {resolveAge(extracted)})
                   </span>
                 </p>
               </div>

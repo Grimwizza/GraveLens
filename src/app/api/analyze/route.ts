@@ -51,7 +51,7 @@ Family stone rules:
 Date inference:
 - If only deathYear and ageAtDeath are given, calculate birthYear = deathYear − ageAtDeath.
 - If only birthYear and ageAtDeath are given, calculate deathYear = birthYear + ageAtDeath.
-- Cross-check: ageAtDeath must equal deathYear − birthYear (±1). Correct whichever value is inconsistent.
+- Cross-check: ageAtDeath must equal deathYear − birthYear (±1). When all three are present and they disagree, trust the two explicit years (birthYear and deathYear) and set ageAtDeath = deathYear − birthYear. Only override a year if ageAtDeath is the sole value that can settle the conflict.
 
 Confidence rules — be strict:
 - "high": name AND at least one year are legible; cross-checks pass.
