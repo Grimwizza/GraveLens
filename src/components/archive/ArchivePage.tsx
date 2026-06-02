@@ -644,7 +644,7 @@ export default function ArchivePage() {
             {/* Markers */}
             <button
               onClick={() => setArchiveTab("markers")}
-              className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[10px] transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[10px] transition-all flex items-center gap-1.5 ${
                 archiveTab === "markers"
                   ? "bg-stone-700/80 text-gold-400 shadow-[0_2px_8px_rgba(0,0,0,0.5)] border border-stone-600/50"
                   : "text-stone-500 hover:text-stone-300 border border-transparent"
@@ -692,7 +692,7 @@ export default function ArchivePage() {
             </button>
           </div>
           {archiveTab === "markers" && graves.length > 0 && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 shrink-0">
               {(
                 [
                   { mode: "list" as ViewMode, label: "List", icon: <path d="M2 4h12M2 8h12M2 12h12" /> },
