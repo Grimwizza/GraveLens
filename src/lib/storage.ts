@@ -13,6 +13,8 @@ const AUDIO_STORE = "audio";
 // Avoids re-scheduling the upgrade transaction on every operation.
 let _dbPromise: Promise<IDBPDatabase> | null = null;
 
+const AUDIO_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 function getDB(): Promise<IDBPDatabase> {
   if (!_dbPromise) {
     _dbPromise = openDB(DB_NAME, DB_VERSION, {
@@ -35,9 +37,25 @@ function getDB(): Promise<IDBPDatabase> {
           db.createObjectStore(AUDIO_STORE, { keyPath: "id" });
         }
       },
+    }).then(async (db) => {
+      // Fire-and-forget: prune audio cache entries older than 30 days
+      pruneAudioCache(db).catch(() => {});
+      return db;
     });
   }
   return _dbPromise;
+}
+
+async function pruneAudioCache(db: IDBPDatabase): Promise<void> {
+  const cutoff = Date.now() - AUDIO_TTL_MS;
+  const tx = db.transaction(AUDIO_STORE, "readwrite");
+  const all = await tx.store.getAll();
+  const stale = all.filter((entry) => (entry.createdAt ?? 0) < cutoff);
+  await Promise.all(stale.map((entry) => tx.store.delete(entry.id)));
+  await tx.done;
+  if (stale.length > 0) {
+    console.log(`[Storage] Pruned ${stale.length} stale audio cache entries (>${30}d old).`);
+  }
 }
 
 // ── Saved archive ─────────────────────────────────────────────────────────

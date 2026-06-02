@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/apiAuth";
 import { toNameCase } from "@/lib/nameUtils";
+import { createClient } from "@/lib/supabase/server";
 
 // Two-tier model strategy:
 //   Haiku   — fast, cheap (~$0.003/scan). Used on every request.
@@ -140,46 +141,49 @@ async function callClaude(
   return JSON.parse(rawJson);
 }
 
-// In-memory rate limiter storage
-const rateLimitMap = new Map<string, number[]>();
-const LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour sliding window
 const MAX_REQUESTS = 20;
 
-function isRateLimited(userId: string): boolean {
-  const now = Date.now();
-  const timestamps = rateLimitMap.get(userId) || [];
+/**
+ * Supabase-backed sliding-window rate limiter.
+ * Persists across cold starts and server instances.
+ * Returns true if the request should be blocked.
+ */
+async function checkRateLimit(userId: string): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const now = Date.now();
+    const cutoff = now - LIMIT_WINDOW_MS;
 
-  // Filter out timestamps older than 1 hour
-  const recent = timestamps.filter(t => now - t < LIMIT_WINDOW_MS);
+    // Fetch current row
+    const { data } = await supabase
+      .from("rate_limits")
+      .select("requests")
+      .eq("user_id", userId)
+      .maybeSingle();
 
-  if (recent.length >= MAX_REQUESTS) {
-    rateLimitMap.set(userId, recent);
-    return true;
+    const recent: number[] = (data?.requests ?? []).filter((t: number) => t > cutoff);
+
+    if (recent.length >= MAX_REQUESTS) return true;
+
+    // Record this request
+    recent.push(now);
+    await supabase
+      .from("rate_limits")
+      .upsert({ user_id: userId, requests: recent, updated_at: new Date().toISOString() });
+
+    return false;
+  } catch {
+    // If Supabase is unavailable, fail open (allow the request)
+    return false;
   }
-
-  recent.push(now);
-  rateLimitMap.set(userId, recent);
-
-  // Basic cleanup: if map gets too large, prune old entries
-  if (rateLimitMap.size > 1000) {
-    for (const [key, ts] of rateLimitMap.entries()) {
-      const filtered = ts.filter(t => now - t < LIMIT_WINDOW_MS);
-      if (filtered.length === 0) {
-        rateLimitMap.delete(key);
-      } else {
-        rateLimitMap.set(key, filtered);
-      }
-    }
-  }
-
-  return false;
 }
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-  if (isRateLimited(auth.userId)) {
+  if (await checkRateLimit(auth.userId)) {
     return NextResponse.json(
       { error: "Too many requests. Please try again later." },
       { status: 429, headers: { "Retry-After": "60" } }

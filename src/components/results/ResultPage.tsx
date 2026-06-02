@@ -360,13 +360,19 @@ export default function ResultPage({ id }: { id: string }) {
         const data: CulturalContext = await res.json();
         setCulturalContext(data);
         setResearch((prev) => ({ ...(prev ?? {}), culturalContext: data }));
+        // Persist cultural summary to IDB so it doesn't regenerate on next view
+        if (selectedPersonIdx === 0) {
+          getGrave(pending.id).then((existing) => {
+            if (existing) saveGrave({ ...existing, research: { ...existing.research, culturalContext: data } });
+          }).catch(() => {});
+        }
       }
     } catch (err) {
       console.warn("Cultural context generation failed:", err);
     } finally {
       setCulturalLoading(false);
     }
-  }, [pending, culturalLoading, selectedPersonData, locationOverride]);
+  }, [pending, culturalLoading, selectedPersonData, locationOverride, selectedPersonIdx]);
 
   const autoExpandAllCategories = useCallback(async (
     ctx: CulturalContext,
