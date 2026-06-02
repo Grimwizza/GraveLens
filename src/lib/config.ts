@@ -1,1 +1,1 @@
-export const SHOW_COMMUNITY_FEATURES = false;
+export const SHOW_COMMUNITY_FEATURES = true;

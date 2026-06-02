@@ -22,6 +22,7 @@ import DesktopNav from "@/components/layout/DesktopNav";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { toNameCase } from "@/lib/nameUtils";
 import { detectConflicts } from "@/lib/conflictDetector";
+import type { ResearchLink } from "@/lib/researchLinks";
 import type {
   GraveRecord,
   ResearchData,
@@ -1342,6 +1343,14 @@ export default function ResultPage({ id }: { id: string }) {
           {!researchLoading && research && (
             <ConflictWarningCard extracted={activeExtracted} research={research} />
           )}
+
+          {/* F12: Find A Grave submission helper */}
+          {!researchLoading && activeExtracted.name && (activeExtracted.birthYear || activeExtracted.deathYear) && (
+            <FindAGraveSubmitCard extracted={activeExtracted} location={location} />
+          )}
+
+          {/* F13: Family connection hints */}
+          <FamilyConnectionHints graveId={pending.id} extracted={activeExtracted} location={location} />
         </div>
 
         <div className="mx-5 lg:mx-8 mt-4">
@@ -3869,6 +3878,150 @@ function ImmigrationJourneyCard({ records }: { records: import("@/types").Immigr
   );
 }
 
+// ── Find A Grave Submit Card (P4.2) ──────────────────────────────────────────
+
+function FindAGraveSubmitCard({
+  extracted,
+  location,
+}: {
+  extracted: ExtractedGraveData;
+  location: GeoLocation | null;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const firstName  = extracted.firstName  ?? extracted.name?.split(" ")[0]       ?? "";
+  const lastName   = extracted.lastName   ?? extracted.name?.split(" ").slice(-1)[0] ?? "";
+  const birthYear  = extracted.birthYear  ?? "";
+  const deathYear  = extracted.deathYear  ?? "";
+  const cemetery   = location?.cemetery   ?? "";
+
+  const addUrl = `https://www.findagrave.com/memorial/add?fn=${encodeURIComponent(firstName)}&ln=${encodeURIComponent(lastName)}${birthYear ? `&bd=${birthYear}` : ""}${deathYear ? `&dd=${deathYear}` : ""}${cemetery ? `&mc=${encodeURIComponent(cemetery)}` : ""}`;
+
+  const details = [
+    `Name: ${extracted.name ?? "Unknown"}`,
+    birthYear ? `Born: ${birthYear}` : null,
+    deathYear ? `Died: ${deathYear}` : null,
+    cemetery  ? `Cemetery: ${cemetery}` : null,
+    location?.city  ? `City: ${location.city}` : null,
+    location?.state ? `State: ${location.state}` : null,
+  ].filter(Boolean).join("\n");
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(details).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="🪦" title="Not on Find A Grave?" />
+      <p className="text-stone-500 text-xs mt-1 mb-3 leading-relaxed">
+        Help build the world's largest memorial database. Your scan opens a pre-filled Add Memorial form.
+      </p>
+      <div
+        className="rounded-xl p-3 mb-3 font-mono text-xs text-stone-300 leading-relaxed"
+        style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+      >
+        {details.split("\n").map((line) => <div key={line}>{line}</div>)}
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95"
+          style={{ background: "rgba(255,255,255,0.06)", color: copied ? "#92cc92" : "#a09a94", border: "1px solid rgba(255,255,255,0.08)" }}
+        >
+          {copied ? (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          )}
+          {copied ? "Copied!" : "Copy details"}
+        </button>
+        <a
+          href={addUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95"
+          style={{ background: "rgba(201,168,76,0.12)", color: "var(--t-gold-500)", border: "1px solid rgba(201,168,76,0.25)" }}
+        >
+          Add Memorial on Find A Grave →
+        </a>
+      </div>
+      <p className="text-stone-600 text-[0.7rem] mt-2">Requires a free Find A Grave account.</p>
+    </div>
+  );
+}
+
+// ── Family Connection Hints (P4.3) ────────────────────────────────────────────
+
+function FamilyConnectionHints({
+  graveId,
+  extracted,
+  location,
+}: {
+  graveId: string;
+  extracted: ExtractedGraveData;
+  location: GeoLocation | null;
+}) {
+  const [relatives, setRelatives] = useState<GraveRecord[]>([]);
+
+  useEffect(() => {
+    const lastName = extracted.lastName ?? extracted.name?.split(" ").slice(-1)[0];
+    const cemetery = location?.cemetery;
+    if (!lastName || !cemetery) return;
+
+    getAllGraves().then((all) => {
+      const matches = all.filter((g) => {
+        if (g.id === graveId) return false;
+        const gLastName = g.extracted.lastName ?? g.extracted.name?.split(" ").slice(-1)[0];
+        const gCemetery = g.location?.cemetery;
+        if (!gLastName || !gCemetery) return false;
+        return (
+          gLastName.toLowerCase() === lastName.toLowerCase() &&
+          gCemetery.toLowerCase() === cemetery.toLowerCase()
+        );
+      });
+      setRelatives(matches.slice(0, 5));
+    }).catch(() => {});
+  }, [graveId, extracted, location]);
+
+  if (relatives.length === 0) return null;
+
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="👨‍👩‍👧" title="Possible Relatives Nearby" />
+      <p className="text-stone-500 text-xs mt-1 mb-3">
+        Same surname and cemetery in your archive — likely family members.
+      </p>
+      <ul className="space-y-1.5">
+        {relatives.map((g) => {
+          const name = g.extracted.name || "Unknown";
+          const dates = [g.extracted.birthDate, g.extracted.deathDate].filter(Boolean).join(" – ") ||
+            [g.extracted.birthYear, g.extracted.deathYear].filter(Boolean).map(String).join(" – ") || "";
+          return (
+            <li key={g.id}>
+              <a
+                href={`/result/${g.id}`}
+                className="flex items-center gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
+              >
+                {g.photoDataUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={g.photoDataUrl} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-stone-200 text-sm font-medium font-serif truncate">{name}</p>
+                  {dates && <p className="text-stone-500 text-xs mt-0.5">{dates}</p>}
+                </div>
+                <p className="text-xs shrink-0" style={{ color: "var(--t-gold-500)" }}>View →</p>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 // ── Research Links Card (P3) ──────────────────────────────────────────────────
 
 const CATEGORY_META: Record<string, { title: string; description: string }> = {
@@ -3890,16 +4043,16 @@ const CATEGORY_META: Record<string, { title: string; description: string }> = {
   },
 };
 
-function ResearchLinksCard({ links }: { links: import("@/lib/researchLinks").ResearchLink[] }) {
+function ResearchLinksCard({ links }: { links: ResearchLink[] }) {
   if (!links.length) return null;
 
-  const byCategory = links.reduce<Record<string, typeof links>>((acc, link) => {
+  const byCategory = links.reduce<Record<string, ResearchLink[]>>((acc, link) => {
     if (!acc[link.category]) acc[link.category] = [];
     acc[link.category].push(link);
     return acc;
   }, {});
 
-  const order: Array<import("@/lib/researchLinks").ResearchLink["category"]> = [
+  const order: Array<ResearchLink["category"]> = [
     "wwiDraft", "stateVital", "modernObit", "fraternal",
   ];
 
