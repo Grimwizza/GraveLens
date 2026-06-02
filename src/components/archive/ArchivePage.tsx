@@ -16,7 +16,7 @@ type SortField = "birthYear" | "deathYear" | "name" | "dateAdded";
 type SortDir = "asc" | "desc";
 type ConfidenceFilter = "" | "high" | "medium" | "low" | "needs_review";
 type ViewMode = "list" | "tile" | "cover";
-type ArchiveTab = "markers" | "places";
+type ArchiveTab = "markers" | "places" | "review";
 
 const PLACE_MARKER_TYPES = new Set(["cemetery", "graveyard", "mausoleum"]);
 
@@ -620,28 +620,55 @@ export default function ArchivePage() {
       headerBottomRow={
         <>
           <div className="flex bg-[var(--t-stone-900)]/80 rounded-[14px] p-1 border border-stone-800 shadow-[inset_0_1px_4px_rgba(0,0,0,0.5)]">
-            {(["markers", "places"] as ArchiveTab[]).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setArchiveTab(tab)}
-                className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[10px] transition-all flex items-center gap-1.5 ${
-                  archiveTab === tab 
-                    ? "bg-stone-700/80 text-gold-400 shadow-[0_2px_8px_rgba(0,0,0,0.5)] border border-stone-600/50" 
-                    : "text-stone-500 hover:text-stone-300 border border-transparent"
-                }`}
-              >
-                {tab === "markers" ? (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/>
-                  </svg>
-                ) : (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 21h12"/><path d="M7 21v-8a5 5 0 0 1 10 0v8"/><path d="M12 7v4"/><path d="M10 9h4"/>
-                  </svg>
-                )}
-                {tab}
-              </button>
-            ))}
+            {/* Markers */}
+            <button
+              onClick={() => setArchiveTab("markers")}
+              className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[10px] transition-all flex items-center gap-1.5 ${
+                archiveTab === "markers"
+                  ? "bg-stone-700/80 text-gold-400 shadow-[0_2px_8px_rgba(0,0,0,0.5)] border border-stone-600/50"
+                  : "text-stone-500 hover:text-stone-300 border border-transparent"
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/>
+              </svg>
+              Markers
+            </button>
+            {/* Places */}
+            <button
+              onClick={() => setArchiveTab("places")}
+              className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[10px] transition-all flex items-center gap-1.5 ${
+                archiveTab === "places"
+                  ? "bg-stone-700/80 text-gold-400 shadow-[0_2px_8px_rgba(0,0,0,0.5)] border border-stone-600/50"
+                  : "text-stone-500 hover:text-stone-300 border border-transparent"
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 21h12"/><path d="M7 21v-8a5 5 0 0 1 10 0v8"/><path d="M12 7v4"/><path d="M10 9h4"/>
+              </svg>
+              Places
+            </button>
+            {/* Review — pending completion */}
+            <button
+              onClick={() => setArchiveTab("review")}
+              className={`relative px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[10px] transition-all flex items-center gap-1.5 ${
+                archiveTab === "review"
+                  ? "bg-stone-700/80 text-gold-400 shadow-[0_2px_8px_rgba(0,0,0,0.5)] border border-stone-600/50"
+                  : "text-stone-500 hover:text-stone-300 border border-transparent"
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              Review
+              {workingScans.length > 0 && (
+                <span
+                  className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-0.5 rounded-full text-[0.6rem] font-bold flex items-center justify-center bg-amber-500 text-stone-900 shadow"
+                >
+                  {workingScans.length}
+                </span>
+              )}
+            </button>
           </div>
           {archiveTab === "markers" && graves.length > 0 && (
             <div className="flex items-center gap-1">
@@ -816,49 +843,6 @@ export default function ArchivePage() {
           <EmptyState />
         ) : archiveTab === "markers" ? (
           <>
-            {/* Working Scans — records that need manual completion */}
-            {workingScans.length > 0 && (
-              <div className="mx-4 mt-4 mb-1">
-                <div className="flex items-center gap-2 mb-2 px-1">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                  </svg>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-stone-500">
-                    Working Scans · {workingScans.length}
-                  </p>
-                </div>
-                <div className="rounded-2xl overflow-hidden border border-stone-700/60">
-                  {workingScans.map((g, i) => (
-                    <Link
-                      key={g.id}
-                      href={`/result/${g.id}`}
-                      className={`flex items-center gap-3 px-3 py-3 active:bg-white/5 ${i > 0 ? "border-t border-stone-800" : ""}`}
-                      style={{ background: "rgba(var(--glass-bg-rgb), 0.5)" }}
-                    >
-                      {/* Thumbnail */}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={g.photoDataUrl}
-                        alt=""
-                        className="w-12 h-12 rounded-xl object-cover shrink-0 opacity-80"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-stone-300 text-sm font-medium truncate">
-                          {g.extracted.inscription?.slice(0, 40) || "Unread marker"}
-                        </p>
-                        <p className="text-stone-500 text-xs mt-0.5 truncate">
-                          {[g.location?.cemetery, g.location?.city, g.location?.state].filter(Boolean).join(", ") || "Location unknown"}
-                        </p>
-                      </div>
-                      <span className="text-xs font-medium shrink-0 px-2.5 py-1 rounded-full" style={{ background: "rgba(201,168,76,0.12)", color: "var(--t-gold-500)" }}>
-                        Complete →
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Failed Uploads — records that failed to process/upload */}
             {failedQueueItems.length > 0 && (
               <div className="mx-4 mt-4 mb-1">
@@ -992,6 +976,84 @@ export default function ArchivePage() {
             )}
           </>
         ) : null}
+
+        {/* ── Review tab ── */}
+        {!loading && archiveTab === "review" && (
+          <div className="flex flex-col">
+            {workingScans.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3 px-8">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--t-stone-600)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+                <p className="text-stone-400 text-sm font-semibold text-center">All caught up</p>
+                <p className="text-stone-600 text-xs text-center leading-relaxed">
+                  Records flagged for completion will appear here before moving to your archive.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="px-5 pt-5 pb-2">
+                  <p className="text-stone-500 text-xs leading-relaxed">
+                    {workingScans.length} {workingScans.length === 1 ? "record" : "records"} pending — tap any entry to complete it.
+                  </p>
+                </div>
+                <div className="divide-y divide-stone-800/60">
+                  {workingScans.map((g) => {
+                    const hasDates = g.extracted.birthYear != null || g.extracted.deathYear != null;
+                    const hasName = !!g.extracted.name;
+                    const hasCemetery = !!g.location?.cemetery;
+                    const dateRange = hasDates
+                      ? [g.extracted.birthYear ?? "?", g.extracted.deathYear ?? "?"].join(" – ")
+                      : null;
+                    const locationLine = [g.location?.cemetery, g.location?.city, g.location?.state]
+                      .filter(Boolean).join(", ");
+
+                    return (
+                      <Link
+                        key={g.id}
+                        href={`/result/${g.id}`}
+                        className="flex items-start gap-4 px-5 py-4 active:bg-white/5"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={g.photoDataUrl}
+                          alt=""
+                          className="w-14 h-14 rounded-xl object-cover shrink-0 opacity-90 mt-0.5"
+                        />
+                        <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                          <p className="text-stone-200 text-sm font-semibold leading-snug">
+                            {hasName ? g.extracted.name : <span className="text-stone-500 italic font-normal">Name unknown</span>}
+                          </p>
+                          {dateRange && (
+                            <p className="text-stone-400 text-xs">{dateRange}</p>
+                          )}
+                          <p className="text-stone-500 text-xs truncate">
+                            {locationLine || "Location unknown"}
+                          </p>
+                          {/* Missing-field badges */}
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {!hasName && (
+                              <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-amber-500/12 text-amber-400 font-bold uppercase tracking-wide">Name</span>
+                            )}
+                            {!hasDates && (
+                              <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-stone-700/80 text-stone-400 font-bold uppercase tracking-wide">Dates</span>
+                            )}
+                            {!hasCemetery && (
+                              <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-stone-700/80 text-stone-400 font-bold uppercase tracking-wide">Cemetery</span>
+                            )}
+                          </div>
+                        </div>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--t-stone-600)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-1">
+                          <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* ── Places tab ── */}
         {!loading && archiveTab === "places" && (
