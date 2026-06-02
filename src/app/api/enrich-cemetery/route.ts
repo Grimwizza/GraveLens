@@ -9,17 +9,17 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const { name, lat, lng, city, state } = await req.json();
+    const { name, lat, lng, city, state, force } = await req.json();
     if (!name || typeof lat !== "number" || typeof lng !== "number") {
       return NextResponse.json({ error: "name, lat, lng required" }, { status: 400 });
     }
 
     const supabase = await createClient();
 
-    // 1. Run OSM query to get osmId
-    const osmData: any = await fetchOsmCemeteryDetails(lat, lng).catch(() => ({}));
-    if (osmData.osmId) {
-      // 2. Check cache first
+    // 1. Run OSM query to get osmId (pass name for better candidate selection)
+    const osmData: any = await fetchOsmCemeteryDetails(lat, lng, name).catch(() => ({}));
+    if (osmData.osmId && !force) {
+      // 2. Check cache first (skipped on explicit force-refresh)
       const cached = await checkCemeteryCache(supabase, osmData.osmId);
       if (cached) {
         return NextResponse.json({

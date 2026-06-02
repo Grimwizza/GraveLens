@@ -19,6 +19,27 @@ export function cemeteryId(name: string, lat: number, lng: number, osmId?: strin
   return `loc-${(hash >>> 0).toString(16)}`;
 }
 
+const STRIP_WORDS = /\b(cemetery|cemeteries|graveyard|burial|ground|grounds|memorial|arboretum|park|garden|gardens|church|saint|st\.?)\b/gi;
+
+/**
+ * Returns true if the Wikipedia article title is plausibly about the same
+ * cemetery as `expected`. Strips generic cemetery words then checks for token
+ * overlap so that "Bellefontaine Cemetery and Arboretum" does NOT match
+ * "Parkview Cemetery".
+ */
+function cemeteryNamesMatch(expected: string, articleTitle: string): boolean {
+  const normalize = (s: string) =>
+    s.toLowerCase().replace(STRIP_WORDS, " ").replace(/[^a-z0-9\s]/g, " ").trim();
+  const tokens = (s: string) => normalize(s).split(/\s+/).filter((t) => t.length > 2);
+
+  const expTokens = new Set(tokens(expected));
+  const artTokens = tokens(articleTitle);
+  if (!expTokens.size || !artTokens.length) return false;
+
+  // Require at least one non-trivial token to overlap
+  return artTokens.some((t) => expTokens.has(t));
+}
+
 // ── Overpass detail query ─────────────────────────────────────────────────
 
 export interface OsmCemeteryDetail {
@@ -34,7 +55,8 @@ export interface OsmCemeteryDetail {
 
 export async function fetchOsmCemeteryDetails(
   lat: number,
-  lng: number
+  lng: number,
+  name?: string,
 ): Promise<OsmCemeteryDetail> {
   const query = `
 [out:json][timeout:15];
@@ -68,7 +90,15 @@ out tags;
     const named = elements.filter((e) => e.tags?.name);
     if (!named.length) return {};
 
-    const best = named.find((e) => e.tags?.landuse === "cemetery") ?? named[0];
+    // Prefer the element whose name best matches the supplied cemetery name,
+    // then fall back to first landuse=cemetery, then first named element.
+    let best = named[0];
+    if (name) {
+      const nameMatched = named.find((e) => cemeteryNamesMatch(name, e.tags?.name ?? ""));
+      best = nameMatched ?? named.find((e) => e.tags?.landuse === "cemetery") ?? named[0];
+    } else {
+      best = named.find((e) => e.tags?.landuse === "cemetery") ?? named[0];
+    }
     const tags = best.tags ?? {};
 
     const wikiRaw = tags.wikipedia;
@@ -106,11 +136,12 @@ interface WikipediaEnrichment {
 // since searching by name can return a different cemetery with the same name.
 async function fetchWikipediaEnrichment(
   wikipediaUrl: string,
+  cemeteryName: string,
 ): Promise<WikipediaEnrichment> {
   try {
     const m = wikipediaUrl.match(/\/wiki\/(.+)$/);
     if (!m) return {};
-    const articleTitle = decodeURIComponent(m[1]);
+    const articleTitle = decodeURIComponent(m[1]).replace(/_/g, " ");
 
     const summaryRes = await fetch(
       `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(articleTitle)}`,
@@ -119,6 +150,19 @@ async function fetchWikipediaEnrichment(
     if (!summaryRes.ok) return {};
 
     const summary = await summaryRes.json();
+
+    // Guard: reject the article if its title doesn't match this cemetery's name.
+    // This catches OSM data-quality errors where the wikipedia tag points to a
+    // different cemetery (e.g. Bellefontaine) instead of the correct one.
+    const resolvedTitle: string = summary.title ?? articleTitle;
+    if (!cemeteryNamesMatch(cemeteryName, resolvedTitle)) {
+      console.warn(
+        `[cemetery] Wikipedia title "${resolvedTitle}" does not match cemetery ` +
+        `"${cemeteryName}" — skipping description.`
+      );
+      return {};
+    }
+
     const extract: string = summary.extract ?? "";
 
     // Heuristically extract founding year from text
@@ -178,15 +222,16 @@ export async function enrichCemetery(
   city?: string,
   state?: string,
 ): Promise<Omit<CemeteryRecord, "visitCount" | "firstVisited" | "lastVisited">> {
-  // Fetch OSM data — location-verified via 800 m radius query
-  const osmData = await fetchOsmCemeteryDetails(lat, lng).catch((): OsmCemeteryDetail => ({}));
+  // Fetch OSM data — location-verified via 800 m radius query, name-matched
+  const osmData = await fetchOsmCemeteryDetails(lat, lng, name).catch((): OsmCemeteryDetail => ({}));
 
   // Only fetch Wikipedia when OSM provides a direct, georeferenced link.
   // Never search Wikipedia by name: "Lakeside Cemetery" matches hundreds of
   // different cemeteries and the first result is almost certainly the wrong one.
+  // Additionally, the fetcher validates the article title matches this cemetery.
   let finalWiki: WikipediaEnrichment = {};
   if (osmData.wikipedia) {
-    finalWiki = await fetchWikipediaEnrichment(osmData.wikipedia).catch(() => ({}));
+    finalWiki = await fetchWikipediaEnrichment(osmData.wikipedia, name).catch(() => ({}));
   }
 
   const id = cemeteryId(name, lat, lng, osmData.osmId);

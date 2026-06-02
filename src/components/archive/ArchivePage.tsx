@@ -1680,7 +1680,7 @@ function CemeterySection({
       const res = await fetch("/api/enrich-cemetery", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: c.name, lat: c.lat, lng: c.lng }),
+        body: JSON.stringify({ name: c.name, lat: c.lat, lng: c.lng, force: true }),
       });
       if (!res.ok) return;
       const enriched = await res.json();
