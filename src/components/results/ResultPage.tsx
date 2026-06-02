@@ -629,12 +629,38 @@ export default function ResultPage({ id }: { id: string }) {
             ? { name: effectiveLocation.cemetery, wikipediaUrl: d.cemeteryWikiUrl, location: effectiveLocation ?? undefined }
             : undefined,
         };
-        setResearch(researchData);
+        // Patch lookup results over existing research — preserves user-generated
+        // content (story script, epitaph context, narratives) that isn't
+        // returned by /api/lookup so it isn't wiped on every name/date edit.
+        setResearch((prev) => ({
+          storyScript:    prev?.storyScript,
+          epitaphSource:  prev?.epitaphSource,
+          epitaphMeaning: prev?.epitaphMeaning,
+          narrative:      prev?.narrative,
+          narratives:     prev?.narratives,
+          culturalContext: prev?.culturalContext,
+          ...researchData,
+        }));
         personResearchCacheRef.current.set(0, researchData);
         setSelectedPersonIdx(0);
         setCulturalContext(null);
         const existing = await getGrave(pending.id);
-        if (existing) await saveGrave({ ...existing, extracted: current, research: researchData });
+        if (existing) {
+          await saveGrave({
+            ...existing,
+            extracted: current,
+            research: {
+              // Preserve generated content not touched by the lookup
+              storyScript:    existing.research?.storyScript,
+              epitaphSource:  existing.research?.epitaphSource,
+              epitaphMeaning: existing.research?.epitaphMeaning,
+              narrative:      existing.research?.narrative,
+              narratives:     existing.research?.narratives,
+              culturalContext: existing.research?.culturalContext,
+              ...researchData,
+            },
+          });
+        }
       }
     } catch { /* non-fatal */ } finally {
       setResearchLoading(false);
