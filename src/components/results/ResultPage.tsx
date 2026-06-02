@@ -1333,7 +1333,12 @@ export default function ResultPage({ id }: { id: string }) {
             <ExternalLinksCard extracted={activeExtracted} location={location} research={research} />
           )}
 
-          {/* F10: Cross-source conflict warning */}
+          {/* F10: P3 targeted research links (WWI draft, state vitals, modern obits, fraternal) */}
+          {!researchLoading && research?.researchLinks?.length && (
+            <ResearchLinksCard links={research.researchLinks} />
+          )}
+
+          {/* F11: Cross-source conflict warning */}
           {!researchLoading && research && (
             <ConflictWarningCard extracted={activeExtracted} research={research} />
           )}
@@ -3859,6 +3864,81 @@ function ImmigrationJourneyCard({ records }: { records: import("@/types").Immigr
         {r.collection && (
           <p className="text-stone-600 text-[0.7rem] italic mt-2">{r.collection}</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Research Links Card (P3) ──────────────────────────────────────────────────
+
+const CATEGORY_META: Record<string, { title: string; description: string }> = {
+  wwiDraft: {
+    title: "WWI Draft Registration Cards",
+    description: "Physical description, employer, and nearest relative — 24M cards from 1917–1918.",
+  },
+  stateVital: {
+    title: "State Death Certificate",
+    description: "Official record — cause of death, informant name, parents' birthplaces.",
+  },
+  modernObit: {
+    title: "Modern Obituaries",
+    description: "Post-1963 newspaper obituaries — not covered by Chronicling America.",
+  },
+  fraternal: {
+    title: "Fraternal Organization Records",
+    description: "Lodge membership rolls, benefit files, and meeting minutes.",
+  },
+};
+
+function ResearchLinksCard({ links }: { links: import("@/lib/researchLinks").ResearchLink[] }) {
+  if (!links.length) return null;
+
+  const byCategory = links.reduce<Record<string, typeof links>>((acc, link) => {
+    if (!acc[link.category]) acc[link.category] = [];
+    acc[link.category].push(link);
+    return acc;
+  }, {});
+
+  const order: Array<import("@/lib/researchLinks").ResearchLink["category"]> = [
+    "wwiDraft", "stateVital", "modernObit", "fraternal",
+  ];
+
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="📂" title="Targeted Research Sources" />
+      <p className="text-stone-500 text-xs mt-1 mb-3">
+        Sources matched to this person's era, location, and symbols.
+      </p>
+      <div className="flex flex-col gap-4">
+        {order.filter((cat) => byCategory[cat]).map((cat) => {
+          const meta = CATEGORY_META[cat];
+          const catLinks = byCategory[cat];
+          return (
+            <div key={cat}>
+              <p className="text-[0.7rem] uppercase tracking-widest text-stone-500 font-semibold mb-1.5">{meta.title}</p>
+              <p className="text-stone-500 text-xs mb-2 leading-relaxed">{meta.description}</p>
+              <ul className="space-y-1.5">
+                {catLinks.map((link) => (
+                  <li key={link.url}>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
+                    >
+                      <span className="text-lg shrink-0">{link.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-stone-200 text-sm font-medium leading-snug">{link.label}</p>
+                        <p className="text-stone-500 text-xs mt-0.5 leading-relaxed">{link.sub}</p>
+                      </div>
+                      <p className="text-xs shrink-0" style={{ color: "var(--t-gold-500)" }}>Open →</p>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

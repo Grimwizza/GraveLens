@@ -23,6 +23,7 @@ import { searchUsGenWebRecords } from "@/lib/apis/usgenweb";
 
 import { getSoundex, variantsFor } from "@/lib/phonetic";
 import { buildResearchChecklist } from "@/lib/researchChecklist";
+import { buildAllResearchLinks } from "@/lib/researchLinks";
 import type { ResearchData, GeoLocation, NaraItemRecord, UsGenWebRecord } from "@/types";
 import { createClient } from "@/lib/supabase/server";
 import { checkLocalHistoryCache, saveLocalHistoryCache } from "@/lib/community";
@@ -188,6 +189,18 @@ export async function POST(req: NextRequest) {
 
     const notables = birthYearNotables.status === "fulfilled" ? birthYearNotables.value : [];
 
+    // ── P3: Research deep-links (zero-cost, computed from existing data) ─────
+    const researchLinks = buildAllResearchLinks({
+      firstName:      firstName ?? "",
+      lastName:       lastName  ?? "",
+      birthYear:      birthYear ?? null,
+      deathYear:      deathYear ?? null,
+      state:          state     ?? "",
+      inscription:    inscription,
+      symbols:        symbols,
+      likelyConflict: militaryContext?.likelyConflict ?? null,
+    });
+
     return NextResponse.json({
       newspapers:         newspapers.status    === "fulfilled" ? newspapers.value    : [],
       naraRecords:        naraRecords.status   === "fulfilled" ? naraRecords.value   : [],
@@ -206,6 +219,7 @@ export async function POST(req: NextRequest) {
       researchChecklist,
       surnameSoundex:     surnameSoundex || undefined,
       surnameVariants:    surnameVariants.length > 0 ? surnameVariants : undefined,
+      researchLinks:      researchLinks.length  > 0 ? researchLinks  : undefined,
     });
   } catch (error) {
     console.error("Lookup error:", error);
