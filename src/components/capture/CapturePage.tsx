@@ -13,6 +13,7 @@ import { takePendingCaptureFile } from "@/lib/pendingCapture";
 import type { ExtractedGraveData, GeoLocation } from "@/types";
 import ReliefCapture from "./ReliefCapture";
 import { localContrastBoost, unsharpMask } from "@/lib/relief";
+import { resizeForStorage } from "@/lib/imageUtils";
 
 type Phase = "idle" | "processing" | "queued" | "pro_prompt" | "degraded_prompt";
 
@@ -905,27 +906,6 @@ function getDeviceLocation(): Promise<{ lat: number; lng: number } | null> {
  * an upload call and store the returned URL instead of the data URL.
  * See CLOUD_STORAGE_GUIDE.md for the recommended migration path.
  */
-function resizeForStorage(dataUrl: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const maxPx = 1200;
-      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return reject(new Error("Canvas unavailable"));
-      ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL("image/jpeg", 0.80));
-    };
-    img.onerror = () => reject(new Error("Failed to load image for storage resizing"));
-    img.src = dataUrl;
-  });
-}
-
 
 /**
  * Preprocess an image for Claude: contrast stretch → CLAHE-lite → unsharp mask → resize.

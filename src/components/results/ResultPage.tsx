@@ -15,6 +15,7 @@ import { setGravePublic } from "@/lib/community";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import { interpretSymbols } from "@/lib/apis/symbols";
 import { getLandmarkEvents } from "@/lib/apis/wikipedia";
+import PhotoEditorModal from "@/components/results/PhotoEditorModal";
 import { SHOW_COMMUNITY_FEATURES } from "@/lib/config";
 import ProfileBadge from "@/components/auth/ProfileBadge";
 import DesktopNav from "@/components/layout/DesktopNav";
@@ -54,6 +55,7 @@ export default function ResultPage({ id }: { id: string }) {
   const [locationOverride, setLocationOverride] = useState<GeoLocation | null>(null);
   const [nearbyPrompt, setNearbyPrompt] = useState<{ name: string; records: GraveRecord[] } | null>(null);
   const [photoFullscreen, setPhotoFullscreen] = useState(false);
+  const [photoEditing, setPhotoEditing] = useState(false);
   const [extractedOverride, setExtractedOverride] = useState<Partial<ExtractedGraveData> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const refreshingRef = useRef(false);
@@ -478,6 +480,26 @@ export default function ResultPage({ id }: { id: string }) {
   }, [pending, researchLoading]);
 
   const currentLocation = locationOverride ?? pending?.location ?? null;
+
+  const handlePhotoSave = useCallback(async (newDataUrl: string) => {
+    if (!pending) return;
+    setPending((prev) => prev ? { ...prev, photoDataUrl: newDataUrl } : prev);
+    const existing = await getGrave(pending.id);
+    if (existing) await saveGrave({ ...existing, photoDataUrl: newDataUrl });
+    // Re-sync to cloud non-fatally
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const photoUrl = await uploadPhoto(supabase, user.id, pending.id, newDataUrl);
+        const fresh = await getGrave(pending.id);
+        if (fresh) await saveGrave({ ...fresh, photoDataUrl: photoUrl, syncedAt: Date.now() });
+      } catch { /* offline or not logged in */ }
+    })();
+    setPhotoEditing(false);
+    setPhotoFullscreen(false);
+  }, [pending]);
 
   const handleCemeteryEdit = useCallback(async (name: string) => {
     if (!pending) return;
@@ -1496,9 +1518,31 @@ export default function ResultPage({ id }: { id: string }) {
                 </svg>
                 <span className="text-sm">Share</span>
               </button>
+
+              {/* Edit photo */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setPhotoEditing(true); }}
+                className="flex items-center gap-1.5 text-stone-300 active:text-stone-100"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                <span className="text-sm">Edit</span>
+              </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Photo editor */}
+      {photoEditing && (
+        <PhotoEditorModal
+          photoDataUrl={photoDataUrl}
+          graveName={extracted.name}
+          onSave={handlePhotoSave}
+          onClose={() => setPhotoEditing(false)}
+        />
       )}
 
       {/* Nearby-records bulk-update prompt */}
