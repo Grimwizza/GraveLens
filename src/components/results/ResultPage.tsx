@@ -1099,7 +1099,9 @@ export default function ResultPage({ id }: { id: string }) {
         </div>
 
         <div className="flex flex-col gap-0 px-5 lg:px-8 lg:py-4">
-          {/* Primary info card */}
+
+          {/* ── ZONE 1: IDENTITY ── Who is this person? ────────────────────── */}
+
           <PrimaryCard
             extracted={activeExtracted}
             onSave={selectedPersonIdx === 0 ? handleExtractedEdit : undefined}
@@ -1108,7 +1110,59 @@ export default function ResultPage({ id }: { id: string }) {
             onSelectPerson={handleSelectPerson}
           />
 
-          {/* Flagship: Hear Their Story */}
+          {/* Inscription + epitaph — the primary source; grounds all other data */}
+          <InscriptionCard
+            inscription={extracted.inscription}
+            epitaph={extracted.epitaph}
+            epitaphSource={research?.epitaphSource}
+            epitaphMeaning={research?.epitaphMeaning}
+            onSave={(inscription) => handleExtractedEdit({ inscription })}
+          />
+
+          {/* Symbols with database meanings */}
+          {extracted.symbols && extracted.symbols.length > 0 && (
+            <SymbolsCard symbols={extracted.symbols} />
+          )}
+
+          {/* ── ZONE 2: CONTEXT ── When and where did they live? ──────────── */}
+
+          {/* Cemetery & Location */}
+          {location && <CemeteryCard location={location} research={research} onSave={handleCemeteryEdit} />}
+
+          {/* Historical context — birth/death era, life expectancy, lifetime events */}
+          {(research?.historical || researchLoading) && (
+            <HistoricalCard
+              historical={research?.historical}
+              extracted={activeExtracted}
+              loading={researchLoading}
+            />
+          )}
+
+          {/* A Life in Their Era — cultural context */}
+          <CulturalContextCard
+            context={culturalContext}
+            loading={culturalLoading}
+            expandingCategory={expandingCategory}
+            onExpand={handleExpandCategory}
+            extracted={extracted}
+          />
+
+          {/* Local & regional history */}
+          {(research?.localHistory || researchLoading) && (
+            <LocalHistoryCard
+              localHistory={research?.localHistory}
+              location={location}
+              loading={researchLoading}
+            />
+          )}
+
+          {/* Notable people born the same year */}
+          {research?.birthYearNotables?.length ? (
+            <BirthYearNotablesCard notables={research.birthYearNotables} birthYear={extracted.birthYear} />
+          ) : null}
+
+          {/* ── ZONE 3: STORY ── Their narrative (context established above) ─ */}
+
           <StoryCard
             graveId={pending.id}
             extracted={activeExtracted}
@@ -1132,13 +1186,12 @@ export default function ResultPage({ id }: { id: string }) {
             }}
           />
 
-          {/* Divider */}
+          {/* Divider between story and records */}
           <div className="h-px bg-gradient-to-r from-transparent via-stone-700 to-transparent my-1" />
 
-          {/* Cemetery & Location */}
-          {location && <CemeteryCard location={location} research={research} onSave={handleCemeteryEdit} />}
+          {/* ── ZONE 4: RECORDS ── The evidence ───────────────────────────── */}
 
-          {/* Military context */}
+          {/* Military context — most significant record type, always first */}
           {(research?.militaryContext || researchLoading) && (
             <MilitaryCard
               context={research?.militaryContext}
@@ -1147,83 +1200,50 @@ export default function ResultPage({ id }: { id: string }) {
             />
           )}
 
-          {/* Historical context */}
-          {(research?.historical || researchLoading) && (
-            <HistoricalCard
-              historical={research?.historical}
-              extracted={activeExtracted}
-              loading={researchLoading}
-            />
+          {/* Cross-source conflict warning — flag before user reads individual records */}
+          {!researchLoading && research && (
+            <ConflictWarningCard extracted={activeExtracted} research={research} />
           )}
 
-          {/* Notable people born the same year */}
-          {research?.birthYearNotables?.length ? (
-            <BirthYearNotablesCard notables={research.birthYearNotables} birthYear={extracted.birthYear} />
+          {/* SSDI — death confirmation */}
+          {(research?.ssdi?.length || researchLoading) ? (
+            <SSDICard
+              records={research?.ssdi ?? []}
+              loading={researchLoading}
+              onRefresh={handleRefreshSsdi}
+              refreshing={sectionRefreshing === "ssdi"}
+            />
           ) : null}
 
-          {/* Local & regional history */}
-          {(research?.localHistory || researchLoading) && (
-            <LocalHistoryCard
-              localHistory={research?.localHistory}
-              location={location}
+          {/* Historical Census — household, occupation, birthplace */}
+          {(research?.historicalCensus?.length || researchLoading) ? (
+            <HistoricalCensusCard records={research?.historicalCensus ?? []} loading={researchLoading} />
+          ) : null}
+
+          {/* Household members from census */}
+          {research?.historicalCensus?.some((r) => r.household?.length) ? (
+            <HouseholdCard records={research.historicalCensus} />
+          ) : null}
+
+          {/* Immigration records */}
+          {(research?.immigration?.length || researchLoading) ? (
+            <ImmigrationCard records={research?.immigration ?? []} loading={researchLoading} />
+          ) : null}
+
+          {/* Immigration journey visual */}
+          {research?.immigration?.length ? (
+            <ImmigrationJourneyCard records={research.immigration} />
+          ) : null}
+
+          {/* Item-level military/enlistment records */}
+          {(research?.naraItemRecords?.length || researchLoading) ? (
+            <NaraItemCard
+              records={research?.naraItemRecords ?? []}
               loading={researchLoading}
+              onRefresh={handleRefreshNara}
+              refreshing={sectionRefreshing === "nara"}
             />
-          )}
-
-          {/* A Life in Their Era — cultural context */}
-          <CulturalContextCard
-            context={culturalContext}
-            loading={culturalLoading}
-            expandingCategory={expandingCategory}
-            onExpand={handleExpandCategory}
-            extracted={extracted}
-          />
-
-          {/* Inscription + epitaph */}
-          <InscriptionCard
-            inscription={extracted.inscription}
-            epitaph={extracted.epitaph}
-            epitaphSource={research?.epitaphSource}
-            epitaphMeaning={research?.epitaphMeaning}
-            onSave={(inscription) => handleExtractedEdit({ inscription })}
-          />
-
-          {/* Symbols with database meanings */}
-          {extracted.symbols && extracted.symbols.length > 0 && (
-            <SymbolsCard symbols={extracted.symbols} />
-          )}
-
-          {/* Tags */}
-          <TagsCard tags={tags} onChange={handleTagsChange} />
-
-          {/* Community sharing */}
-          {SHOW_COMMUNITY_FEATURES && (
-            <div
-              className="rounded-2xl px-4 py-3.5 flex items-center justify-between gap-3"
-              style={{ background: "rgba(var(--glass-bg-rgb), 0.7)", border: "1px solid var(--t-stone-700)" }}
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-stone-200 text-sm font-medium">Share with community</p>
-                <p className="text-stone-500 text-[0.8rem] mt-0.5 leading-relaxed">
-                  {isPublic
-                    ? "Visible on the community map as a coral marker"
-                    : "Private — only you can see this on the map"}
-                </p>
-              </div>
-              <button
-                onClick={() => handleTogglePublic(!isPublic)}
-                className="shrink-0 w-11 h-6 rounded-full relative transition-colors duration-200"
-                style={{ background: isPublic ? "#c97c6b" : "#3a3733" }}
-                role="switch"
-                aria-checked={isPublic}
-              >
-                <span
-                  className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
-                  style={{ transform: isPublic ? "translateX(1.25rem)" : "translateX(0.125rem)" }}
-                />
-              </button>
-            </div>
-          )}
+          ) : null}
 
           {/* Newspaper records */}
           {(research?.newspapers?.length || researchLoading) ? (
@@ -1242,8 +1262,7 @@ export default function ResultPage({ id }: { id: string }) {
             />
           ) : null}
 
-          {/* NARA records — only show standalone card when there's no military section
-              (military section already embeds them when militaryContext is present) */}
+          {/* NARA records — only show standalone when there's no military section */}
           {!research?.militaryContext && (research?.naraRecords?.length || researchLoading) ? (
             <RecordsCard
               title="National Archives"
@@ -1285,78 +1304,71 @@ export default function ResultPage({ id }: { id: string }) {
             />
           ) : null}
 
-          {/* F3: SSDI */}
-          {(research?.ssdi?.length || researchLoading) ? (
-            <SSDICard
-              records={research?.ssdi ?? []}
-              loading={researchLoading}
-              onRefresh={handleRefreshSsdi}
-              refreshing={sectionRefreshing === "ssdi"}
-            />
-          ) : null}
-
-          {/* F4: Historical Census */}
-          {(research?.historicalCensus?.length || researchLoading) ? (
-            <HistoricalCensusCard records={research?.historicalCensus ?? []} loading={researchLoading} />
-          ) : null}
-
-          {/* Household members from census */}
-          {research?.historicalCensus?.some((r) => r.household?.length) ? (
-            <HouseholdCard records={research.historicalCensus} />
-          ) : null}
-
-          {/* F5: Immigration records */}
-          {(research?.immigration?.length || researchLoading) ? (
-            <ImmigrationCard records={research?.immigration ?? []} loading={researchLoading} />
-          ) : null}
-
-          {/* Immigration journey visual */}
-          {research?.immigration?.length ? (
-            <ImmigrationJourneyCard records={research.immigration} />
-          ) : null}
-
-          {/* F6: Item-level military/enlistment records */}
-          {(research?.naraItemRecords?.length || researchLoading) ? (
-            <NaraItemCard
-              records={research?.naraItemRecords ?? []}
-              loading={researchLoading}
-              onRefresh={handleRefreshNara}
-              refreshing={sectionRefreshing === "nara"}
-            />
-          ) : null}
-
-          {/* F7: USGenWeb probate/deed/will */}
+          {/* USGenWeb probate/deed/will */}
           {(research?.usGenWebRecords?.length || researchLoading) ? (
             <UsGenWebCard records={research?.usGenWebRecords ?? []} loading={researchLoading} />
           ) : null}
 
-          {/* F8: Research Checklist */}
+          {/* ── ZONE 5: NEXT STEPS ── Where to go from here ───────────────── */}
+
+          {/* Research Checklist */}
           {(research?.researchChecklist?.items?.length || researchLoading) ? (
             <ResearchChecklistCard checklist={research?.researchChecklist} loading={researchLoading} />
           ) : null}
 
-          {/* F9: External search links (Find A Grave, BillionGraves) */}
+          {/* External search links (Find A Grave, BillionGraves, FamilySearch) */}
           {!researchLoading && activeExtracted.name && (
             <ExternalLinksCard extracted={activeExtracted} location={location} research={research} />
           )}
 
-          {/* F10: P3 targeted research links (WWI draft, state vitals, modern obits, fraternal) */}
+          {/* Targeted research links (WWI draft, state vitals, modern obits, fraternal) */}
           {!researchLoading && research?.researchLinks?.length && (
             <ResearchLinksCard links={research.researchLinks} />
           )}
 
-          {/* F11: Cross-source conflict warning */}
-          {!researchLoading && research && (
-            <ConflictWarningCard extracted={activeExtracted} research={research} />
+          {/* ── ZONE 6: CONNECTIONS ── Relationships ──────────────────────── */}
+
+          <FamilyConnectionHints graveId={pending.id} extracted={activeExtracted} location={location} />
+
+          {/* ── ZONE 7: ACTIONS ── Save, share, contribute ────────────────── */}
+
+          {/* Tags */}
+          <TagsCard tags={tags} onChange={handleTagsChange} />
+
+          {/* Community sharing */}
+          {SHOW_COMMUNITY_FEATURES && (
+            <div
+              className="rounded-2xl px-4 py-3.5 flex items-center justify-between gap-3"
+              style={{ background: "rgba(var(--glass-bg-rgb), 0.7)", border: "1px solid var(--t-stone-700)" }}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-stone-200 text-sm font-medium">Share with community</p>
+                <p className="text-stone-500 text-[0.8rem] mt-0.5 leading-relaxed">
+                  {isPublic
+                    ? "Visible on the community map as a coral marker"
+                    : "Private — only you can see this on the map"}
+                </p>
+              </div>
+              <button
+                onClick={() => handleTogglePublic(!isPublic)}
+                className="shrink-0 w-11 h-6 rounded-full relative transition-colors duration-200"
+                style={{ background: isPublic ? "#c97c6b" : "#3a3733" }}
+                role="switch"
+                aria-checked={isPublic}
+              >
+                <span
+                  className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
+                  style={{ transform: isPublic ? "translateX(1.25rem)" : "translateX(0.125rem)" }}
+                />
+              </button>
+            </div>
           )}
 
-          {/* F12: Find A Grave submission helper */}
+          {/* Find A Grave submission helper */}
           {!researchLoading && activeExtracted.name && (activeExtracted.birthYear || activeExtracted.deathYear) && (
             <FindAGraveSubmitCard extracted={activeExtracted} location={location} />
           )}
 
-          {/* F13: Family connection hints */}
-          <FamilyConnectionHints graveId={pending.id} extracted={activeExtracted} location={location} />
         </div>
 
         <div className="mx-5 lg:mx-8 mt-4">
