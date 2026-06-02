@@ -64,7 +64,8 @@ export async function searchUsGenWebRecords(
 
   const stateSlug  = slug(state);
   const countySlug = slug(county.replace(/\s*county\s*/i, ""));
-  const baseUrl    = `https://usgwarchives.net/${stateSlug}/${countySlug}/`;
+  // usgwarchives.net is an old volunteer site with no SSL certificate — HTTP only.
+  const baseUrl    = `http://usgwarchives.net/${stateSlug}/${countySlug}/`;
 
   const fallback: UsGenWebRecord = {
     title:      `${county}, ${state} — USGenWeb Archives`,
