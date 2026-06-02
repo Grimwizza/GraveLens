@@ -48,6 +48,9 @@ export default function ResultPage({ id }: { id: string }) {
   const [research, setResearch] = useState<ResearchData | null>(null);
   const [researchLoading, setResearchLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  // True when this result was loaded from the archive (not a fresh scan).
+  // Used to surface the "refresh for latest records" banner.
+  const isArchivedLoad = useRef(false);
   const [tags, setTags] = useState<string[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
   const [achievementToasts, setAchievementToasts] = useState<Achievement[]>([]);
@@ -114,6 +117,7 @@ export default function ResultPage({ id }: { id: string }) {
           }
         }
 
+        isArchivedLoad.current = true;
         setResearch(archivedResearch);
         setCulturalContext(archivedResearch?.culturalContext ?? null);
         setTags(archived.tags ?? []);
@@ -244,9 +248,12 @@ export default function ResultPage({ id }: { id: string }) {
             immigration:       d.immigration ?? undefined,
             historicalCensus:  d.historicalCensus ?? undefined,
             naraItemRecords:   d.naraItemRecords ?? undefined,
-            usGenWebRecords:    d.usGenWebRecords    ?? undefined,
-            birthYearNotables:  d.birthYearNotables  ?? undefined,
-            researchChecklist:  d.researchChecklist  ?? undefined,
+            usGenWebRecords:   d.usGenWebRecords ?? undefined,
+            birthYearNotables: d.birthYearNotables ?? undefined,
+            researchChecklist: d.researchChecklist ?? undefined,
+            surnameSoundex:    d.surnameSoundex ?? undefined,
+            surnameVariants:   d.surnameVariants ?? undefined,
+            researchLinks:     d.researchLinks ?? undefined,
             cemetery: data.location?.cemetery
               ? {
                   name: data.location.cemetery,
@@ -618,6 +625,7 @@ export default function ResultPage({ id }: { id: string }) {
 
     const current = extractedData ?? { ...(freshExtracted ?? pending.extracted), ...(extractedOverride ?? {}) };
     try {
+      isArchivedLoad.current = false; // refresh clears the stale banner
       setResearchLoading(true);
       const res = await fetch("/api/lookup", {
         method: "POST",
@@ -655,6 +663,9 @@ export default function ResultPage({ id }: { id: string }) {
           usGenWebRecords:   d.usGenWebRecords ?? undefined,
           birthYearNotables: d.birthYearNotables ?? undefined,
           researchChecklist: d.researchChecklist ?? undefined,
+          surnameSoundex:    d.surnameSoundex ?? undefined,
+          surnameVariants:   d.surnameVariants ?? undefined,
+          researchLinks:     d.researchLinks ?? undefined,
           cemetery: effectiveLocation?.cemetery
             ? { name: effectiveLocation.cemetery, wikipediaUrl: d.cemeteryWikiUrl, location: effectiveLocation ?? undefined }
             : undefined,
@@ -1190,6 +1201,29 @@ export default function ResultPage({ id }: { id: string }) {
           <div className="h-px bg-gradient-to-r from-transparent via-stone-700 to-transparent my-1" />
 
           {/* ── ZONE 4: RECORDS ── The evidence ───────────────────────────── */}
+
+          {/* Stale-research banner: shown for archived graves loaded from IDB
+              that haven't been refreshed this session. Fades once ↺ is tapped. */}
+          {isArchivedLoad.current && !researchLoading && !refreshing && (
+            <button
+              onClick={() => handleRefreshData()}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-left mb-1 transition-colors active:opacity-80"
+              style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.18)" }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium" style={{ color: "var(--t-gold-400)" }}>
+                  Records loaded from archive
+                </p>
+                <p className="text-stone-500 text-[0.72rem] mt-0.5">
+                  Tap to re-run all research lookups and surface the latest records
+                </p>
+              </div>
+            </button>
+          )}
 
           {/* Military context — most significant record type, always first */}
           {(research?.militaryContext || researchLoading) && (

@@ -79,16 +79,23 @@ export default function OnboardingCarousel() {
   return createPortal(
     <div
       className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center"
-      style={{ background: "rgba(10, 9, 8, 0.88)", backdropFilter: "blur(8px)" }}
+      style={{
+        // Semi-transparent so the app is visible above the sheet
+        background: "rgba(10, 9, 8, 0.55)",
+        backdropFilter: "blur(4px)",
+        WebkitBackdropFilter: "blur(4px)",
+        // Push the sheet above the bottom nav (72px bar + safe area)
+        paddingBottom: "calc(80px + env(safe-area-inset-bottom, 16px))",
+      }}
     >
       <div
         className="relative w-full sm:max-w-sm mx-auto rounded-t-3xl sm:rounded-3xl overflow-hidden"
-        style={{ background: "var(--t-stone-950, #111)", border: "1px solid rgba(255,255,255,0.06)" }}
+        style={{ background: "#121110", border: "1px solid rgba(255,255,255,0.07)" }}
       >
         {/* Gold top accent */}
         <div className="h-px w-full" style={{ background: "linear-gradient(90deg, transparent, var(--t-gold-500), transparent)" }} />
 
-        <div className="px-7 pt-8 pb-6 flex flex-col items-center gap-6 text-center">
+        <div className="px-7 pt-8 pb-7 flex flex-col items-center gap-6 text-center">
           {/* Slide icon */}
           <div className="flex items-center justify-center min-h-[80px]">
             {slide.icon}
@@ -140,9 +147,6 @@ export default function OnboardingCarousel() {
             )}
           </div>
         </div>
-
-        {/* Safe-area padding for mobile */}
-        <div className="pb-safe" />
       </div>
     </div>,
     document.body
