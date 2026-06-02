@@ -43,11 +43,19 @@ export function buildWwiDraftLinks(params: {
   const ln = encodeURIComponent(lastName);
   const st = state ? encodeURIComponent(state) : "";
 
+  // Birth year ±1 for draft card searches (age reporting varied ±1 year)
+  const byLo = birthYear ? birthYear - 1 : null;
+  const byHi = birthYear ? birthYear + 1 : null;
+
   return [
     {
       label: "WWI Draft Cards (FamilySearch)",
       sub: "24 million draft registration cards 1917–1918 — physical description, employer, and nearest relative",
-      url: `https://www.familysearch.org/search/collection/1968530?q.givenName=${fn}&q.surname=${ln}${st ? `&q.residencePlace=${st}` : ""}`,
+      url: [
+        `https://www.familysearch.org/search/collection/1968530?q.givenName=${fn}&q.surname=${ln}`,
+        byLo != null ? `&q.birthLikeDate.from=${byLo}&q.birthLikeDate.to=${byHi}` : "",
+        st ? `&q.residencePlace=${st}` : "",
+      ].join(""),
       icon: "📋",
       category: "wwiDraft",
     },
@@ -133,17 +141,28 @@ export function buildStateDeathLinks(params: {
 
   const fn = encodeURIComponent(firstName);
   const ln = encodeURIComponent(lastName);
+
+  // ±1 year to catch records where death year was transcribed off by one
+  const dyLo = deathYear ? deathYear - 1 : null;
+  const dyHi = deathYear ? deathYear + 1 : null;
+
   const baseUrl = record.url(deathYear);
 
-  // Append name parameters if the URL is a FamilySearch collection search
-  const url = baseUrl.includes("familysearch.org/search/collection")
-    ? `${baseUrl}&q.givenName=${fn}&q.surname=${ln}`
-    : baseUrl;
+  let url = baseUrl;
+  if (url.includes("familysearch.org/search/collection")) {
+    // Replace exact year with ±1 range and append name parameters
+    if (dyLo != null) {
+      url = url
+        .replace(/q\.deathLikeDate\.from=[^&]*/g, `q.deathLikeDate.from=${dyLo}`)
+        .replace(/q\.deathLikeDate\.to=[^&]*/g,   `q.deathLikeDate.to=${dyHi}`);
+    }
+    url += `&q.givenName=${fn}&q.surname=${ln}`;
+  }
 
   return [
     {
       label: record.label,
-      sub: `Official death certificate${deathYear ? ` — ${deathYear}` : ""} — cause of death, informant, parents' birthplaces`,
+      sub: `Official death certificate${deathYear ? ` — ${deathYear} ±1 yr` : ""} — cause of death, informant, parents' birthplaces`,
       url,
       icon: "📜",
       category: "stateVital",
@@ -165,27 +184,40 @@ export function buildModernObituaryLinks(params: {
 
   const fn = encodeURIComponent(firstName);
   const ln = encodeURIComponent(lastName);
-  const yearParam = deathYear ? String(deathYear) : "";
+  const fullName = encodeURIComponent(`${firstName} ${lastName}`.trim());
+
+  // ±1 year window to catch obituaries published in adjacent calendar year
+  const dyLo = deathYear ? deathYear - 1 : null;
+  const dyHi = deathYear ? deathYear + 1 : null;
 
   return [
     {
       label: "Legacy.com Obituaries",
       sub: "Free obituary search — major US newspapers since 1998",
-      url: `https://www.legacy.com/obituaries/search/?firstName=${fn}&lastName=${ln}${yearParam ? `&ddaFrom=${yearParam}&ddaTo=${yearParam}` : ""}`,
+      url: [
+        `https://www.legacy.com/obituaries/search/?firstName=${fn}&lastName=${ln}`,
+        dyLo != null ? `&ddaFrom=${dyLo}&ddaTo=${dyHi}` : "",
+      ].join(""),
       icon: "📰",
       category: "modernObit",
     },
     {
       label: "GenealogyBank Obituaries",
       sub: "Obituaries from 6,500+ US newspapers — includes small-town papers",
-      url: `https://www.genealogybank.com/find/obituaries?fn=${fn}&ln=${ln}${yearParam ? `&dr=${yearParam}` : ""}`,
+      url: [
+        `https://www.genealogybank.com/find/obituaries?fn=${fn}&ln=${ln}`,
+        dyLo != null ? `&dr=${dyLo}-${dyHi}` : "",
+      ].join(""),
       icon: "📰",
       category: "modernObit",
     },
     {
       label: "Newspapers.com",
       sub: "Historical and modern newspaper archives — searchable full text",
-      url: `https://www.newspapers.com/search/#query=${encodeURIComponent(`${firstName} ${lastName}`)}&dr_year=${yearParam}`,
+      url: [
+        `https://www.newspapers.com/search/#query=${fullName}`,
+        dyLo != null ? `&dr_year=${dyLo}-${dyHi}` : "",
+      ].join(""),
       icon: "🗞️",
       category: "modernObit",
     },

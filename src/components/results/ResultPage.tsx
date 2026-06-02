@@ -4339,12 +4339,37 @@ function ExternalLinksCard({
 }) {
   const firstName  = extracted.firstName ?? extracted.name?.split(" ")[0] ?? "";
   const lastName   = extracted.lastName  ?? extracted.name?.split(" ").slice(-1)[0] ?? "";
-  const deathYear  = extracted.deathYear ?? "";
+  const birthYear  = extracted.birthYear ?? null;
+  const deathYear  = extracted.deathYear ?? null;
   const state      = location?.state ?? "";
 
-  const fagUrl = `https://www.findagrave.com/memorial/search?firstname=${encodeURIComponent(firstName)}&lastname=${encodeURIComponent(lastName)}${deathYear ? `&death=${deathYear}` : ""}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
-  const bgUrl  = `https://billiongraves.com/search/results#given_names=${encodeURIComponent(firstName)}&family_names=${encodeURIComponent(lastName)}${deathYear ? `&year_of_death=${deathYear}` : ""}`;
-  const fsUrl  = `https://www.familysearch.org/search/record/results?q.givenName=${encodeURIComponent(firstName)}&q.surname=${encodeURIComponent(lastName)}${deathYear ? `&q.deathLikeDate.from=${deathYear}&q.deathLikeDate.to=${deathYear}` : ""}`;
+  const fn = encodeURIComponent(firstName);
+  const ln = encodeURIComponent(lastName);
+
+  // ±1 year windows to account for record-keeping variances
+  const byLo = birthYear ? birthYear - 1 : null;
+  const byHi = birthYear ? birthYear + 1 : null;
+  const dyLo = deathYear ? deathYear - 1 : null;
+  const dyHi = deathYear ? deathYear + 1 : null;
+
+  const fagUrl = [
+    `https://www.findagrave.com/memorial/search?firstname=${fn}&lastname=${ln}`,
+    birthYear ? `&birth=${birthYear}` : "",
+    deathYear ? `&death=${deathYear}` : "",
+    state     ? `&state=${encodeURIComponent(state)}` : "",
+  ].join("");
+
+  const bgUrl = [
+    `https://billiongraves.com/search/results#given_names=${fn}&family_names=${ln}`,
+    byLo != null ? `&year_of_birth_start=${byLo}&year_of_birth_end=${byHi}` : "",
+    dyLo != null ? `&year_of_death_start=${dyLo}&year_of_death_end=${dyHi}` : "",
+  ].join("");
+
+  const fsUrl = [
+    `https://www.familysearch.org/search/record/results?q.givenName=${fn}&q.surname=${ln}`,
+    byLo != null ? `&q.birthLikeDate.from=${byLo}&q.birthLikeDate.to=${byHi}` : "",
+    dyLo != null ? `&q.deathLikeDate.from=${dyLo}&q.deathLikeDate.to=${dyHi}` : "",
+  ].join("");
 
   const links = [
     { label: "Find A Grave",    sub: "200M+ memorials, photos, family connections", url: fagUrl, icon: "🪦" },
@@ -4384,8 +4409,11 @@ function ExternalLinksCard({
           <p className="text-xs text-stone-500 uppercase tracking-widest mb-2">Also try alternate spellings</p>
           <div className="flex flex-wrap gap-2">
             {research.surnameVariants.map((variant) => {
-              const variantFirst = extracted.firstName ?? "";
-              const varUrl = `https://www.findagrave.com/memorial/search?firstname=${encodeURIComponent(variantFirst)}&lastname=${encodeURIComponent(variant)}${deathYear ? `&death=${deathYear}` : ""}`;
+              const varUrl = [
+                `https://www.findagrave.com/memorial/search?firstname=${fn}&lastname=${encodeURIComponent(variant)}`,
+                birthYear ? `&birth=${birthYear}` : "",
+                deathYear ? `&death=${deathYear}` : "",
+              ].join("");
               return (
                 <a
                   key={variant}
@@ -4395,7 +4423,7 @@ function ExternalLinksCard({
                   className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors active:opacity-80"
                   style={{ borderColor: "rgba(201,168,76,0.3)", color: "var(--t-gold-400)", background: "rgba(201,168,76,0.06)" }}
                 >
-                  {variantFirst} <strong>{variant}</strong> →
+                  {firstName} <strong>{variant}</strong> →
                 </a>
               );
             })}
