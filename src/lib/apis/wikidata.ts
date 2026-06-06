@@ -53,7 +53,7 @@ LIMIT 20`.trim();
           Accept: "application/sparql-results+json",
           "User-Agent": "GraveLens/1.0 (genealogy research app)",
         },
-        signal: AbortSignal.timeout(12000),
+        signal: AbortSignal.timeout(6000),
       }
     );
 
@@ -160,7 +160,7 @@ LIMIT 100`.trim();
           Accept: "application/sparql-results+json",
           "User-Agent": "GraveLens/1.0 (genealogy research app)",
         },
-        signal: AbortSignal.timeout(12000),
+        signal: AbortSignal.timeout(6000),
       }
     );
 
@@ -238,7 +238,7 @@ LIMIT 6`.trim();
           Accept: "application/sparql-results+json",
           "User-Agent": "GraveLens/1.0 (genealogy research app)",
         },
-        signal: AbortSignal.timeout(12000),
+        signal: AbortSignal.timeout(6000),
       }
     );
     if (!res.ok) return [];

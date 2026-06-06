@@ -20,6 +20,8 @@ create table public.graves (
 );
 
 create index graves_user_timestamp_idx on public.graves (user_id, timestamp desc);
+-- Partial index for community map queries (.eq("is_public", true))
+create index if not exists graves_is_public_idx on public.graves (is_public, user_id) where is_public = true;
 
 alter table public.graves enable row level security;
 

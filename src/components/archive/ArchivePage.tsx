@@ -8,6 +8,7 @@ import { fetchAllFromCloud, deleteFromCloud } from "@/lib/cloudSync";
 import type { GraveRecord, CemeteryRecord, QueuedCapture } from "@/types";
 import { QUEUE_CHANGED_EVENT } from "@/lib/queue";
 import Link from "next/link";
+import { generateThumbnail } from "@/lib/imageUtils";
 import ThematicIllustration from "@/components/ui/ThematicIllustration";
 import { reverseGeocode } from "@/lib/apis/nominatim";
 import { formatOpeningHours, cemeteryId } from "@/lib/apis/cemetery";
@@ -161,6 +162,23 @@ export default function ArchivePage() {
     const onScroll = () => sessionStorage.setItem(SCROLL_KEY, String(scrollEl.scrollTop));
     scrollEl.addEventListener("scroll", onScroll, { passive: true });
     return () => scrollEl.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // ── Backfill thumbnails for existing records ─────────────────────────────
+  useEffect(() => {
+    (async () => {
+      const all = await getAllGraves();
+      const missing = all.filter((g) => !g.thumbnailDataUrl);
+      if (missing.length === 0) return;
+      for (const g of missing) {
+        try {
+          const thumb = await generateThumbnail(g.photoDataUrl);
+          await saveGrave({ ...g, thumbnailDataUrl: thumb });
+          setGraves((prev) => prev.map((r) => r.id === g.id ? { ...r, thumbnailDataUrl: thumb } : r));
+        } catch { /* non-fatal — will retry next visit */ }
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Load graves ──────────────────────────────────────────────────────────
@@ -896,7 +914,7 @@ export default function ArchivePage() {
                       {/* Thumbnail */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={item.photoDataUrl}
+                        src={item.thumbnailDataUrl ?? item.photoDataUrl}
                         alt=""
                         className="w-12 h-12 rounded-xl object-cover shrink-0 opacity-70 border border-red-950/40"
                       />
@@ -1037,7 +1055,7 @@ export default function ArchivePage() {
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={g.photoDataUrl}
+                          src={g.thumbnailDataUrl ?? g.photoDataUrl}
                           alt=""
                           className="w-14 h-14 rounded-xl object-cover shrink-0 opacity-90 mt-0.5"
                         />
@@ -1153,7 +1171,7 @@ function AssignmentSheet({
           <div className="flex items-center gap-3 mb-5 p-3 rounded-xl bg-stone-700/50">
             <div className="w-12 h-12 rounded-lg overflow-hidden bg-stone-700 shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={grave.photoDataUrl} alt="" className="w-full h-full object-cover" />
+              <img src={grave.thumbnailDataUrl ?? grave.photoDataUrl} alt="" className="w-full h-full object-cover" />
             </div>
             <div className="min-w-0">
               <p className="font-serif text-stone-200 font-medium truncate">
@@ -1236,7 +1254,7 @@ function NearbyConfirmSheet({
               <div key={g.id} className="flex items-center gap-3 p-3 rounded-xl bg-stone-700/50">
                 <div className="w-10 h-10 rounded-lg overflow-hidden bg-stone-700 shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={g.photoDataUrl} alt="" className="w-full h-full object-cover" />
+                  <img src={g.thumbnailDataUrl ?? g.photoDataUrl} alt="" className="w-full h-full object-cover" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-stone-200 text-sm font-medium truncate">
@@ -1317,7 +1335,7 @@ function GraveTileGrid({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={grave.photoDataUrl}
+                  src={grave.thumbnailDataUrl ?? grave.photoDataUrl}
                   alt={grave.extracted.name ?? ""}
                   className="w-full h-full object-cover"
                 />
@@ -1464,7 +1482,7 @@ function GraveCoverFlow({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={grave.photoDataUrl}
+                  src={grave.thumbnailDataUrl ?? grave.photoDataUrl}
                   alt={grave.extracted.name ?? ""}
                   className="w-full h-full object-cover"
                 />
@@ -1619,7 +1637,7 @@ function GraveList({
             <Link href={`/result/${grave.id}`} className="flex items-center gap-3 flex-1 min-w-0" onClick={() => onView(grave.id)}>
               <div className="w-14 h-14 rounded-xl overflow-hidden bg-stone-800 shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={grave.photoDataUrl} alt={grave.extracted.name} className="w-full h-full object-cover" />
+                <img src={grave.thumbnailDataUrl ?? grave.photoDataUrl} alt={grave.extracted.name} className="w-full h-full object-cover" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">

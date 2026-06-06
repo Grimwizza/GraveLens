@@ -11,6 +11,7 @@ import {
   type SearchRadius,
   type LocationPref,
   type AnalysisMode,
+  type PhotoSaveTarget,
 } from "@/lib/settings";
 import { getAllGraves, getAllCemeteries } from "@/lib/storage";
 import { useAuth } from "@/lib/auth";
@@ -548,6 +549,17 @@ export default function SettingsPanel({ onClose }: Props) {
                 options={[
                   { value: "fast", label: "Fast" },
                   { value: "thorough", label: "Thorough" },
+                ]}
+              />
+            </Row>
+            <Row>
+              <Label title="Save to Device" sub="Also copy each photo to your camera roll or downloads folder" />
+              <SegmentControl<PhotoSaveTarget>
+                value={settings.photoSaveTarget ?? "app-only"}
+                onChange={(v) => update("photoSaveTarget", v)}
+                options={[
+                  { value: "app-only", label: "App Only" },
+                  { value: "app-and-device", label: "Both" },
                 ]}
               />
             </Row>

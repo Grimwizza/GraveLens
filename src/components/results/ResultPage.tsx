@@ -8,6 +8,7 @@ import { saveGrave, getGrave, getAllGraves, getPendingResult, deletePendingResul
 import { inferGender, inferOrigin, selectVoice, formatTime } from "@/lib/ttsUtils";
 import { cemeteryId } from "@/lib/apis/cemetery";
 import { reverseGeocode } from "@/lib/apis/nominatim";
+import { getDeviceLocation } from "@/lib/geo";
 import { checkAndUnlock, loadStats, type Achievement } from "@/lib/achievements";
 import { createClient } from "@/lib/supabase/browser";
 import { uploadPhoto, upsertGrave, pushExplorerPoints } from "@/lib/cloudSync";
@@ -37,6 +38,7 @@ import type {
 interface PendingResult {
   id: string;
   photoDataUrl: string;
+  thumbnailDataUrl?: string;
   extracted: ExtractedGraveData;
   location: GeoLocation | null;
   timestamp: number;
@@ -71,10 +73,12 @@ export default function ResultPage({ id }: { id: string }) {
   // Cancelled the moment a user-triggered refresh starts so the old-name
   // response can never overwrite a corrected refresh that resolves first.
   const initialFetchAbortRef = useRef<AbortController | null>(null);
+  // Abort controller for the simultaneous supplemental fetch (Phase 2).
+  const supplementalFetchAbortRef = useRef<AbortController | null>(null);
   const isDesktop = useIsDesktop();
 
   // Detecting spinner shown briefly while reverse-geocoding for a cemetery name
-  const [cemeteryPrompt, setCemeteryPrompt] = useState<"detecting" | null>(null);
+  const [cemeteryPrompt, setCemeteryPrompt] = useState<"detecting" | "locating" | null>(null);
 
   const [selectedPersonIdx, setSelectedPersonIdx] = useState(0);
   const personResearchCacheRef = useRef<Map<number, ResearchData>>(new Map());
@@ -137,6 +141,7 @@ export default function ResultPage({ id }: { id: string }) {
         id: data.id,
         timestamp: data.timestamp,
         photoDataUrl: data.photoDataUrl,
+        thumbnailDataUrl: data.thumbnailDataUrl,
         location: data.location ?? { lat: 0, lng: 0 },
         extracted: data.extracted,
         research: {},
@@ -214,25 +219,31 @@ export default function ResultPage({ id }: { id: string }) {
       setResearchLoading(true);
       const initialAbort = new AbortController();
       initialFetchAbortRef.current = initialAbort;
+      const suppAbort = new AbortController();
+      supplementalFetchAbortRef.current = suppAbort;
+
+      const lookupPayload = {
+        name: data.extracted.name,
+        firstName: data.extracted.firstName,
+        lastName: data.extracted.lastName,
+        birthYear: data.extracted.birthYear,
+        deathYear: data.extracted.deathYear,
+        lat: data.location?.lat,
+        lng: data.location?.lng,
+        city: data.location?.city,
+        county: data.location?.county,
+        state: data.location?.state,
+        cemetery: data.location?.cemetery,
+        inscription: data.extracted.inscription ?? "",
+        symbols: data.extracted.symbols ?? [],
+      };
+
+      // Phase 1: person-specific core data — resolves in ~5–7s
       fetch("/api/lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: initialAbort.signal,
-        body: JSON.stringify({
-          name: data.extracted.name,
-          firstName: data.extracted.firstName,
-          lastName: data.extracted.lastName,
-          birthYear: data.extracted.birthYear,
-          deathYear: data.extracted.deathYear,
-          lat: data.location?.lat,
-          lng: data.location?.lng,
-          city: data.location?.city,
-          county: data.location?.county,
-          state: data.location?.state,
-          cemetery: data.location?.cemetery,
-          inscription: data.extracted.inscription ?? "",
-          symbols: data.extracted.symbols ?? [],
-        }),
+        body: JSON.stringify(lookupPayload),
       })
         .then((r) => r.json())
         .then((d) => {
@@ -248,7 +259,6 @@ export default function ResultPage({ id }: { id: string }) {
             immigration:       d.immigration ?? undefined,
             historicalCensus:  d.historicalCensus ?? undefined,
             naraItemRecords:   d.naraItemRecords ?? undefined,
-            birthYearNotables: d.birthYearNotables ?? undefined,
             researchChecklist: d.researchChecklist ?? undefined,
             surnameSoundex:    d.surnameSoundex ?? undefined,
             surnameVariants:   d.surnameVariants ?? undefined,
@@ -276,6 +286,35 @@ export default function ResultPage({ id }: { id: string }) {
         .finally(() => {
           if (!initialAbort.signal.aborted) setResearchLoading(false);
         });
+
+      // Phase 2: supplemental geographic context + birth year notables.
+      // Fires simultaneously with Phase 1; merges into research state when ready.
+      fetch("/api/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: suppAbort.signal,
+        body: JSON.stringify({ ...lookupPayload, supplemental: true }),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (suppAbort.signal.aborted) return;
+          setResearch((prev) => {
+            if (!prev) return prev;
+            const merged: ResearchData = {
+              ...prev,
+              birthYearNotables: d.birthYearNotables ?? prev.birthYearNotables,
+              localHistory: d.localHistory
+                ? { ...(prev.localHistory ?? {}), ...d.localHistory }
+                : prev.localHistory,
+            };
+            personResearchCacheRef.current.set(0, merged);
+            getGrave(autoRecord.id).then((existing) => {
+              saveGrave({ ...(existing ?? autoRecord), research: merged });
+            }).catch(() => {});
+            return merged;
+          });
+        })
+        .catch(() => { /* supplemental is best-effort */ });
     });
   }, [id, router]);
 
@@ -548,6 +587,19 @@ export default function ResultPage({ id }: { id: string }) {
     }
   }, [pending, currentLocation, research, tags]);
 
+  const handleLocateCemetery = useCallback(async () => {
+    if (!pending) return;
+    try {
+      const deviceLoc = await getDeviceLocation();
+      if (!deviceLoc) return;
+      const geo = await reverseGeocode(deviceLoc.lat, deviceLoc.lng);
+      const newLoc: GeoLocation = { ...(currentLocation ?? { lat: 0, lng: 0 }), ...geo };
+      setLocationOverride(newLoc);
+      const existing = await getGrave(pending.id);
+      if (existing) await saveGrave({ ...existing, location: newLoc });
+    } catch { /* non-fatal */ }
+  }, [pending, currentLocation]);
+
   const handleNearbyYes = useCallback(async () => {
     if (!nearbyPrompt) return;
     for (const g of nearbyPrompt.records) {
@@ -559,9 +611,12 @@ export default function ResultPage({ id }: { id: string }) {
 
   const handleRefreshData = useCallback(async (extractedData?: ExtractedGraveData, skipCemeteryCheck = false) => {
     if (!pending || refreshingRef.current) return;
-    // Cancel any in-flight initial scan fetch so it can't overwrite this refresh
+    // Cancel any in-flight initial scan fetch (Phase 1 + Phase 2) so they
+    // can't overwrite a corrected refresh that resolves first.
     initialFetchAbortRef.current?.abort();
     initialFetchAbortRef.current = null;
+    supplementalFetchAbortRef.current?.abort();
+    supplementalFetchAbortRef.current = null;
 
     // ── Cemetery auto-detection ──────────────────────────────────────────────
     // Only runs on explicit user-triggered refreshes (not edit-triggered ones).
@@ -589,8 +644,26 @@ export default function ResultPage({ id }: { id: string }) {
           // Network error — proceed without cemetery
         }
         setCemeteryPrompt(null);
+      } else {
+        // No valid GPS coords — try to get the device's current location now.
+        // The user may have granted permission after capture, or moved outside to get a fix.
+        setCemeteryPrompt("locating");
+        setRefreshing(true);
+        try {
+          const deviceLoc = await getDeviceLocation();
+          if (deviceLoc) {
+            const geo = await reverseGeocode(deviceLoc.lat, deviceLoc.lng);
+            const newLoc: GeoLocation = { ...geo };
+            setLocationOverride(newLoc);
+            effectiveLocation = newLoc;
+            const existing = await getGrave(pending.id);
+            if (existing) await saveGrave({ ...existing, location: newLoc });
+          }
+        } catch {
+          // Non-fatal — proceed without location
+        }
+        setCemeteryPrompt(null);
       }
-      // No GPS — proceed with whatever data we have; no interruption
     }
     // ────────────────────────────────────────────────────────────────────────
 
@@ -626,40 +699,56 @@ export default function ResultPage({ id }: { id: string }) {
     try {
       isArchivedLoad.current = false; // refresh clears the stale banner
       setResearchLoading(true);
-      const res = await fetch("/api/lookup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: current.name,
-          firstName: current.firstName,
-          lastName: current.lastName,
-          birthYear: current.birthYear,
-          deathYear: current.deathYear,
-          lat: effectiveLocation?.lat,
-          lng: effectiveLocation?.lng,
-          city: effectiveLocation?.city,
-          county: effectiveLocation?.county,
-          state: effectiveLocation?.state,
-          cemetery: effectiveLocation?.cemetery,
-          inscription: current.inscription ?? "",
-          symbols: current.symbols ?? [],
+
+      const refreshPayload = {
+        name: current.name,
+        firstName: current.firstName,
+        lastName: current.lastName,
+        birthYear: current.birthYear,
+        deathYear: current.deathYear,
+        lat: effectiveLocation?.lat,
+        lng: effectiveLocation?.lng,
+        city: effectiveLocation?.city,
+        county: effectiveLocation?.county,
+        state: effectiveLocation?.state,
+        cemetery: effectiveLocation?.cemetery,
+        inscription: current.inscription ?? "",
+        symbols: current.symbols ?? [],
+      };
+
+      // Fire Phase 1 and Phase 2 simultaneously; wait for both before clearing spinner.
+      const [phase1Res, phase2Res] = await Promise.all([
+        fetch("/api/lookup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(refreshPayload),
         }),
-      });
-      if (res.ok) {
-        const d = await res.json();
+        fetch("/api/lookup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...refreshPayload, supplemental: true }),
+        }),
+      ]);
+
+      if (phase1Res.ok) {
+        const d = await phase1Res.json();
+        const s = phase2Res.ok ? await phase2Res.json() : {};
+
         const researchData: ResearchData = {
           newspapers:        d.newspapers ?? [],
           naraRecords:       d.naraRecords ?? [],
           landRecords:       d.landRecords ?? [],
           historical:        d.historical ?? {},
           militaryContext:   d.militaryContext ?? undefined,
-          localHistory:      d.localHistory ?? undefined,
+          localHistory:      s.localHistory
+            ? { ...(d.localHistory ?? {}), ...s.localHistory }
+            : (d.localHistory ?? undefined),
           familySearchHints: d.familySearchHints ?? undefined,
           ssdi:              d.ssdi ?? undefined,
           immigration:       d.immigration ?? undefined,
           historicalCensus:  d.historicalCensus ?? undefined,
           naraItemRecords:   d.naraItemRecords ?? undefined,
-          birthYearNotables: d.birthYearNotables ?? undefined,
+          birthYearNotables: s.birthYearNotables ?? undefined,
           researchChecklist: d.researchChecklist ?? undefined,
           surnameSoundex:    d.surnameSoundex ?? undefined,
           surnameVariants:   d.surnameVariants ?? undefined,
@@ -1135,7 +1224,7 @@ export default function ResultPage({ id }: { id: string }) {
           {/* ── ZONE 2: CONTEXT ── When and where did they live? ──────────── */}
 
           {/* Cemetery & Location */}
-          {location && <CemeteryCard location={location} research={research} onSave={handleCemeteryEdit} />}
+          {location && <CemeteryCard location={location} research={research} onSave={handleCemeteryEdit} onLocate={handleLocateCemetery} />}
 
           {/* Historical context — birth/death era, life expectancy, lifetime events */}
           {(research?.historical || researchLoading) && (
@@ -1617,7 +1706,7 @@ export default function ResultPage({ id }: { id: string }) {
       )}
 
       {/* Cemetery prompt — shown when refresh finds no cemetery */}
-      {cemeteryPrompt === "detecting" && (
+      {cemeteryPrompt != null && (
         <div
           className="fixed left-1/2 -translate-x-1/2 z-[70] flex items-center gap-2.5 px-4 py-2.5 rounded-2xl shadow-xl"
           style={{
@@ -1631,7 +1720,9 @@ export default function ResultPage({ id }: { id: string }) {
             className="w-3.5 h-3.5 border-2 border-t-transparent rounded-full animate-spin shrink-0"
             style={{ borderColor: "var(--t-gold-500) transparent var(--t-gold-500) var(--t-gold-500)" }}
           />
-          <span className="text-xs text-stone-300 font-medium">Looking up cemetery location…</span>
+          <span className="text-xs text-stone-300 font-medium">
+            {cemeteryPrompt === "locating" ? "Getting your location…" : "Looking up cemetery location…"}
+          </span>
         </div>
       )}
 
@@ -1820,14 +1911,24 @@ function CemeteryCard({
   location,
   research,
   onSave,
+  onLocate,
 }: {
   location: GeoLocation;
   research: ResearchData | null;
   onSave?: (name: string) => Promise<void>;
+  onLocate?: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(location.cemetery ?? "");
   const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
+
+  const handleLocate = async () => {
+    if (!onLocate) return;
+    setLocating(true);
+    await onLocate();
+    setLocating(false);
+  };
   const cemeteryUrl = research?.cemetery?.wikipediaUrl;
 
   const handleSave = async () => {
@@ -1888,18 +1989,38 @@ function CemeteryCard({
                 </a>
               )}
             </div>
-            {onSave && (
-              <button
-                onClick={() => { setEditValue(location.cemetery ?? ""); setEditing(true); }}
-                className="text-stone-500 active:text-stone-300 shrink-0 mt-0.5"
-                aria-label="Edit cemetery"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                </svg>
-              </button>
-            )}
+            <div className="flex items-center gap-2 shrink-0 mt-0.5">
+              {onLocate && !location.cemetery && (
+                <button
+                  onClick={handleLocate}
+                  disabled={locating}
+                  className="text-stone-500 active:text-stone-300 disabled:opacity-40"
+                  aria-label="Detect cemetery location"
+                  title="Detect cemetery location"
+                >
+                  {locating ? (
+                    <div className="w-3.5 h-3.5 border border-t-transparent rounded-full animate-spin" style={{ borderColor: "currentColor transparent currentColor currentColor" }} />
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                      <circle cx="12" cy="9" r="2.5"/>
+                    </svg>
+                  )}
+                </button>
+              )}
+              {onSave && (
+                <button
+                  onClick={() => { setEditValue(location.cemetery ?? ""); setEditing(true); }}
+                  className="text-stone-500 active:text-stone-300"
+                  aria-label="Edit cemetery"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
         )}
         {location.city && location.state && (

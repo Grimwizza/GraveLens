@@ -38,22 +38,10 @@ export async function POST(req: NextRequest) {
       city, county, state, cemetery,
       inscription = "",
       symbols = [],
+      supplemental = false,
     } = await req.json();
 
     const hasCoords = typeof lat === "number" && typeof lng === "number" && (lat !== 0 || lng !== 0);
-
-    const isMilitary = hasMilitaryIndicators(inscription, symbols);
-    const militaryTerms = isMilitary ? extractMilitaryTerms(inscription, symbols) : "";
-
-    // ── Immigration gate ──────────────────────────────────────────────────
-    // Only query passenger collections when inscription or birth year suggests
-    // a non-US-born subject, to avoid burning FamilySearch quota unnecessarily.
-    const runImmigration = isLikelyImmigrant(inscription, undefined, birthYear, undefined);
-
-    // ── Phonetic normalization ──────────────────────────────────────────────
-    const surnameSoundex = lastName ? getSoundex(lastName) : "";
-    const surnameVariants = lastName ? variantsFor(lastName) : [];
-
     const supabase = await createClient();
 
     // ── Check local history cache ───────────────────────────────────────────
@@ -62,24 +50,78 @@ export async function POST(req: NextRequest) {
       cachedHistory = await checkLocalHistoryCache(supabase, lat, lng).catch(() => null);
     }
 
-    // ── Tier 1: All free-API lookups in parallel ────────────────────────────
+    // ── Phase 2: supplemental geographic data + birth year notables ─────────
+    // Fired simultaneously with Phase 1 by the frontend. Returns the slow
+    // geographic enrichment that would otherwise bottleneck first-content time.
+    if (supplemental) {
+      let localHistory: any = {};
+
+      if (cachedHistory) {
+        // Cache hit — geography is instant, no API calls needed
+        localHistory = cachedHistory.localHistory || {};
+      } else {
+        // Cache miss — run all geographic enrichment calls in parallel
+        const [
+          cityContext, decadeSnaps, localNewspaper,
+          nrhpSites, censusPopulation, wikidataEvents,
+        ] = await Promise.allSettled([
+          getCityContext(city, county, state),
+          getDecadeSnapshots(state, birthYear, deathYear),
+          searchLocalAreaNews(city, county, state, birthYear, deathYear),
+          hasCoords ? searchNrhpSites(lat, lng, birthYear, deathYear) : Promise.resolve([]),
+          (hasCoords && (!deathYear || deathYear >= 1970)) ? getCountyPopulation(lat, lng, birthYear, deathYear) : Promise.resolve([]),
+          hasCoords ? getLocalWikidataEvents(lat, lng, birthYear, deathYear) : Promise.resolve([]),
+        ]);
+
+        const cityCtx    = cityContext.status      === "fulfilled" ? (cityContext.value as any)      : {};
+        const snapshots  = decadeSnaps.status      === "fulfilled" ? (decadeSnaps.value as any)      : [];
+        const localNews  = localNewspaper.status   === "fulfilled" ? (localNewspaper.value as any)   : [];
+        const nrhp       = nrhpSites.status        === "fulfilled" ? (nrhpSites.value as any)        : [];
+        const census     = censusPopulation.status === "fulfilled" ? (censusPopulation.value as any) : [];
+        const wikiEvents = wikidataEvents.status   === "fulfilled" ? (wikidataEvents.value as any)   : [];
+
+        localHistory = {
+          ...(cityCtx.cityArticle   ? { cityArticle:   cityCtx.cityArticle   } : {}),
+          ...(cityCtx.countyArticle ? { countyArticle: cityCtx.countyArticle } : {}),
+          ...(snapshots.length   > 0 ? { decadeSnapshots: snapshots   } : {}),
+          ...(localNews.length   > 0 ? { localNewspaper:  localNews   } : {}),
+          ...(nrhp.length        > 0 ? { nrhpSites:       nrhp        } : {}),
+          ...(census.length      > 0 ? { censusPopulation: census     } : {}),
+          ...(wikiEvents.length  > 0 ? { wikidataEvents:  wikiEvents  } : {}),
+        };
+
+        if (hasCoords) {
+          await saveLocalHistoryCache(supabase, lat, lng, {
+            localHistory,
+            wikidataEvents: wikiEvents,
+            nrhpSites: nrhp,
+          }).catch((err) => console.error("[local-history-cache-save] failed:", err));
+        }
+      }
+
+      // birthYearNotables is always person-specific (never geographic-cached)
+      const [birthYearNotablesResult] = await Promise.allSettled([
+        birthYear ? getBirthYearNotables(birthYear) : Promise.resolve([]),
+      ]);
+      const notables = birthYearNotablesResult.status === "fulfilled" ? (birthYearNotablesResult.value as any) : [];
+
+      return NextResponse.json({
+        localHistory:      Object.keys(localHistory).length > 0 ? localHistory : undefined,
+        birthYearNotables: notables.length > 0 ? notables : undefined,
+      });
+    }
+
+    // ── Phase 1: person-specific lookups ────────────────────────────────────
+
+    const isMilitary = hasMilitaryIndicators(inscription, symbols);
+    const militaryTerms = isMilitary ? extractMilitaryTerms(inscription, symbols) : "";
+    const runImmigration = isLikelyImmigrant(inscription, undefined, birthYear, undefined);
+    const surnameSoundex = lastName ? getSoundex(lastName) : "";
+    const surnameVariants = lastName ? variantsFor(lastName) : [];
+
     const [
-      newspapers,
-      naraRecords,
-      landRecords,
-      historical,
-      cemeteryWikiUrl,
-      cityContext,
-      decadeSnapshots,
-      localNewspaper,
-      nrhpSites,
-      censusPopulation,
-      wikidataEvents,
-      familySearchHints,
-      ssdiRecords,
-      immigrationRecords,
-      historicalCensusRecords,
-      birthYearNotables,
+      newspapers, naraRecords, landRecords, historical, cemeteryWikiUrl,
+      familySearchHints, ssdiRecords, immigrationRecords, historicalCensusRecords,
     ] = await Promise.allSettled([
       searchNewspapers(name, deathYear, state),
       // NARA catalog indexes series/finding aids, not individuals — only useful for military records
@@ -92,14 +134,6 @@ export async function POST(req: NextRequest) {
         : Promise.resolve([]),
       getHistoricalContext(birthYear, deathYear, state),
       searchCemeteryWikipedia(cemetery),
-      // Cacheable local history inputs: bypassed on cache hit
-      !cachedHistory ? getCityContext(city, county, state) : Promise.resolve({}),
-      !cachedHistory ? getDecadeSnapshots(state, birthYear, deathYear) : Promise.resolve([]),
-      !cachedHistory ? searchLocalAreaNews(city, county, state, birthYear, deathYear) : Promise.resolve([]),
-      (!cachedHistory && hasCoords) ? searchNrhpSites(lat, lng, birthYear, deathYear) : Promise.resolve([]),
-      // Census API only has 1990-2020 data; irrelevant for pre-1970 graves
-      (!cachedHistory && hasCoords && (!deathYear || deathYear >= 1970)) ? getCountyPopulation(lat, lng, birthYear, deathYear) : Promise.resolve([]),
-      (!cachedHistory && hasCoords) ? getLocalWikidataEvents(lat, lng, birthYear, deathYear) : Promise.resolve([]),
       // F1: FamilySearch record hints — require at least one date anchor to be actionable
       (birthYear || deathYear)
         ? searchFamilySearchHints(firstName, lastName, birthYear, deathYear)
@@ -110,12 +144,10 @@ export async function POST(req: NextRequest) {
       runImmigration
         ? searchImmigrationRecords(firstName, lastName, birthYear, deathYear)
         : Promise.resolve([]),
-      // F4: Historical census — 1880–1940 indexed; allow up to 1950 (consistent with historicalCensus.ts gate)
+      // F4: Historical census — 1880–1940 indexed; allow up to 1950
       (!deathYear || deathYear <= 1950)
         ? searchHistoricalCensus(firstName, lastName, birthYear, deathYear, state)
         : Promise.resolve([]),
-      // Notable people born the same year
-      birthYear ? getBirthYearNotables(birthYear) : Promise.resolve([]),
     ]);
 
     // ── Tier 2: Military context (local, instant) ───────────────────────────
@@ -126,45 +158,17 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── Resolve cacheable local history ─────────────────────────────────────
-    let localHistory: any = {};
-    if (cachedHistory) {
-      localHistory = cachedHistory.localHistory || {};
-    } else {
-      const cityCtx      = cityContext.status      === "fulfilled" ? (cityContext.value as any)      : {};
-      const snapshots    = decadeSnapshots.status  === "fulfilled" ? (decadeSnapshots.value as any)  : [];
-      const localNews    = localNewspaper.status   === "fulfilled" ? (localNewspaper.value as any)   : [];
-      const nrhp         = nrhpSites.status        === "fulfilled" ? (nrhpSites.value as any)        : [];
-      const census       = censusPopulation.status === "fulfilled" ? (censusPopulation.value as any) : [];
-      const wikiEvents   = wikidataEvents.status   === "fulfilled" ? (wikidataEvents.value as any)   : [];
-
-      localHistory = {
-        ...(cityCtx.cityArticle   ? { cityArticle:   cityCtx.cityArticle   } : {}),
-        ...(cityCtx.countyArticle ? { countyArticle: cityCtx.countyArticle } : {}),
-        ...(snapshots.length   > 0 ? { decadeSnapshots: snapshots   } : {}),
-        ...(localNews.length   > 0 ? { localNewspaper:  localNews   } : {}),
-        ...(nrhp.length        > 0 ? { nrhpSites:       nrhp        } : {}),
-        ...(census.length      > 0 ? { censusPopulation: census     } : {}),
-        ...(wikiEvents.length  > 0 ? { wikidataEvents:  wikiEvents  } : {}),
-      };
-
-      if (hasCoords) {
-        await saveLocalHistoryCache(supabase, lat, lng, {
-          localHistory,
-          wikidataEvents: wikiEvents,
-          nrhpSites: nrhp,
-        }).catch((err) => console.error("[local-history-cache-save] failed:", err));
-      }
-    }
-
     // ── Tier 3: Conditional lookups requiring Tier 1/2 results ─────────────
     const [enlistmentResult] = await Promise.allSettled([
-      // F6: Item-level military records
       militaryContext?.likelyConflict
         ? searchEnlistmentRecords(firstName, lastName, birthYear, militaryContext.likelyConflict)
         : Promise.resolve([] as NaraItemRecord[]),
     ]);
     const naraItemRecords = enlistmentResult.status === "fulfilled" ? enlistmentResult.value : [];
+
+    // On cache hit, include full geographic context in Phase 1 response.
+    // On cache miss, localHistory is empty — Phase 2 fetches and caches all geography.
+    const localHistory: any = cachedHistory ? (cachedHistory.localHistory || {}) : {};
 
     // ── F8: Research Checklist — deterministic, zero-cost ──────────────────
     const partialResearch: ResearchData = {
@@ -183,8 +187,6 @@ export async function POST(req: NextRequest) {
       partialResearch,
       partialLocation
     );
-
-    const notables = birthYearNotables.status === "fulfilled" ? birthYearNotables.value : [];
 
     // ── P3: Research deep-links (zero-cost, computed from existing data) ─────
     const researchLinks = buildAllResearchLinks({
@@ -211,7 +213,6 @@ export async function POST(req: NextRequest) {
       immigration:        immigrationRecords.status === "fulfilled" && (immigrationRecords.value as any).length > 0 ? immigrationRecords.value : undefined,
       historicalCensus:   historicalCensusRecords.status === "fulfilled" && (historicalCensusRecords.value as any).length > 0 ? historicalCensusRecords.value : undefined,
       naraItemRecords:    naraItemRecords.length > 0 ? naraItemRecords : undefined,
-      birthYearNotables:  notables.length        > 0 ? notables        : undefined,
       researchChecklist,
       surnameSoundex:     surnameSoundex || undefined,
       surnameVariants:    surnameVariants.length > 0 ? surnameVariants : undefined,
@@ -222,5 +223,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Lookup failed" }, { status: 500 });
   }
 }
-
-

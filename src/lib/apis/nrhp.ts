@@ -52,7 +52,7 @@ LIMIT 8`.trim();
           Accept: "application/sparql-results+json",
           "User-Agent": "GraveLens/1.0 (genealogy research app)",
         },
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(6000),
       }
     );
 

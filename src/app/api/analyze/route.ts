@@ -111,7 +111,7 @@ async function callClaude(
   const message = await client.messages.create({
     model,
     max_tokens: maxTokens,
-    system: SYSTEM_PROMPT,
+    system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

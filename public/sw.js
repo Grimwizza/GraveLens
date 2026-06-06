@@ -1,9 +1,8 @@
-const CACHE_NAME = "gravelens-cache-v1";
+const CACHE_NAME = "gravelens-cache-v2";
 const PRECACHE_ASSETS = [
   "/",
   "/manifest.json",
   "/memorial-bg.jpg",
-  "/background.gif"
 ];
 
 self.addEventListener("install", (event) => {

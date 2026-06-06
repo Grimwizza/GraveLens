@@ -9,6 +9,7 @@ export type MapStyle = "standard" | "satellite" | "terrain";
 export type SearchRadius = 1 | 5 | 10 | 25;
 export type LocationPref = "always" | "ask" | "never";
 export type AnalysisMode = "fast" | "thorough";
+export type PhotoSaveTarget = "app-only" | "app-and-device";
 
 export interface AppSettings {
   // Display
@@ -28,6 +29,7 @@ export interface AppSettings {
   autoSaveToArchive: boolean;
   analysisMode: AnalysisMode;
   showPhotoTips: boolean;
+  photoSaveTarget: PhotoSaveTarget;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -41,6 +43,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoSaveToArchive: false,
   analysisMode: "fast",
   showPhotoTips: true,
+  photoSaveTarget: "app-only",
 };
 
 const STORAGE_KEY = "gl_settings";

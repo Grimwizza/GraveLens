@@ -4,6 +4,11 @@ import type { MilitaryContext } from "@/types";
 const MILITARY_RE =
   /\b(war|veteran|vet\b|pvt|sgt|cpl|cpt|maj|col|gen|lt\b|ltr|ltc|rank|tank|infantry|cavalry|regiment|battalion|squadron|division|brigade|corps|platoon|company|army|navy|marine|marines|air\s*force|coast\s*guard|national\s*guard|served|service|honorabl[ey]\s*discharged|killed\s*in\s*action|k\.i\.a|died\s*in\s*service|medal|bronze\s*star|silver\s*star|purple\s*heart|doughboy|soldier|sailor|airman|pilot|gunner|medic|sniper|commander|captain|sergeant|corporal|private|lieutenant|major|colonel|general|admiral)\b/i;
 
+function keywordMatch(text: string, keyword: string): boolean {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escaped}\\b`, "i").test(text);
+}
+
 // ── Known US conflicts with full contextual templates ─────────────────────
 // roleDescription and historicalNote are pre-written factual text for each
 // conflict, eliminating the need for a Claude API call on military markers.
@@ -106,7 +111,7 @@ function detectConflict(text: string, birthYear: number | null) {
   const lower = text.toLowerCase();
 
   for (const c of CONFLICTS) {
-    if (c.keywords.some((k) => lower.includes(k))) return c;
+    if (c.keywords.some((k) => keywordMatch(lower, k))) return c;
   }
 
   if (birthYear) {
@@ -134,7 +139,7 @@ export function extractMilitaryTerms(inscription: string, symbols: string[]): st
 
   for (const c of CONFLICTS) {
     for (const k of c.keywords) {
-      if (all.toLowerCase().includes(k)) {
+      if (keywordMatch(all, k)) {
         terms.push(c.name);
         break;
       }
@@ -181,7 +186,7 @@ export async function getMilitaryContext(params: {
     roleDescription: conflict.roleDescription,
     historicalNote: conflict.historicalNote,
     inferredFrom: conflict.keywords.some((k) =>
-      [inscription, ...symbols].join(" ").toLowerCase().includes(k)
+      keywordMatch([inscription, ...symbols].join(" "), k)
     )
       ? "inscription"
       : "dates",

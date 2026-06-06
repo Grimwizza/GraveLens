@@ -314,6 +314,8 @@ export interface GraveRecord {
   id: string;
   timestamp: number;
   photoDataUrl: string;
+  /** Small preview image (300 px longest edge, ~65% JPEG). Used in archive lists to avoid re-parsing the full photo. */
+  thumbnailDataUrl?: string;
   location: GeoLocation;
   extracted: ExtractedGraveData;
   research: ResearchData;
@@ -418,6 +420,7 @@ export interface QueuedCapture {
   id: string;
   timestamp: number;
   photoDataUrl: string;   // resized for storage (1200 px JPEG)
+  thumbnailDataUrl?: string;
   location?: GeoLocation;
   sessionId?: string;
   sessionName?: string;

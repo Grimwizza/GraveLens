@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
     const message = await client.messages.create({
       model: MODEL,
       max_tokens: maxTokens,
-      system: SYSTEM_PROMPT,
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: prompt }],
     });
 

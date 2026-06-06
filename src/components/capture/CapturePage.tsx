@@ -10,10 +10,11 @@ import { fileToDataUrl, extractExifLocation, correctOrientation, generateId } fr
 import { savePendingResult, addToQueue, getQueueCount } from "@/lib/storage";
 import { QUEUE_CHANGED_EVENT } from "@/lib/queue";
 import { reverseGeocode } from "@/lib/apis/nominatim";
+import { getDeviceLocation } from "@/lib/geo";
 import { takePendingCaptureFile } from "@/lib/pendingCapture";
 import type { ExtractedGraveData, GeoLocation } from "@/types";
 import { localContrastBoost, unsharpMask } from "@/lib/relief";
-import { resizeForStorage } from "@/lib/imageUtils";
+import { resizeForStorage, generateThumbnail, saveToDevice } from "@/lib/imageUtils";
 import OnboardingCarousel from "@/components/onboarding/OnboardingCarousel";
 import { loadSettings } from "@/lib/settings";
 
@@ -238,10 +239,17 @@ export default function CapturePage() {
       setProgressLabel("Saving…");
 
       const storageDataUrl = await resizeForStorage(pUrl);
+      const [thumbnailDataUrl] = await Promise.all([
+        generateThumbnail(storageDataUrl),
+        loadSettings().photoSaveTarget === "app-and-device"
+          ? saveToDevice(storageDataUrl, `gravelens-${Date.now()}.jpg`)
+          : Promise.resolve(),
+      ]);
       const id = generateId();
       await savePendingResult(id, {
         id,
         photoDataUrl: storageDataUrl,
+        thumbnailDataUrl,
         extracted: dataOrRef,
         location: locOrRef,
         timestamp: Date.now(),
@@ -297,12 +305,19 @@ export default function CapturePage() {
 
       setProgress(70);
       const storageDataUrl = await resizeForStorage(previewUrl);
+      const [thumbnailDataUrl] = await Promise.all([
+        generateThumbnail(storageDataUrl),
+        loadSettings().photoSaveTarget === "app-and-device"
+          ? saveToDevice(storageDataUrl, `gravelens-${Date.now()}.jpg`)
+          : Promise.resolve(),
+      ]);
 
       const id = generateId();
       await addToQueue({
         id,
         timestamp: Date.now(),
         photoDataUrl: storageDataUrl,
+        thumbnailDataUrl,
         location,
         status: "pending",
         retries: 0,
@@ -722,22 +737,6 @@ function ProcessingState({
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Get the device's current GPS position via the Geolocation API.
- * Used as a fallback when the photo has no EXIF GPS data (common on PWA/mobile).
- * Resolves to null on error or denial rather than rejecting.
- */
-function getDeviceLocation(): Promise<{ lat: number; lng: number } | null> {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) { resolve(null); return; }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve(null),
-      { timeout: 6000, maximumAge: 30000, enableHighAccuracy: true }
-    );
-  });
-}
 
 /**
  * Compress a photo for long-term storage in IndexedDB.

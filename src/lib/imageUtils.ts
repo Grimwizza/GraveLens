@@ -23,3 +23,55 @@ export function resizeForStorage(dataUrl: string): Promise<string> {
     img.src = dataUrl;
   });
 }
+
+/**
+ * Generate a small preview thumbnail (300 px longest edge, 65% JPEG).
+ * Used in archive list/tile/coverflow views to avoid parsing the full photo on each render.
+ */
+export function generateThumbnail(dataUrl: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxPx = 300;
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Canvas unavailable"));
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.65));
+    };
+    img.onerror = () => reject(new Error("Failed to load image for thumbnail"));
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Save a photo to the device camera roll (mobile) or trigger a file download (desktop).
+ * On iOS/Android uses Web Share API Level 2 — the OS share sheet appears and the user
+ * taps "Save Image". On desktop falls back to an <a download> link.
+ * Silently no-ops if the user dismisses or the API is unavailable.
+ */
+export async function saveToDevice(dataUrl: string, filename: string): Promise<void> {
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    const file = new File([blob], filename, { type: blob.type || "image/jpeg" });
+
+    if (typeof navigator !== "undefined" && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: "GraveLens Photo" });
+    } else {
+      const a = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  } catch {
+    // Share dismissed or unsupported — not an error from the user's perspective
+  }
+}
