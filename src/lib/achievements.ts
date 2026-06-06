@@ -1,5 +1,6 @@
 import type { GraveRecord } from "@/types";
 
+
 // ── Rank ladder ───────────────────────────────────────────────────────────
 // Themed as a "History Explorer" progression — from casual visitor to master.
 
@@ -12,15 +13,15 @@ export interface Rank {
 
 export const RANKS: Rank[] = [
   { level: 1,  title: "The Wanderer",       subtitle: "Your journey into history begins",           minXP: 0     },
-  { level: 2,  title: "The Curious",         subtitle: "Questions stir among the stones",            minXP: 150   },
-  { level: 3,  title: "The Seeker",          subtitle: "Following trails through the grass",         minXP: 450   },
-  { level: 4,  title: "The Chronicler",      subtitle: "Names and dates fill your pages",            minXP: 1000  },
-  { level: 5,  title: "The Sleuth",          subtitle: "Every stone holds a secret",                 minXP: 1800  },
-  { level: 6,  title: "The Historian",       subtitle: "Patterns emerge across the centuries",       minXP: 2800  },
-  { level: 7,  title: "The Archivist",       subtitle: "Deep in the records, deep in the past",      minXP: 4000  },
-  { level: 8,  title: "The Curator",         subtitle: "Preserving heritage for those who follow",   minXP: 5500  },
-  { level: 9,  title: "The Scholar",         subtitle: "Your knowledge spans generations",           minXP: 7500  },
-  { level: 10, title: "Master Historian",    subtitle: "Guardian of the forgotten and the found",    minXP: 10000 },
+  { level: 2,  title: "The Curious",         subtitle: "Questions stir among the stones",            minXP: 100   },
+  { level: 3,  title: "The Seeker",          subtitle: "Following trails through the grass",         minXP: 300   },
+  { level: 4,  title: "The Chronicler",      subtitle: "Names and dates fill your pages",            minXP: 600   },
+  { level: 5,  title: "The Sleuth",          subtitle: "Every stone holds a secret",                 minXP: 1000  },
+  { level: 6,  title: "The Historian",       subtitle: "Patterns emerge across the centuries",       minXP: 1500  },
+  { level: 7,  title: "The Archivist",       subtitle: "Deep in the records, deep in the past",      minXP: 2200  },
+  { level: 8,  title: "The Curator",         subtitle: "Preserving heritage for those who follow",   minXP: 3000  },
+  { level: 9,  title: "The Scholar",         subtitle: "Your knowledge spans generations",           minXP: 4000  },
+  { level: 10, title: "Master Historian",    subtitle: "Guardian of the forgotten and the found",    minXP: 5000  },
 ];
 
 export function getRank(xp: number): Rank {
@@ -106,6 +107,61 @@ export function recordActiveDay(): void {
 }
 
 // ── Helpers used in evaluate functions ───────────────────────────────────
+
+function longestStreak(days: string[]): number {
+  if (days.length === 0) return 0;
+  const sorted = Array.from(new Set(days))
+    .map((d) => new Date(d + "T00:00:00Z").getTime())
+    .sort((a, b) => a - b);
+  let maxStreak = 1;
+  let currentStreak = 1;
+  const oneDay = 24 * 60 * 60 * 1000;
+  for (let i = 1; i < sorted.length; i++) {
+    const diff = sorted[i] - sorted[i - 1];
+    if (diff === oneDay) {
+      currentStreak++;
+      maxStreak = Math.max(maxStreak, currentStreak);
+    } else if (diff > oneDay) {
+      currentStreak = 1;
+    }
+  }
+  return maxStreak;
+}
+
+function completedGoalsCount(graves: GraveRecord[]): number {
+  try {
+    const goalsRaw = localStorage.getItem("gl_cemetery_goals");
+    if (!goalsRaw) return 0;
+    const goals: Record<string, number> = JSON.parse(goalsRaw);
+    if (Object.keys(goals).length === 0) return 0;
+
+    const namesRaw = localStorage.getItem("gl_cemetery_id_names");
+    const idToName: Record<string, string> = namesRaw ? JSON.parse(namesRaw) : {};
+
+    const counts: Record<string, number> = {};
+    for (const g of graves) {
+      if (g.location?.cemetery) {
+        const key = g.location.cemetery.toLowerCase().trim();
+        counts[key] = (counts[key] ?? 0) + 1;
+      }
+    }
+
+    let completed = 0;
+    for (const [cemId, target] of Object.entries(goals)) {
+      let name = idToName[cemId];
+      if (!name && cemId.startsWith("gl_derived_")) {
+        name = cemId.substring("gl_derived_".length);
+      }
+      if (name) {
+        const current = counts[name.toLowerCase().trim()] ?? 0;
+        if (current >= target) completed++;
+      }
+    }
+    return completed;
+  } catch {
+    return 0;
+  }
+}
 
 function uniqueCemeteries(graves: GraveRecord[]) {
   return new Set(graves.map((g) => g.location?.cemetery).filter(Boolean));
@@ -734,6 +790,100 @@ export const ACHIEVEMENTS: Achievement[] = [
     flavour: "The stones become familiar. The names, like old friends.",
     xp: 75, category: "Discovery", icon: "🗓️",
     evaluate: (_g, stats) => count(stats.daysActive.length, 7),
+  },
+  {
+    id: "dis_streak_3",
+    title: "Dedicated Archivist",
+    description: "Use the app on 3 consecutive days.",
+    flavour: "Consistency turns curiosity into chronicling.",
+    xp: 30, category: "Discovery", icon: "🔥",
+    evaluate: (_g, stats) => count(longestStreak(stats.daysActive), 3),
+  },
+  {
+    id: "dis_streak_7",
+    title: "Chronicle Keeper",
+    description: "Use the app on 7 consecutive days.",
+    flavour: "A week of memories preserved in stone.",
+    xp: 100, category: "Discovery", icon: "👑",
+    evaluate: (_g, stats) => count(longestStreak(stats.daysActive), 7),
+  },
+  {
+    id: "goal_setter",
+    title: "Goal Setter",
+    description: "Set a cemetery documentation goal.",
+    flavour: "A plan in place makes history manageable.",
+    xp: 10, category: "Discovery", icon: "🎯",
+    evaluate: () => {
+      try {
+        const goalsRaw = localStorage.getItem("gl_cemetery_goals");
+        const countGoals = goalsRaw ? Object.keys(JSON.parse(goalsRaw)).length : 0;
+        return binary(countGoals >= 1);
+      } catch {
+        return binary(false);
+      }
+    },
+  },
+  {
+    id: "goal_met_1",
+    title: "Cemetery Guardian",
+    description: "Complete 1 cemetery documentation goal.",
+    flavour: "You set a mark and met it. The ground is documented.",
+    xp: 50, category: "Research", icon: "🏰",
+    evaluate: (g) => count(completedGoalsCount(g), 1),
+  },
+  {
+    id: "goal_met_3",
+    title: "Master Chronicler",
+    description: "Complete 3 cemetery documentation goals.",
+    flavour: "Three entire yards preserved forever under your watch.",
+    xp: 100, category: "Research", icon: "🏆",
+    evaluate: (g) => count(completedGoalsCount(g), 3),
+  },
+  {
+    id: "multi_spouse",
+    title: "Shared Rest",
+    description: "Document a marker commemorating 2 or more individuals.",
+    flavour: "Together in life, together in history.",
+    xp: 15, category: "Family", icon: "👩‍❤️‍👨",
+    evaluate: (g) => binary(g.some((r) => (r.extracted.people?.length ?? 0) >= 2)),
+  },
+  {
+    id: "multi_family",
+    title: "Family Plot Stone",
+    description: "Document a marker commemorating 4 or more individuals.",
+    flavour: "A whole generation commemorated on a single face.",
+    xp: 40, category: "Family", icon: "👪",
+    evaluate: (g) => binary(g.some((r) => (r.extracted.people?.length ?? 0) >= 4)),
+  },
+  {
+    id: "mat_bronze",
+    title: "Bronze Age",
+    description: "Document a marker made of Bronze.",
+    flavour: "Metal that withstands the elements, keeping memory bright.",
+    xp: 20, category: "Discovery", icon: "🛡️",
+    evaluate: (g) => binary(g.some((r) => (r.extracted.material ?? "").toLowerCase().includes("bronze"))),
+  },
+  {
+    id: "mat_slate",
+    title: "Slate Scholar",
+    description: "Document a marker made of Slate.",
+    flavour: "Dark stone carved by early colonial hands.",
+    xp: 25, category: "Discovery", icon: "🖤",
+    evaluate: (g) => binary(g.some((r) => (r.extracted.material ?? "").toLowerCase().includes("slate"))),
+  },
+  {
+    id: "cond_weathered",
+    title: "Weathered Witness",
+    description: "Document a grave marker in weathered or cracked condition.",
+    flavour: "Fading letters salvaged just in time.",
+    xp: 15, category: "Discovery", icon: "🌧️",
+    evaluate: (g) =>
+      binary(
+        g.some((r) => {
+          const cond = (r.extracted.condition ?? "").toLowerCase();
+          return cond.includes("weathered") || cond.includes("cracked");
+        })
+      ),
   },
 ];
 

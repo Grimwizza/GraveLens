@@ -18,6 +18,8 @@ import {
   updateStats,
   type UnlockRecord,
   type AppStats,
+  totalXP,
+  getRank,
 } from "@/lib/achievements";
 
 const BUCKET = "grave-photos";
@@ -261,10 +263,15 @@ export async function pushExplorerPoints(
     ).sort(),
   };
 
+  const xp = totalXP(mergedUnlocks);
+  const rank = getRank(xp).level;
+
   const { error } = await supabase.from("user_profiles").upsert({
     user_id: userId,
     achievement_unlocks: mergedUnlocks,
     app_stats: mergedStats,
+    explorer_xp: xp,
+    explorer_rank: rank,
     updated_at: new Date().toISOString(),
   });
 

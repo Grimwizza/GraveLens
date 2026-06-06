@@ -344,6 +344,14 @@ export default function ArchivePage() {
   // ── Load cemeteries from IDB & Sanitize Polluted Data ─────────────────────
   useEffect(() => {
     getAllCemeteries().then(async (list) => {
+      try {
+        const mapping = JSON.parse(localStorage.getItem("gl_cemetery_id_names") ?? "{}");
+        list.forEach((c) => {
+          mapping[c.id] = c.name;
+        });
+        localStorage.setItem("gl_cemetery_id_names", JSON.stringify(mapping));
+      } catch {}
+
       const sanitized = await Promise.all(
         list.map(async (c) => {
           const nameLower = c.name.toLowerCase();
