@@ -22,7 +22,7 @@ import { searchEnlistmentRecords } from "@/lib/apis/nara";
 import { getSoundex, variantsFor } from "@/lib/phonetic";
 import { buildResearchChecklist } from "@/lib/researchChecklist";
 import { buildAllResearchLinks } from "@/lib/researchLinks";
-import type { ResearchData, GeoLocation, NaraItemRecord } from "@/types";
+import type { ResearchData, GeoLocation, NaraItemRecord, LocalHistoryContext } from "@/types";
 import { createClient } from "@/lib/supabase/server";
 import { checkLocalHistoryCache, saveLocalHistoryCache } from "@/lib/community";
 import { CURRENT_RESEARCH_VERSION } from "@/lib/researchVersion";
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     // Fired simultaneously with Phase 1 by the frontend. Returns the slow
     // geographic enrichment that would otherwise bottleneck first-content time.
     if (supplemental) {
-      let localHistory: any = {};
+      let localHistory: LocalHistoryContext = {};
 
       if (cachedHistory) {
         // Cache hit — geography is instant, no API calls needed
@@ -74,12 +74,12 @@ export async function POST(req: NextRequest) {
           hasCoords ? getLocalWikidataEvents(lat, lng, birthYear, deathYear) : Promise.resolve([]),
         ]);
 
-        const cityCtx    = cityContext.status      === "fulfilled" ? (cityContext.value as any)      : {};
-        const snapshots  = decadeSnaps.status      === "fulfilled" ? (decadeSnaps.value as any)      : [];
-        const localNews  = localNewspaper.status   === "fulfilled" ? (localNewspaper.value as any)   : [];
-        const nrhp       = nrhpSites.status        === "fulfilled" ? (nrhpSites.value as any)        : [];
-        const census     = censusPopulation.status === "fulfilled" ? (censusPopulation.value as any) : [];
-        const wikiEvents = wikidataEvents.status   === "fulfilled" ? (wikidataEvents.value as any)   : [];
+        const cityCtx    = cityContext.status      === "fulfilled" ? cityContext.value      : {};
+        const snapshots  = decadeSnaps.status      === "fulfilled" ? decadeSnaps.value      : [];
+        const localNews  = localNewspaper.status   === "fulfilled" ? localNewspaper.value   : [];
+        const nrhp       = nrhpSites.status        === "fulfilled" ? nrhpSites.value        : [];
+        const census     = censusPopulation.status === "fulfilled" ? censusPopulation.value : [];
+        const wikiEvents = wikidataEvents.status   === "fulfilled" ? wikidataEvents.value   : [];
 
         localHistory = {
           ...(cityCtx.cityArticle   ? { cityArticle:   cityCtx.cityArticle   } : {}),
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
       const [birthYearNotablesResult] = await Promise.allSettled([
         birthYear ? getBirthYearNotables(birthYear) : Promise.resolve([]),
       ]);
-      const notables = birthYearNotablesResult.status === "fulfilled" ? (birthYearNotablesResult.value as any) : [];
+      const notables = birthYearNotablesResult.status === "fulfilled" ? birthYearNotablesResult.value : [];
 
       return NextResponse.json({
         localHistory:      Object.keys(localHistory).length > 0 ? localHistory : undefined,
@@ -169,18 +169,18 @@ export async function POST(req: NextRequest) {
 
     // On cache hit, include full geographic context in Phase 1 response.
     // On cache miss, localHistory is empty — Phase 2 fetches and caches all geography.
-    const localHistory: any = cachedHistory ? (cachedHistory.localHistory || {}) : {};
+    const localHistory: LocalHistoryContext = cachedHistory ? (cachedHistory.localHistory || {}) : {};
 
     // ── F8: Research Checklist — deterministic, zero-cost ──────────────────
     const partialResearch: ResearchData = {
-      newspapers:       newspapers.status    === "fulfilled" ? (newspapers.value as any)    : [],
-      naraRecords:      naraRecords.status   === "fulfilled" ? (naraRecords.value as any)   : [],
-      landRecords:      landRecords.status   === "fulfilled" ? (landRecords.value as any)   : [],
+      newspapers:       newspapers.status    === "fulfilled" ? newspapers.value    : [],
+      naraRecords:      naraRecords.status   === "fulfilled" ? naraRecords.value   : [],
+      landRecords:      landRecords.status   === "fulfilled" ? landRecords.value   : [],
       militaryContext:  militaryContext ?? undefined,
-      familySearchHints: familySearchHints.status === "fulfilled" ? (familySearchHints.value as any) : undefined,
-      ssdi:             ssdiRecords.status   === "fulfilled" ? (ssdiRecords.value as any)   : undefined,
-      immigration:      immigrationRecords.status === "fulfilled" ? (immigrationRecords.value as any) : undefined,
-      historicalCensus: historicalCensusRecords.status === "fulfilled" ? (historicalCensusRecords.value as any) : undefined,
+      familySearchHints: familySearchHints.status === "fulfilled" ? familySearchHints.value : undefined,
+      ssdi:             ssdiRecords.status   === "fulfilled" ? ssdiRecords.value   : undefined,
+      immigration:      immigrationRecords.status === "fulfilled" ? immigrationRecords.value : undefined,
+      historicalCensus: historicalCensusRecords.status === "fulfilled" ? historicalCensusRecords.value : undefined,
     };
     const partialLocation: GeoLocation = { lat: lat ?? 0, lng: lng ?? 0, city, county, state };
     const researchChecklist = buildResearchChecklist(
@@ -209,10 +209,10 @@ export async function POST(req: NextRequest) {
       cemeteryWikiUrl:    cemeteryWikiUrl.status === "fulfilled" ? cemeteryWikiUrl.value : undefined,
       militaryContext,
       localHistory:       Object.keys(localHistory).length > 0 ? localHistory : undefined,
-      familySearchHints:  familySearchHints.status === "fulfilled" && (familySearchHints.value as any).length > 0 ? familySearchHints.value : undefined,
-      ssdi:               ssdiRecords.status        === "fulfilled" && (ssdiRecords.value as any).length        > 0 ? ssdiRecords.value        : undefined,
-      immigration:        immigrationRecords.status === "fulfilled" && (immigrationRecords.value as any).length > 0 ? immigrationRecords.value : undefined,
-      historicalCensus:   historicalCensusRecords.status === "fulfilled" && (historicalCensusRecords.value as any).length > 0 ? historicalCensusRecords.value : undefined,
+      familySearchHints:  (familySearchHints.status === "fulfilled" && familySearchHints.value.length > 0) ? familySearchHints.value : undefined,
+      ssdi:               (ssdiRecords.status        === "fulfilled" && ssdiRecords.value.length        > 0) ? ssdiRecords.value        : undefined,
+      immigration:        (immigrationRecords.status === "fulfilled" && immigrationRecords.value.length > 0) ? immigrationRecords.value : undefined,
+      historicalCensus:   (historicalCensusRecords.status === "fulfilled" && historicalCensusRecords.value.length > 0) ? historicalCensusRecords.value : undefined,
       naraItemRecords:    naraItemRecords.length > 0 ? naraItemRecords : undefined,
       researchChecklist,
       surnameSoundex:     surnameSoundex || undefined,

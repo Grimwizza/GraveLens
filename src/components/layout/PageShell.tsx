@@ -40,7 +40,9 @@ export default function PageShell({
   const isDesktop = useIsDesktop();
 
   useEffect(() => {
-    setOffline(!navigator.onLine);
+    setTimeout(() => {
+      setOffline(!navigator.onLine);
+    }, 0);
     const onOnline  = () => setOffline(false);
     const onOffline = () => setOffline(true);
     window.addEventListener("online",  onOnline);

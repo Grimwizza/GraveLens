@@ -1803,9 +1803,11 @@ function PrimaryCard({
   // Keep fields in sync if parent updates extracted (e.g. after refresh)
   useEffect(() => {
     if (!editing) {
-      setName(extracted.name ?? "");
-      setBirthDate(extracted.birthDate ?? "");
-      setDeathDate(extracted.deathDate ?? "");
+      setTimeout(() => {
+        setName(extracted.name ?? "");
+        setBirthDate(extracted.birthDate ?? "");
+        setDeathDate(extracted.deathDate ?? "");
+      }, 0);
     }
   }, [extracted, editing]);
 
@@ -2257,7 +2259,11 @@ function InscriptionCard({
   const shouldTruncate = !editing && inscription.length > 200;
 
   useEffect(() => {
-    if (!editing) setDraft(inscription ?? "");
+    if (!editing) {
+      setTimeout(() => {
+        setDraft(inscription ?? "");
+      }, 0);
+    }
   }, [inscription, editing]);
 
   const handleSave = () => {
@@ -3430,7 +3436,6 @@ function StoryCard({
   const preGenRef = useRef<AbortController | null>(null);
 
   const hasEnoughData = !!(extracted.birthYear || extracted.deathYear || extracted.name);
-  if (!hasEnoughData) return null;
 
   // Load cached audio on mount; reset script when person changes
   useEffect(() => {
@@ -3705,6 +3710,8 @@ function StoryCard({
     el.currentTime = parseFloat(e.target.value) * el.duration;
     setProgress(parseFloat(e.target.value));
   };
+
+  if (!hasEnoughData) return null;
 
   return (
     <div className="py-5 animate-fade-up" style={{ animationDelay: "0.04s" }}>
@@ -4137,7 +4144,7 @@ function FindAGraveSubmitCard({
     <div className="py-5 animate-fade-up">
       <SectionHeader icon="🪦" title="Not on Find A Grave?" />
       <p className="text-stone-500 text-xs mt-1 mb-3 leading-relaxed">
-        Help build the world's largest memorial database. Your scan opens a pre-filled Add Memorial form.
+        {"Help build the world's largest memorial database. Your scan opens a pre-filled Add Memorial form."}
       </p>
       <div
         className="rounded-xl p-3 mb-3 font-mono text-xs text-stone-300 leading-relaxed"
@@ -4281,7 +4288,7 @@ function ResearchLinksCard({ links }: { links: ResearchLink[] }) {
     <div className="py-5 animate-fade-up">
       <SectionHeader icon="📂" title="Targeted Research Sources" />
       <p className="text-stone-500 text-xs mt-1 mb-3">
-        Sources matched to this person's era, location, and symbols.
+        {"Sources matched to this person's era, location, and symbols."}
       </p>
       <div className="flex flex-col gap-4">
         {order.filter((cat) => byCategory[cat]).map((cat) => {

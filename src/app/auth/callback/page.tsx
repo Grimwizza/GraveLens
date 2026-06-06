@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import BrandLogo from "@/components/ui/BrandLogo";
 import { createClient } from "@/lib/supabase/browser";
 
@@ -50,7 +51,7 @@ export default function AuthCallbackPage() {
       ? supabase.auth.verifyOtp({ token_hash: tokenHash, type: type as "signup" | "magiclink" | "recovery" | "email_change" | "email" })
       : supabase.auth.exchangeCodeForSession(code!);
 
-    authPromise.then(({ error }: { error: any }) => {
+    authPromise.then(({ error }: { error: import("@supabase/supabase-js").AuthError | null }) => {
       if (error) {
         setErrorMsg(error.message);
         setStatus("error");
@@ -101,25 +102,25 @@ export default function AuthCallbackPage() {
           <p className="text-stone-200 text-base font-medium mb-1">Signed in</p>
           <p className="text-stone-500 text-sm mb-8">Taking you back to the app…</p>
           {/* Visible button in case auto-redirect or window.close() both fail */}
-          <a
+          <Link
             href="/"
             className="h-12 px-8 rounded-xl font-semibold text-[#1a1917] text-sm flex items-center justify-center"
             style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
           >
             Open GraveLens
-          </a>
+          </Link>
         </>
       )}
 
       {status === "error" && (
         <>
           <p className="text-red-400 text-sm mb-6 capitalize">{errorMsg || "Sign-in failed."}</p>
-          <a
+          <Link
             href="/login"
             className="h-12 px-8 rounded-xl border border-stone-700 text-stone-300 text-sm flex items-center justify-center"
           >
             Try Again
-          </a>
+          </Link>
         </>
       )}
     </div>

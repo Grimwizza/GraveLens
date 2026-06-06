@@ -269,7 +269,12 @@ export async function getWikipediaPlacesNear(
     if (!res.ok) return [];
 
     const data = await res.json();
-    const pages: Record<string, any> = data?.query?.pages ?? {};
+    const pages: Record<string, {
+      pageid: number;
+      title: string;
+      coordinates?: Array<{ lat: number; lon: number }>;
+      description?: string;
+    }> = data?.query?.pages ?? {};
 
     return Object.values(pages)
       .map((page) => {

@@ -261,9 +261,20 @@ export async function POST(req: NextRequest) {
       .replace(/\s*```\s*$/i, "")
       .trim();
 
-    return NextResponse.json(JSON.parse(rawJson));
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(rawJson);
+    } catch (parseErr) {
+      console.error("[story] JSON parse failed on text:", content.text, parseErr);
+      return NextResponse.json(
+        { error: "Claude returned malformed JSON", details: rawJson },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json(parsed);
   } catch (error: unknown) {
-    console.error("[story]", error);
+    console.error("[story] Error in story generation route:", error);
     return NextResponse.json(
       { error: "Story generation failed" },
       { status: 500 }

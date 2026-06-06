@@ -7,10 +7,19 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const { name, birthYear, deathYear } = await req.json();
-    const naraRecords = await searchNaraRecords(name, birthYear ?? null, deathYear ?? null);
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body.name !== "string" || !body.name.trim()) {
+      return NextResponse.json({ error: "Invalid or missing 'name' input" }, { status: 400 });
+    }
+    const { name, birthYear, deathYear } = body;
+    const naraRecords = await searchNaraRecords(
+      name,
+      typeof birthYear === "number" ? birthYear : null,
+      typeof deathYear === "number" ? deathYear : null
+    );
     return NextResponse.json({ naraRecords });
-  } catch {
-    return NextResponse.json({ naraRecords: [] });
+  } catch (error) {
+    console.error("[NARA route] Search failed:", error);
+    return NextResponse.json({ naraRecords: [], error: "Internal search error" }, { status: 500 });
   }
 }

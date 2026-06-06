@@ -52,10 +52,12 @@ export default function OnboardingCarousel() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    if (!localStorage.getItem(STORAGE_KEY)) {
-      setVisible(true);
-    }
+    setTimeout(() => {
+      setMounted(true);
+      if (!localStorage.getItem(STORAGE_KEY)) {
+        setVisible(true);
+      }
+    }, 0);
   }, []);
 
   const dismiss = () => {

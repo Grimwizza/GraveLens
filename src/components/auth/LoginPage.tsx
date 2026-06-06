@@ -26,8 +26,8 @@ export default function LoginPage() {
   // Redirect away if already signed in
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }: { data: any }) => {
-      if (data.user) router.replace(next);
+    supabase.auth.getUser().then(({ data }: { data: { user: import("@supabase/supabase-js").User | null } }) => {
+      if (data?.user) router.replace(next);
     });
   }, [next, router]);
 
@@ -152,7 +152,7 @@ export default function LoginPage() {
           </div>
 
           <p className="text-stone-600 text-xs text-center mt-6">
-            Can't find it? Check your <span className="text-stone-400">spam or junk</span> folder.
+            {"Can't find it? Check your "}<span className="text-stone-400">spam or junk</span> folder.
           </p>
         </div>
       </div>

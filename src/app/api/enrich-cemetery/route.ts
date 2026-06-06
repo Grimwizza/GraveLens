@@ -17,7 +17,13 @@ export async function POST(req: NextRequest) {
     const supabase = await createClient();
 
     // 1. Run OSM query to get osmId (pass name for better candidate selection)
-    const osmData: any = await fetchOsmCemeteryDetails(lat, lng, name).catch(() => ({}));
+    const osmData = (await fetchOsmCemeteryDetails(lat, lng, name).catch(() => ({}))) as {
+      osmId?: string;
+      openingHours?: string;
+      phone?: string;
+      website?: string;
+      denomination?: string;
+    };
     if (osmData.osmId && !force) {
       // 2. Check cache first (skipped on explicit force-refresh)
       const cached = await checkCemeteryCache(supabase, osmData.osmId);
@@ -57,7 +63,10 @@ export async function POST(req: NextRequest) {
       }).catch((err) => console.error("[cemetery-cache-save] failed:", err));
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      osmId: result.osmId ?? null
+    });
   } catch (err) {
     console.error("[enrich-cemetery]", err);
     return NextResponse.json({ error: "enrichment failed" }, { status: 500 });

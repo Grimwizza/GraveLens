@@ -263,12 +263,12 @@ export default function ArchiveMap({
   onClearFind: () => void;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const leafletRef = useRef<any>(null);
-  const graveLayerRef = useRef<any>(null);
-  const communityLayerRef = useRef<any>(null);
-  const overlayLayerRef = useRef<any>(null);
-  const userMarkerRef = useRef<any>(null);
+  const mapInstanceRef = useRef<import("leaflet").Map | null>(null);
+  const leafletRef = useRef<typeof import("leaflet") | null>(null);
+  const graveLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
+  const communityLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
+  const overlayLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
+  const userMarkerRef = useRef<import("leaflet").Marker | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
@@ -320,7 +320,7 @@ export default function ArchiveMap({
       leafletRef.current = L;
       if (cancelled || !mapRef.current) return;
 
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
       L.Icon.Default.mergeOptions({ iconUrl: "", shadowUrl: "" });
 
       const validGraves = graves.filter((g) => g.location?.lat && g.location?.lng);
@@ -630,7 +630,7 @@ export default function ArchiveMap({
         L.marker([g.location.lat, g.location.lng], { icon }).addTo(layer).bindPopup(html, { autoPan: false });
       });
     }
-  }, [heritagePlaces, manualFigures, manualCemeteries, manualRelatives, mapReady, activeFilters]);
+  }, [heritagePlaces, manualFigures, manualCemeteries, manualRelatives, mapReady, activeFilters, visitedCemeteries]);
 
   // ── Manual search trigger ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -832,7 +832,7 @@ export default function ArchiveMap({
     }
 
     // Figure categories present
-    const figCategories = new Set(activeFigures.map((f) => f.category));
+    const figCategories = new Set<string>(activeFigures.map((f) => f.category));
     const figCategoryMap: Record<string, string> = {
       political: "🏛️  Political figures",
       military:  "⚔️  Military figures",
@@ -842,7 +842,7 @@ export default function ArchiveMap({
       other:     "📍  Notable buried figures",
     };
     for (const cat of ["political", "military", "artist", "musician", "actor", "other"]) {
-      if (figCategories.has(cat as any)) {
+      if (figCategories.has(cat)) {
         items.push({ icon: <span style={{ fontSize: 14 }}>{figCategoryMap[cat].split("  ")[0]}</span>, label: figCategoryMap[cat].split("  ")[1] });
       }
     }
@@ -883,7 +883,7 @@ export default function ArchiveMap({
     }
 
     return items;
-  }, [graves, communityGraves, heritagePlaces, manualFigures, manualCemeteries, manualRelatives, activeFilters]);
+  }, [graves, communityGraves, heritagePlaces, manualFigures, manualCemeteries, manualRelatives, activeFilters, visitedCemeteries]);
 
   return (
     <div className="relative flex-1 flex flex-col overflow-hidden h-screen">

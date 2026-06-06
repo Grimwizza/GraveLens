@@ -91,6 +91,7 @@ function preprocessForClaude(
 }
 
 async function processItem(item: QueuedCapture): Promise<void> {
+  const loc = item.location ?? { lat: 0, lng: 0 };
   // Mark as processing (temporarily — we still use "pending" as the stored status)
   let extracted: ExtractedGraveData | null = null;
 
@@ -107,7 +108,8 @@ async function processItem(item: QueuedCapture): Promise<void> {
     if (claudeRes.status === 429) {
       // Respect Retry-After header if present, otherwise back off 15 s
       const retryAfter = claudeRes.headers.get("retry-after");
-      const ms = retryAfter ? parseInt(retryAfter) * 1000 : 15000;
+      const retryAfterSec = retryAfter ? parseInt(retryAfter) : 0;
+      const ms = (retryAfterSec && !isNaN(retryAfterSec)) ? retryAfterSec * 1000 : 15000;
       throw new RateLimitError(ms);
     }
     if (claudeRes.ok) {
@@ -135,12 +137,12 @@ async function processItem(item: QueuedCapture): Promise<void> {
           lastName: extracted.lastName,
           birthYear: extracted.birthYear,
           deathYear: extracted.deathYear,
-          lat: item.location?.lat,
-          lng: item.location?.lng,
-          city: item.location?.city,
-          county: item.location?.county,
-          state: item.location?.state,
-          cemetery: item.location?.cemetery,
+          lat: loc.lat,
+          lng: loc.lng,
+          city: loc.city,
+          county: loc.county,
+          state: loc.state,
+          cemetery: loc.cemetery,
           inscription: extracted.inscription ?? "",
           symbols: extracted.symbols ?? [],
         }),
@@ -154,8 +156,8 @@ async function processItem(item: QueuedCapture): Promise<void> {
           historical: d.historical ?? {},
           militaryContext: d.militaryContext ?? undefined,
           localHistory: d.localHistory ?? undefined,
-          cemetery: item.location?.cemetery
-            ? { name: item.location.cemetery, location: item.location }
+          cemetery: loc.cemetery
+            ? { name: loc.cemetery, location: loc }
             : undefined,
         };
       }
@@ -171,7 +173,7 @@ async function processItem(item: QueuedCapture): Promise<void> {
     id: item.id,
     timestamp: item.timestamp,
     photoDataUrl: item.photoDataUrl,
-    location: item.location ?? { lat: 0, lng: 0 },
+    location: loc,
     extracted,
     research,
     tags,

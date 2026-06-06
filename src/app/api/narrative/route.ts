@@ -118,13 +118,16 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body.name !== "string") {
+      return NextResponse.json({ error: "Invalid or missing 'name' input" }, { status: 400 });
+    }
     const client = new Anthropic({ apiKey });
 
     const message = await client.messages.create({
       model: MODEL,
       max_tokens: MAX_TOKENS,
-      system: SYSTEM_PROMPT,
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       messages: [
         {
           role: "user",
@@ -143,7 +146,16 @@ export async function POST(req: NextRequest) {
       .replace(/\s*```\s*$/i, "")
       .trim();
 
-    const result = JSON.parse(rawJson);
+    let result: Record<string, unknown>;
+    try {
+      result = JSON.parse(rawJson);
+    } catch (parseErr) {
+      console.error("[narrative] JSON parse failed on text:", content.text, parseErr);
+      return NextResponse.json(
+        { error: "Claude returned malformed JSON", details: rawJson },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json(result);
   } catch (error: unknown) {

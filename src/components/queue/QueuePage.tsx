@@ -25,6 +25,7 @@ function timeAgo(ts: number): string {
 export default function QueuePage() {
   const [items, setItems] = useState<QueuedCapture[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [sessionTotal, setSessionTotal] = useState<number>(0);
   const sessionTotalRef = useRef<number>(0);
 
   const refresh = async () => {
@@ -35,13 +36,19 @@ export default function QueuePage() {
     const nonEmpty = all.length > 0;
     if (nonEmpty && sessionTotalRef.current === 0) {
       sessionTotalRef.current = all.length;
+      setSessionTotal(all.length);
     } else if (!nonEmpty) {
       sessionTotalRef.current = 0;
+      setSessionTotal(0);
+    } else {
+      setSessionTotal(Math.max(sessionTotalRef.current, all.length));
     }
   };
 
   useEffect(() => {
-    refresh();
+    setTimeout(() => {
+      refresh();
+    }, 0);
     const handler = () => refresh();
     window.addEventListener(QUEUE_CHANGED_EVENT, handler);
     // Poll activeItemId at a higher cadence since it's in-memory only
@@ -54,7 +61,7 @@ export default function QueuePage() {
 
   const pending = items.filter((i) => i.status === "pending");
   const failed = items.filter((i) => i.status === "failed");
-  const total = Math.max(sessionTotalRef.current, items.length);
+  const total = Math.max(sessionTotal, items.length);
   const processed = Math.max(0, total - items.length);
   const progressPct = total > 0 ? Math.round((processed / total) * 100) : 0;
   const isProcessing = activeId !== null;

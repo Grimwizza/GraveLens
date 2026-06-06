@@ -23,8 +23,10 @@ export default function ServiceWorkerRegister() {
     // ── Show "Updated" toast if we just auto-reloaded ───────────────────────
     if (sessionStorage.getItem(RELOADED_KEY)) {
       sessionStorage.removeItem(RELOADED_KEY);
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), TOAST_DURATION_MS);
+      setTimeout(() => {
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), TOAST_DURATION_MS);
+      }, 0);
     }
 
     // ── 1. Register service worker ──────────────────────────────────────────

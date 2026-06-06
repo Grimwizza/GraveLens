@@ -1,5 +1,7 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require('fs');
 const glob = require('glob');
+
 
 const mapping = {
   '#1a1917': 'var(--t-stone-900)',

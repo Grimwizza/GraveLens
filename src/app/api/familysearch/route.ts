@@ -7,10 +7,20 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const { firstName, lastName, birthYear, deathYear } = await req.json();
-    const familySearchHints = await searchFamilySearchHints(firstName, lastName, birthYear ?? null, deathYear ?? null);
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body.lastName !== "string" || !body.lastName.trim()) {
+      return NextResponse.json({ error: "Invalid or missing 'lastName' input" }, { status: 400 });
+    }
+    const { firstName, lastName, birthYear, deathYear } = body;
+    const familySearchHints = await searchFamilySearchHints(
+      typeof firstName === "string" ? firstName : "",
+      lastName,
+      typeof birthYear === "number" ? birthYear : null,
+      typeof deathYear === "number" ? deathYear : null
+    );
     return NextResponse.json({ familySearchHints });
-  } catch {
-    return NextResponse.json({ familySearchHints: [] });
+  } catch (error) {
+    console.error("[FamilySearch route] Search failed:", error);
+    return NextResponse.json({ familySearchHints: [], error: "Internal search error" }, { status: 500 });
   }
 }

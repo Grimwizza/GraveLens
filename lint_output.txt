@@ -1,0 +1,46 @@
+
+> gravelens@0.1.0 lint
+> eslint
+
+
+/Users/benluebbert/Documents/Sites/GraveLens/next.config.ts
+  2:8  warning  'path' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/benluebbert/Documents/Sites/GraveLens/src/components/achievements/AchievementsPage.tsx
+   38:36  warning  '_title' is defined but never used                  @typescript-eslint/no-unused-vars
+  387:13  warning  'statsForLogic' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/benluebbert/Documents/Sites/GraveLens/src/components/archive/ArchiveMap.tsx
+  757:14  warning  'e' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/benluebbert/Documents/Sites/GraveLens/src/components/archive/ArchivePage.tsx
+  185:3  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+  224:3  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+  285:3  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+/Users/benluebbert/Documents/Sites/GraveLens/src/components/auth/ProfileBadge.tsx
+  45:6  warning  React Hook useEffect has a missing dependency: 'user'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/benluebbert/Documents/Sites/GraveLens/src/components/capture/CapturePage.tsx
+   66:6  warning  React Hook useEffect has a missing dependency: 'handleFileChosen'. Either include it or remove the dependency array                                  react-hooks/exhaustive-deps
+  227:6  warning  React Hook useCallback has missing dependencies: 'handleQueueCapture' and 'saveCurrentAnalysis'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/benluebbert/Documents/Sites/GraveLens/src/components/results/ResultPage.tsx
+    33:3  warning  'LifeNarrative' is defined but never used                                                      @typescript-eslint/no-unused-vars
+   423:9  warning  'autoExpandAllCategories' is assigned a value but never used                                   @typescript-eslint/no-unused-vars
+  3718:8  warning  Unused eslint-disable directive (no problems were reported from 'jsx-a11y/media-has-caption')
+
+/Users/benluebbert/Documents/Sites/GraveLens/src/components/ui/RankInsignia.tsx
+  29:9  warning  'textGradId' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/benluebbert/Documents/Sites/GraveLens/src/lib/apis/cemetery.ts
+  222:3  warning  'city' is defined but never used   @typescript-eslint/no-unused-vars
+  223:3  warning  'state' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/benluebbert/Documents/Sites/GraveLens/src/lib/researchChecklist.ts
+  24:10  warning  'hasCoords' is defined but never used      @typescript-eslint/no-unused-vars
+  60:9   warning  'city' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+✖ 18 problems (0 errors, 18 warnings)
+  0 errors and 4 warnings potentially fixable with the `--fix` option.
+

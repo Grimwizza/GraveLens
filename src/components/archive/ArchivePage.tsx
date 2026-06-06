@@ -1364,7 +1364,7 @@ function NearbyConfirmSheet({
             {nearby.length} nearby marker{nearby.length !== 1 ? "s" : ""} found
           </h3>
           <p className="text-stone-400 text-sm mb-5">
-            Apply <span className="text-gold-400 font-medium">"{cemeteryName}"</span> to{" "}
+            Apply <span className="text-gold-400 font-medium">&quot;{cemeteryName}&quot;</span> to{" "}
             {nearby.length === 1 ? "this marker" : "these markers"} too?
           </p>
 
@@ -1430,6 +1430,12 @@ function GraveTileGrid({
   viewedIds: Set<string>;
   onView: (id: string) => void;
 }) {
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setNow(Date.now()), 0);
+    return () => clearTimeout(t);
+  }, []);
+
   if (graves.length === 0) {
     return (
       <div className="flex items-center justify-center flex-1 mt-16">
@@ -1444,7 +1450,7 @@ function GraveTileGrid({
         const hasCemetery = Boolean(grave.location?.cemetery);
         const hasGps = Boolean(grave.location?.lat && grave.location?.lng);
         const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" — ");
-        const isNew = Date.now() - grave.timestamp < RECENT_DAYS && !viewedIds.has(grave.id);
+        const isNew = now > 0 && now - grave.timestamp < RECENT_DAYS && !viewedIds.has(grave.id);
 
         return (
           <div key={grave.id} className="relative">
@@ -1558,6 +1564,12 @@ function GraveCoverFlow({
   viewedIds: Set<string>;
   onView: (id: string) => void;
 }) {
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setNow(Date.now()), 0);
+    return () => clearTimeout(t);
+  }, []);
+
   if (graves.length === 0) {
     return (
       <div className="flex items-center justify-center flex-1 mt-16">
@@ -1583,7 +1595,7 @@ function GraveCoverFlow({
         const locationLine = [grave.location?.cemetery, grave.location?.city, grave.location?.state]
           .filter(Boolean)
           .join(", ");
-        const isNew = Date.now() - grave.timestamp < RECENT_DAYS && !viewedIds.has(grave.id);
+        const isNew = now > 0 && now - grave.timestamp < RECENT_DAYS && !viewedIds.has(grave.id);
 
         return (
           <div
@@ -1735,6 +1747,11 @@ function GraveList({
   viewedIds: Set<string>;
   onView: (id: string) => void;
 }) {
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setNow(Date.now()), 0);
+    return () => clearTimeout(t);
+  }, []);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   if (graves.length === 0) {
@@ -1750,7 +1767,7 @@ function GraveList({
       {graves.map((grave) => {
         const hasCemetery = Boolean(grave.location?.cemetery);
         const hasGps = Boolean(grave.location?.lat && grave.location?.lng);
-        const isNew = Date.now() - grave.timestamp < RECENT_DAYS && !viewedIds.has(grave.id);
+        const isNew = now - grave.timestamp < RECENT_DAYS && !viewedIds.has(grave.id);
 
         return (
           <div key={grave.id} className="flex items-center gap-3 px-5 py-4">
