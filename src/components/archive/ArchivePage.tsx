@@ -341,9 +341,35 @@ export default function ArchivePage() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
-  // ── Load cemeteries from IDB ──────────────────────────────────────────────
+  // ── Load cemeteries from IDB & Sanitize Polluted Data ─────────────────────
   useEffect(() => {
-    getAllCemeteries().then(setCemeteries).catch(() => {});
+    getAllCemeteries().then(async (list) => {
+      const sanitized = await Promise.all(
+        list.map(async (c) => {
+          const nameLower = c.name.toLowerCase();
+          const descLower = (c.description || "").toLowerCase();
+          if (descLower.includes("bellefontaine") && !nameLower.includes("bellefontaine")) {
+            const cleaned = {
+              ...c,
+              osmId: undefined,
+              openingHours: undefined,
+              phone: undefined,
+              website: undefined,
+              wikipediaUrl: undefined,
+              denomination: undefined,
+              established: undefined,
+              description: undefined,
+              notableFeatures: undefined,
+              historicalEvents: undefined,
+            };
+            await saveCemetery(cleaned);
+            return cleaned;
+          }
+          return c;
+        })
+      );
+      setCemeteries(sanitized);
+    }).catch(() => {});
   }, []);
 
   const loadFailedQueue = useCallback(() => {
@@ -1928,12 +1954,19 @@ function CemeterySection({
       if (!res.ok) return;
       const enriched = await res.json();
       const stableId = c.id.startsWith("gl_derived_") ? cemeteryId(c.name, c.lat, c.lng, enriched.osmId) : c.id;
-      // Only apply fields that are actually populated — don't overwrite existing data with undefined
-      const patch = Object.fromEntries(Object.entries(enriched).filter(([, v]) => v !== undefined && v !== null));
       const updated: CemeteryRecord = {
         ...c,
-        ...patch,
         id: stableId,
+        osmId: enriched.osmId ?? undefined,
+        openingHours: enriched.openingHours ?? undefined,
+        phone: enriched.phone ?? undefined,
+        website: enriched.website ?? undefined,
+        wikipediaUrl: enriched.wikipediaUrl ?? undefined,
+        denomination: enriched.denomination ?? undefined,
+        established: enriched.established ?? undefined,
+        description: enriched.description ?? undefined,
+        notableFeatures: enriched.notableFeatures ?? undefined,
+        historicalEvents: enriched.historicalEvents ?? undefined,
         visitCount: c.visitCount,
         firstVisited: c.firstVisited,
         lastVisited: c.lastVisited,
