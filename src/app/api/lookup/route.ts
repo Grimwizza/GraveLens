@@ -7,7 +7,6 @@ import { getHistoricalContext, searchCemeteryWikipedia } from "@/lib/apis/wikipe
 import { getCityContext, getDecadeSnapshots } from "@/lib/apis/localHistory";
 import { searchNrhpSites } from "@/lib/apis/nrhp";
 import { getCountyPopulation } from "@/lib/apis/census";
-import { getSanbornMapUrl } from "@/lib/apis/sanborn";
 import { getLocalWikidataEvents, getBirthYearNotables } from "@/lib/apis/wikidata";
 import {
   hasMilitaryIndicators,
@@ -19,12 +18,11 @@ import { searchSSdI } from "@/lib/apis/ssdi";
 import { searchImmigrationRecords, isLikelyImmigrant } from "@/lib/apis/immigration";
 import { searchHistoricalCensus } from "@/lib/apis/historicalCensus";
 import { searchEnlistmentRecords } from "@/lib/apis/nara";
-import { searchUsGenWebRecords } from "@/lib/apis/usgenweb";
 
 import { getSoundex, variantsFor } from "@/lib/phonetic";
 import { buildResearchChecklist } from "@/lib/researchChecklist";
 import { buildAllResearchLinks } from "@/lib/researchLinks";
-import type { ResearchData, GeoLocation, NaraItemRecord, UsGenWebRecord } from "@/types";
+import type { ResearchData, GeoLocation, NaraItemRecord } from "@/types";
 import { createClient } from "@/lib/supabase/server";
 import { checkLocalHistoryCache, saveLocalHistoryCache } from "@/lib/community";
 
@@ -76,7 +74,6 @@ export async function POST(req: NextRequest) {
       localNewspaper,
       nrhpSites,
       censusPopulation,
-      sanbornMapUrl,
       wikidataEvents,
       familySearchHints,
       ssdiRecords,
@@ -85,8 +82,14 @@ export async function POST(req: NextRequest) {
       birthYearNotables,
     ] = await Promise.allSettled([
       searchNewspapers(name, deathYear, state),
-      searchNaraRecords(name, birthYear, deathYear, militaryTerms || undefined),
-      searchLandPatents(lastName, firstName, state),
+      // NARA catalog indexes series/finding aids, not individuals — only useful for military records
+      isMilitary
+        ? searchNaraRecords(name, birthYear, deathYear, militaryTerms || undefined)
+        : Promise.resolve([]),
+      // BLM land patents are frontier-era; meaningless for post-1940 urban burials
+      (!deathYear || deathYear < 1940)
+        ? searchLandPatents(lastName, firstName, state)
+        : Promise.resolve([]),
       getHistoricalContext(birthYear, deathYear, state),
       searchCemeteryWikipedia(cemetery),
       // Cacheable local history inputs: bypassed on cache hit
@@ -94,19 +97,21 @@ export async function POST(req: NextRequest) {
       !cachedHistory ? getDecadeSnapshots(state, birthYear, deathYear) : Promise.resolve([]),
       !cachedHistory ? searchLocalAreaNews(city, county, state, birthYear, deathYear) : Promise.resolve([]),
       (!cachedHistory && hasCoords) ? searchNrhpSites(lat, lng, birthYear, deathYear) : Promise.resolve([]),
-      (!cachedHistory && hasCoords) ? getCountyPopulation(lat, lng, birthYear, deathYear) : Promise.resolve([]),
-      !cachedHistory ? getSanbornMapUrl(city, state, deathYear) : Promise.resolve(undefined),
+      // Census API only has 1990-2020 data; irrelevant for pre-1970 graves
+      (!cachedHistory && hasCoords && (!deathYear || deathYear >= 1970)) ? getCountyPopulation(lat, lng, birthYear, deathYear) : Promise.resolve([]),
       (!cachedHistory && hasCoords) ? getLocalWikidataEvents(lat, lng, birthYear, deathYear) : Promise.resolve([]),
-      // F1: FamilySearch record hints
-      searchFamilySearchHints(firstName, lastName, birthYear, deathYear),
+      // F1: FamilySearch record hints — require at least one date anchor to be actionable
+      (birthYear || deathYear)
+        ? searchFamilySearchHints(firstName, lastName, birthYear, deathYear)
+        : Promise.resolve([]),
       // F3: SSDI — only 1936–2014 deaths
       searchSSdI(firstName, lastName, birthYear, deathYear),
       // F5: Immigration passenger records — gated
       runImmigration
         ? searchImmigrationRecords(firstName, lastName, birthYear, deathYear)
         : Promise.resolve([]),
-      // F4: Historical census — only for pre-1943 deaths
-      (!deathYear || deathYear <= 1943)
+      // F4: Historical census — 1880–1940 indexed; allow up to 1950 (consistent with historicalCensus.ts gate)
+      (!deathYear || deathYear <= 1950)
         ? searchHistoricalCensus(firstName, lastName, birthYear, deathYear, state)
         : Promise.resolve([]),
       // Notable people born the same year
@@ -131,7 +136,6 @@ export async function POST(req: NextRequest) {
       const localNews    = localNewspaper.status   === "fulfilled" ? (localNewspaper.value as any)   : [];
       const nrhp         = nrhpSites.status        === "fulfilled" ? (nrhpSites.value as any)        : [];
       const census       = censusPopulation.status === "fulfilled" ? (censusPopulation.value as any) : [];
-      const sanborn      = sanbornMapUrl.status    === "fulfilled" ? (sanbornMapUrl.value as any)    : undefined;
       const wikiEvents   = wikidataEvents.status   === "fulfilled" ? (wikidataEvents.value as any)   : [];
 
       localHistory = {
@@ -141,7 +145,6 @@ export async function POST(req: NextRequest) {
         ...(localNews.length   > 0 ? { localNewspaper:  localNews   } : {}),
         ...(nrhp.length        > 0 ? { nrhpSites:       nrhp        } : {}),
         ...(census.length      > 0 ? { censusPopulation: census     } : {}),
-        ...(sanborn               ? { sanbornMapUrl:    sanborn     } : {}),
         ...(wikiEvents.length  > 0 ? { wikidataEvents:  wikiEvents  } : {}),
       };
 
@@ -155,19 +158,13 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Tier 3: Conditional lookups requiring Tier 1/2 results ─────────────
-    const landCount = (landRecords.status === "fulfilled" ? (landRecords.value as any) : []).length;
-    const [enlistmentResult, usGenWebResult] = await Promise.allSettled([
+    const [enlistmentResult] = await Promise.allSettled([
       // F6: Item-level military records
       militaryContext?.likelyConflict
         ? searchEnlistmentRecords(firstName, lastName, birthYear, militaryContext.likelyConflict)
         : Promise.resolve([] as NaraItemRecord[]),
-      // F7: USGenWeb probate/deed/will — only for pre-1920 deaths with known land records
-      landCount > 0 && deathYear && deathYear < 1920 && county && state
-        ? searchUsGenWebRecords(county, state, deathYear)
-        : Promise.resolve([] as UsGenWebRecord[]),
     ]);
     const naraItemRecords = enlistmentResult.status === "fulfilled" ? enlistmentResult.value : [];
-    const usGenWebRecords = usGenWebResult.status   === "fulfilled" ? usGenWebResult.value  : [];
 
     // ── F8: Research Checklist — deterministic, zero-cost ──────────────────
     const partialResearch: ResearchData = {
@@ -214,7 +211,6 @@ export async function POST(req: NextRequest) {
       immigration:        immigrationRecords.status === "fulfilled" && (immigrationRecords.value as any).length > 0 ? immigrationRecords.value : undefined,
       historicalCensus:   historicalCensusRecords.status === "fulfilled" && (historicalCensusRecords.value as any).length > 0 ? historicalCensusRecords.value : undefined,
       naraItemRecords:    naraItemRecords.length > 0 ? naraItemRecords : undefined,
-      usGenWebRecords:    usGenWebRecords.length > 0 ? usGenWebRecords : undefined,
       birthYearNotables:  notables.length        > 0 ? notables        : undefined,
       researchChecklist,
       surnameSoundex:     surnameSoundex || undefined,

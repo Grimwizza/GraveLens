@@ -92,7 +92,7 @@ export async function getCountyPopulation(
   birthYear: number | null,
   deathYear: number | null
 ): Promise<CensusEntry[]> {
-  if (!lat || !lng) return [];
+  if (lat === null || lng === null) return [];
 
   const fips = await getFipsFromCoords(lat, lng);
   if (!fips) return [];

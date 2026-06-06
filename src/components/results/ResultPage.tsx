@@ -248,7 +248,6 @@ export default function ResultPage({ id }: { id: string }) {
             immigration:       d.immigration ?? undefined,
             historicalCensus:  d.historicalCensus ?? undefined,
             naraItemRecords:   d.naraItemRecords ?? undefined,
-            usGenWebRecords:   d.usGenWebRecords ?? undefined,
             birthYearNotables: d.birthYearNotables ?? undefined,
             researchChecklist: d.researchChecklist ?? undefined,
             surnameSoundex:    d.surnameSoundex ?? undefined,
@@ -660,7 +659,6 @@ export default function ResultPage({ id }: { id: string }) {
           immigration:       d.immigration ?? undefined,
           historicalCensus:  d.historicalCensus ?? undefined,
           naraItemRecords:   d.naraItemRecords ?? undefined,
-          usGenWebRecords:   d.usGenWebRecords ?? undefined,
           birthYearNotables: d.birthYearNotables ?? undefined,
           researchChecklist: d.researchChecklist ?? undefined,
           surnameSoundex:    d.surnameSoundex ?? undefined,
@@ -877,7 +875,6 @@ export default function ResultPage({ id }: { id: string }) {
           immigration:       d.immigration ?? undefined,
           historicalCensus:  d.historicalCensus ?? undefined,
           naraItemRecords:   d.naraItemRecords ?? undefined,
-          usGenWebRecords:   d.usGenWebRecords ?? undefined,
           birthYearNotables: d.birthYearNotables ?? undefined,
           researchChecklist: d.researchChecklist ?? undefined,
           culturalContext:   d.culturalContext ?? undefined,
@@ -1337,11 +1334,6 @@ export default function ResultPage({ id }: { id: string }) {
               onRefresh={handleRefreshFamilySearch}
               refreshing={sectionRefreshing === "familysearch"}
             />
-          ) : null}
-
-          {/* USGenWeb probate/deed/will */}
-          {(research?.usGenWebRecords?.length || researchLoading) ? (
-            <UsGenWebCard records={research?.usGenWebRecords ?? []} loading={researchLoading} />
           ) : null}
 
           {/* ── ZONE 5: NEXT STEPS ── Where to go from here ───────────────── */}
@@ -2659,65 +2651,6 @@ function NaraItemCard({
   );
 }
 
-// ── USGenWeb Card (F7) ────────────────────────────────────────────────────────
-
-const RECORD_TYPE_LABEL: Record<string, string> = {
-  probate:   "Probate",
-  deed:      "Deed",
-  will:      "Will",
-  directory: "Directory",
-  general:   "County Archive",
-};
-
-function UsGenWebCard({ records, loading }: { records: import("@/types").UsGenWebRecord[]; loading?: boolean }) {
-  if (loading && !records.length) {
-    return (
-      <div className="py-5 animate-fade-up">
-        <SectionHeader icon="📜" title="Probate & Deed Records (USGenWeb)" />
-        <div className="mt-3 space-y-2">
-          <div className="h-4 shimmer rounded w-2/3" />
-          <div className="h-4 shimmer rounded w-1/2" />
-        </div>
-      </div>
-    );
-  }
-  if (!records.length) return null;
-  return (
-    <div className="py-5 animate-fade-up">
-      <SectionHeader icon="📜" title="Probate & Deed Records (USGenWeb)" />
-      <p className="text-stone-500 text-xs mt-1 mb-3">
-        Volunteer-transcribed county probate, deed, and will records — names heirs and land transfers.
-      </p>
-      <ul className="space-y-2">
-        {records.map((r, i) => (
-          <li key={i}>
-            <a
-              href={r.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-start gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
-            >
-              <div
-                className="shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[0.65rem] font-semibold uppercase tracking-wide whitespace-nowrap"
-                style={{ background: "rgba(92,122,92,0.2)", color: "#8ab47a" }}
-              >
-                {RECORD_TYPE_LABEL[r.recordType] ?? r.recordType}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-stone-200 text-sm font-medium leading-snug">{r.title}</p>
-                <p className="text-stone-500 text-xs mt-0.5">
-                  {r.county}, {r.state}
-                </p>
-                <p className="text-xs mt-1.5" style={{ color: "var(--t-gold-500)" }}>View on USGenWeb →</p>
-              </div>
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 // ── Research Checklist Card ───────────────────────────────────────────────────
 
 const PRIORITY_LABEL: Record<1 | 2 | 3, { label: string; color: string; bg: string; textColor: string }> = {
@@ -3083,7 +3016,6 @@ function LocalHistoryCard({
     localHistory.localNewspaper?.length ||
     localHistory.nrhpSites?.length ||
     localHistory.censusPopulation?.length ||
-    localHistory.sanbornMapUrl ||
     localHistory.wikidataEvents?.length;
 
   if (!hasContent) return null;
@@ -3293,30 +3225,6 @@ function LocalHistoryCard({
                 </li>
               ))}
             </ul>
-          </div>
-        )}
-
-        {/* Sanborn map link */}
-        {localHistory.sanbornMapUrl && (
-          <div>
-            <p className="text-xs text-stone-500 uppercase tracking-widest mb-1.5">
-              Historical Fire Insurance Map
-            </p>
-            <a
-              href={localHistory.sanbornMapUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750"
-            >
-              <span className="text-xl">🗺</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-stone-200 text-sm font-medium">Sanborn Fire Insurance Map</p>
-                <p className="text-stone-500 text-xs mt-0.5">
-                  View historic street-level maps of {placeName} from the LOC collection
-                </p>
-              </div>
-              <p className="text-gold-500 text-xs shrink-0">View →</p>
-            </a>
           </div>
         )}
 

@@ -11,6 +11,8 @@
  * No API calls — pure URL construction from data already in the lookup request.
  */
 
+import { toStateCode } from "@/lib/stateUtils";
+
 export interface ResearchLink {
   label: string;
   sub: string;
@@ -135,7 +137,7 @@ export function buildStateDeathLinks(params: {
   const { firstName, lastName, deathYear, state } = params;
   if (!state || !lastName) return [];
 
-  const stateCode = state.trim().toUpperCase().slice(0, 2);
+  const stateCode = toStateCode(state);
   const record = STATE_DEATH_RECORDS[stateCode];
   if (!record) return [];
 
@@ -179,8 +181,9 @@ export function buildModernObituaryLinks(params: {
 }): ResearchLink[] {
   const { firstName, lastName, deathYear } = params;
   if (!lastName) return [];
+  if (!deathYear) return [];
   // Chronicling America covers to 1963; only surface modern links for post-1963
-  if (deathYear && deathYear <= 1963) return [];
+  if (deathYear <= 1963) return [];
 
   const fn = encodeURIComponent(firstName);
   const ln = encodeURIComponent(lastName);

@@ -115,10 +115,12 @@ export async function searchLocalAreaNews(
   birthYear: number | null,
   deathYear: number | null
 ): Promise<NewspaperArticle[]> {
-  // Only useful within the archive's coverage window
+  // Only useful within the archive's coverage window.
+  // Clamp effectiveStart to ARCHIVE_END_YEAR so a post-1963 birthYear doesn't
+  // produce an invalid date range — local area history up to 1963 is still relevant.
   const effectiveEnd = Math.min(deathYear ?? ARCHIVE_END_YEAR, ARCHIVE_END_YEAR);
-  const effectiveStart = birthYear ?? 1770;
-  if (effectiveStart > ARCHIVE_END_YEAR) return [];
+  const effectiveStart = birthYear ? Math.min(birthYear, ARCHIVE_END_YEAR) : 1770;
+  if (effectiveStart > effectiveEnd) return [];
 
   // Build a geographic search term — prefer specific city, fall back to county
   const geoTerm = city || county;

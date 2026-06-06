@@ -12,19 +12,22 @@ export async function searchNrhpSites(
   birthYear: number | null,
   deathYear: number | null
 ): Promise<NrhpSite[]> {
-  if (!lat || !lng) return [];
+  if (lat === null || lng === null) return [];
 
   // WKT uses longitude THEN latitude
   const point = `Point(${lng} ${lat})`;
   const radiusKm = 16; // ~10 miles
 
-  // Filter by period of significance if we have dates; otherwise return all within radius.
-  // P571 = inception (year built), P7842 = NRHP reference number
+  // Filter by inception year to exclude sites built long before or after the person's era.
+  // P571 = inception (year built). Lower bound: birthYear - 50 (or deathYear - 150 fallback).
+  // Upper bound: deathYear + 30 (site built shortly after death may still be relevant).
+  const lowerBound = birthYear ? birthYear - 50 : deathYear ? deathYear - 150 : null;
+  const upperBound = deathYear ? deathYear + 30 : null;
   const dateFilter =
-    birthYear && deathYear
+    upperBound !== null
       ? `OPTIONAL { ?item wdt:P571 ?inception }
          BIND(YEAR(?inception) AS ?yearBuilt)
-         FILTER(!BOUND(?yearBuilt) || ?yearBuilt <= ${deathYear + 30})`
+         FILTER(!BOUND(?yearBuilt) || (${lowerBound !== null ? `?yearBuilt >= ${lowerBound} && ` : ""}?yearBuilt <= ${upperBound}))`
       : "";
 
   const query = `

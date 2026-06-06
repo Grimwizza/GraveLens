@@ -181,7 +181,6 @@ export interface LocalHistoryContext {
   localNewspaper?: NewspaperArticle[];
   nrhpSites?: NrhpSite[];
   censusPopulation?: CensusEntry[];
-  sanbornMapUrl?: string;
   wikidataEvents?: WikidataEvent[];
 }
 
@@ -257,18 +256,6 @@ export interface HistoricalCensusRecord {
   url: string;
 }
 
-// ── USGenWeb ──────────────────────────────────────────────────────────────────
-
-export interface UsGenWebRecord {
-  /** Link title / record section heading */
-  title: string;
-  county: string;
-  state: string;
-  /** Genealogical record category */
-  recordType: "probate" | "deed" | "will" | "directory" | "general";
-  url: string;
-}
-
 // ── Research checklist ────────────────────────────────────────────────────────
 
 export interface ResearchChecklistItem {
@@ -308,8 +295,6 @@ export interface ResearchData {
   researchChecklist?: ResearchChecklist;
   /** F6: Item-level military enlistment, pension, and casualty records */
   naraItemRecords?: NaraItemRecord[];
-  /** F7: USGenWeb county probate, deed, and will transcriptions */
-  usGenWebRecords?: UsGenWebRecord[];
   /** Notable people born the same year as the deceased */
   birthYearNotables?: Array<{ name: string; description?: string; wikipediaUrl?: string }>;
   /** Phonetic Soundex code for the surname (NARA-compatible) */

@@ -179,9 +179,7 @@ export function buildResearchChecklist(
       priority: 2,
       action: `Check the ${county ? county + " County" : stateLabel(state)} probate court for a will or estate record — land owners almost always left probate files that name all surviving heirs and their married names.`,
       source: `${county ? county + " County" : stateLabel(state)} Probate Court`,
-      url: county && state
-        ? `https://usgwarchives.net/${state.toLowerCase().replace(/\s/g, "")}/${county.toLowerCase().replace(/\s/g, "")}/`
-        : "https://usgwarchives.net/",
+      url: `https://www.familysearch.org/search/collection/list?q.types=probate${state ? `&q.places=${encodeURIComponent(state)}` : ""}`,
     });
   }
 
@@ -211,16 +209,6 @@ export function buildResearchChecklist(
 
   // ── Priority 3: Supplementary ───────────────────────────────────────────────
 
-  // Sanborn maps — if city is known
-  if (city && state && deathYear && deathYear < 1970) {
-    items.push({
-      priority: 3,
-      action: `View Sanborn fire insurance maps for ${city}, ${state} — block-level building maps help confirm residential addresses from census records and locate the family's neighborhood.`,
-      source: "Sanborn Maps (Library of Congress)",
-      url: `https://www.loc.gov/collections/sanborn-maps/?q=${encodeURIComponent(city + " " + state)}`,
-    });
-  }
-
   // BLM GLO — if no land records but rural pre-1900
   if (!hasLand && birthYear && birthYear < 1890 && state) {
     items.push({
@@ -228,16 +216,6 @@ export function buildResearchChecklist(
       action: `Search BLM General Land Office Records for land patents in ${stateLabel(state)} under this surname — homestead filings and cash entries confirm when and where the family settled.`,
       source: "BLM General Land Office Records",
       url: `https://glorecords.blm.gov/search/default.aspx#searchTabIndex=0&searchByType=NameSearch&lastName=${encodeURIComponent(lastName ?? "")}&firstName=${encodeURIComponent(firstName ?? "")}&state=${encodeURIComponent(state)}`,
-    });
-  }
-
-  // USGenWeb county transcriptions
-  if (county && state) {
-    items.push({
-      priority: 3,
-      action: `Check USGenWeb Archives for ${county} County, ${stateLabel(state)} — volunteer-transcribed deed books, early census, and local history often not available anywhere else online.`,
-      source: "USGenWeb Archives",
-      url: `https://usgwarchives.net/${state.toLowerCase().replace(/\s/g, "")}/${county.toLowerCase().replace(/\s/g, "")}/`,
     });
   }
 

@@ -240,7 +240,5 @@ export function isLikelyImmigrant(
   if (/lutheran|catholic|jewish|orthodox|evangelical|methodist|mennonite|moravian/i.test(denomination ?? "")) return true;
   // Burial is outside US
   if (country && country !== "United States" && country !== "US" && country !== "USA") return true;
-  // Birth year before 1920 — high base rate of immigrant population in US
-  if (birthYear && birthYear < 1900) return true;
   return false;
 }

@@ -219,7 +219,7 @@ SELECT DISTINCT ?person ?personLabel ?desc ?wikipedia WHERE {
   FILTER(YEAR(?dob) = ${safeYear})
   ?person wdt:P31 wd:Q5 .
   ?person wikibase:sitelinks ?sitelinks .
-  FILTER(?sitelinks >= 15)
+  FILTER(?sitelinks >= 8)
   OPTIONAL { ?person schema:description ?desc FILTER(LANG(?desc) = "en") }
   OPTIONAL {
     ?wikipedia schema:about ?person ;

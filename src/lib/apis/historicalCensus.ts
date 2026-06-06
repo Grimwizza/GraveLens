@@ -171,8 +171,9 @@ export async function searchHistoricalCensus(
   state?: string
 ): Promise<HistoricalCensusRecord[]> {
   if (!lastName || lastName.length < 2) return [];
-  // Only useful for pre-1941 deaths
-  if (deathYear && deathYear > 1943) return [];
+  // 1940 census is the latest indexed; allow up to 1950 so 1944-1950 deaths
+  // still appear in the 1940 census (per-year filter handles the rest).
+  if (deathYear && deathYear > 1950) return [];
 
   const years = selectCensusYears(birthYear, deathYear);
   if (years.length === 0) return [];

@@ -67,8 +67,11 @@ export async function getCityContext(
   }
 
   if (county && state) {
-    // Nominatim often returns county names like "Dane County" — strip the word
-    const countyName = county.replace(/\s+County$/i, "").trim();
+    // Nominatim returns names like "Dane County", "St. Tammany Parish", "Matanuska-Susitna Borough"
+    const countyName = county
+      .replace(/^County of\s+/i, "")                        // "County of Sonoma" → "Sonoma"
+      .replace(/\s+(County|Parish|Borough|Municipality)$/i, "") // strip trailing division type
+      .trim();
     const countyTitles = [
       `${countyName} County, ${state}`,
       `History of ${countyName} County, ${state}`,
