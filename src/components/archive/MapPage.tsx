@@ -22,12 +22,12 @@ export default function MapPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Discovery State — default radius seeded from settings (km → miles approx)
+  // Discovery State — default radius seeded from settings (miles)
   const [findRadius, setFindRadius] = useState(() => {
-    const km = loadSettings().defaultSearchRadius;
+    const miles = loadSettings().defaultSearchRadius;
     // Map to closest available mile option: 1→5, 5→5, 10→15, 25→50
-    if (km <= 5) return 5;
-    if (km <= 10) return 15;
+    if (miles <= 5) return 5;
+    if (miles <= 10) return 15;
     return 50;
   });
   const [findTrigger, setFindTrigger] = useState(0);
