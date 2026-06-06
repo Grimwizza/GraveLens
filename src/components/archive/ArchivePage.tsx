@@ -119,17 +119,108 @@ export default function ArchivePage() {
 
   const [failedQueueItems, setFailedQueueItems] = useState<QueuedCapture[]>([]);
 
-  // Filter / sort state
-  const [sortField, setSortField] = useState<SortField>("deathYear");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [filterState, setFilterState] = useState("");
-  const [filterCity, setFilterCity] = useState("");
-  const [filterCemetery, setFilterCemetery] = useState("");
-  const [filterTag, setFilterTag] = useState("");
-  const [filterConfidence, setFilterConfidence] = useState<ConfidenceFilter>("");
+  // Filter / sort state with session persistence
+  const FILTER_STORAGE_KEY = "gl_archive_filters";
+
+  const [sortField, setSortField] = useState<SortField>(() => {
+    if (typeof window === "undefined") return "deathYear";
+    try {
+      const stored = sessionStorage.getItem(FILTER_STORAGE_KEY);
+      if (stored) return (JSON.parse(stored).sortField as SortField) ?? "deathYear";
+    } catch {}
+    return "deathYear";
+  });
+
+  const [sortDir, setSortDir] = useState<SortDir>(() => {
+    if (typeof window === "undefined") return "asc";
+    try {
+      const stored = sessionStorage.getItem(FILTER_STORAGE_KEY);
+      if (stored) return (JSON.parse(stored).sortDir as SortDir) ?? "asc";
+    } catch {}
+    return "asc";
+  });
+
+  const [filterState, setFilterState] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const stored = sessionStorage.getItem(FILTER_STORAGE_KEY);
+      if (stored) return JSON.parse(stored).filterState ?? "";
+    } catch {}
+    return "";
+  });
+
+  const [filterCity, setFilterCity] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const stored = sessionStorage.getItem(FILTER_STORAGE_KEY);
+      if (stored) return JSON.parse(stored).filterCity ?? "";
+    } catch {}
+    return "";
+  });
+
+  const [filterCemetery, setFilterCemetery] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const stored = sessionStorage.getItem(FILTER_STORAGE_KEY);
+      if (stored) return JSON.parse(stored).filterCemetery ?? "";
+    } catch {}
+    return "";
+  });
+
+  const [filterTag, setFilterTag] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const stored = sessionStorage.getItem(FILTER_STORAGE_KEY);
+      if (stored) return JSON.parse(stored).filterTag ?? "";
+    } catch {}
+    return "";
+  });
+
+  const [filterConfidence, setFilterConfidence] = useState<ConfidenceFilter>(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const stored = sessionStorage.getItem(FILTER_STORAGE_KEY);
+      if (stored) return (JSON.parse(stored).filterConfidence as ConfidenceFilter) ?? "";
+    } catch {}
+    return "";
+  });
+
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const stored = sessionStorage.getItem(FILTER_STORAGE_KEY);
+      if (stored) return JSON.parse(stored).searchQuery ?? "";
+    } catch {}
+    return "";
+  });
+
+  const [searchOpen, setSearchOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const stored = sessionStorage.getItem(FILTER_STORAGE_KEY);
+      if (stored) return !!JSON.parse(stored).searchQuery;
+    } catch {}
+    return false;
+  });
+
+  // Sync filters to sessionStorage on any change
+  useEffect(() => {
+    const data = {
+      sortField,
+      sortDir,
+      filterState,
+      filterCity,
+      filterCemetery,
+      filterTag,
+      filterConfidence,
+      searchQuery,
+    };
+    try {
+      sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(data));
+    } catch {}
+  }, [sortField, sortDir, filterState, filterCity, filterCemetery, filterTag, filterConfidence, searchQuery]);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "list";
     return (localStorage.getItem("gl_archive_view") as ViewMode) ?? "list";
