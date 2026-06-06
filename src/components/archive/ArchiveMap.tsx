@@ -1014,7 +1014,7 @@ export default function ArchiveMap({
                 Reset All
               </button>
             </div>
-            <div className="flex flex-col gap-1 max-h-64 overflow-y-auto pr-1">
+            <div className="flex flex-col gap-1 max-h-[380px] overflow-y-auto pr-1">
               {FILTER_OPTIONS.map(opt => {
                 const checked = activeFilters.has(opt.id);
                 return (
