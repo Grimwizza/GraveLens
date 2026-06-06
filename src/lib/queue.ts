@@ -183,6 +183,11 @@ async function processItem(item: QueuedCapture): Promise<void> {
 }
 
 let processing = false;
+let activeItemId: string | null = null;
+
+export function getActiveItemId(): string | null {
+  return activeItemId;
+}
 
 export async function processQueue(): Promise<void> {
   if (processing) return;
@@ -196,6 +201,8 @@ export async function processQueue(): Promise<void> {
     );
 
     for (const item of pending) {
+      activeItemId = item.id;
+      notifyQueueChanged();
       try {
         await processItem(item);
         // Small gap between items so we don't immediately re-trigger rate limits
@@ -204,6 +211,8 @@ export async function processQueue(): Promise<void> {
         if (err instanceof RateLimitError) {
           // Don't count rate limiting as a failure — just pause and stop this pass
           console.log(`[Queue] Rate limited — backing off ${err.retryAfterMs}ms`);
+          activeItemId = null;
+          notifyQueueChanged();
           await new Promise((r) => setTimeout(r, err.retryAfterMs));
           // Re-trigger a fresh pass after the backoff
           setTimeout(() => processQueue(), 100);
@@ -216,10 +225,14 @@ export async function processQueue(): Promise<void> {
         };
         await updateQueueItem(updated);
         notifyQueueChanged();
+      } finally {
+        activeItemId = null;
       }
     }
   } finally {
     processing = false;
+    activeItemId = null;
+    notifyQueueChanged();
   }
 }
 

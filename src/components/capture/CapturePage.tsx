@@ -2,11 +2,12 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import BrandLogo from "@/components/ui/BrandLogo";
 import PageShell from "@/components/layout/PageShell";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { fileToDataUrl, extractExifLocation, correctOrientation, generateId } from "@/lib/exif";
-import { savePendingResult, addToQueue } from "@/lib/storage";
+import { savePendingResult, addToQueue, getQueueCount } from "@/lib/storage";
 import { QUEUE_CHANGED_EVENT } from "@/lib/queue";
 import { reverseGeocode } from "@/lib/apis/nominatim";
 import { takePendingCaptureFile } from "@/lib/pendingCapture";
@@ -457,6 +458,34 @@ export default function CapturePage() {
   );
 }
 
+// ── Queue link ──────────────────────────────────────────────────────────────
+
+function QueueLink() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    getQueueCount().then(setCount);
+    const handler = () => getQueueCount().then(setCount);
+    window.addEventListener(QUEUE_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(QUEUE_CHANGED_EVENT, handler);
+  }, []);
+
+  if (count === 0) return null;
+
+  return (
+    <Link
+      href="/queue"
+      className="flex items-center justify-center gap-1.5 text-sm text-stone-400 hover:text-stone-200 active:text-stone-200 transition-colors py-1"
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
+      Queue · {count} pending
+    </Link>
+  );
+}
+
 // ── Idle state ─────────────────────────────────────────────────────────────
 
 const PHOTO_TIPS = [
@@ -581,6 +610,8 @@ function IdleState({
           </svg>
           Upload from Library
         </button>
+
+        <QueueLink />
       </div>
     </div>
   );
@@ -643,6 +674,10 @@ function DesktopIdleState({ onUpload, onFileDrop }: { onUpload: () => void; onFi
       <p className="text-stone-600 text-xs text-center mt-5">
         Supports JPG, PNG, HEIC · EXIF GPS extracted automatically
       </p>
+
+      <div className="mt-3">
+        <QueueLink />
+      </div>
     </div>
   );
 }

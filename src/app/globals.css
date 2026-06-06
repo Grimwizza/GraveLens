@@ -215,6 +215,11 @@ body {
   50%       { box-shadow: 0 0 0 8px rgba(201,168,76,0.0); }
 }
 
+@keyframes shimmer {
+  0%   { transform: translateX(-200%); }
+  100% { transform: translateX(400%); }
+}
+
 .animate-slide-up {
   animation: slide-up 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
