@@ -102,10 +102,15 @@ async function fetchCemeteriesInBounds(
   const query = `
 [out:json][timeout:15];
 (
+  node["landuse"="cemetery"](${south},${west},${north},${east});
   way["landuse"="cemetery"](${south},${west},${north},${east});
   relation["landuse"="cemetery"](${south},${west},${north},${east});
+  node["amenity"="grave_yard"](${south},${west},${north},${east});
   way["amenity"="grave_yard"](${south},${west},${north},${east});
   relation["amenity"="grave_yard"](${south},${west},${north},${east});
+  node["historic"="cemetery"](${south},${west},${north},${east});
+  way["historic"="cemetery"](${south},${west},${north},${east});
+  relation["historic"="cemetery"](${south},${west},${north},${east});
 );
 out center tags;
 `.trim();

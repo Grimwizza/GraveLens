@@ -21,10 +21,13 @@ async function queryCemeteryOverpass(
   const query = `
 [out:json][timeout:10];
 (
+  node["landuse"="cemetery"](around:750,${lat},${lng});
   way["landuse"="cemetery"](around:750,${lat},${lng});
   relation["landuse"="cemetery"](around:750,${lat},${lng});
+  node["amenity"="grave_yard"](around:750,${lat},${lng});
   way["amenity"="grave_yard"](around:750,${lat},${lng});
   relation["amenity"="grave_yard"](around:750,${lat},${lng});
+  node["historic"="cemetery"](around:750,${lat},${lng});
   way["historic"="cemetery"](around:750,${lat},${lng});
   relation["historic"="cemetery"](around:750,${lat},${lng});
 );

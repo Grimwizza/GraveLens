@@ -28,6 +28,21 @@ const STRIP_WORDS = /\b(cemetery|cemeteries|graveyard|burial|ground|grounds|memo
  * "Parkview Cemetery".
  */
 function cemeteryNamesMatch(expected: string, articleTitle: string): boolean {
+  const clean = (s: string) =>
+    s.toLowerCase()
+      .replace(STRIP_WORDS, " ")
+      .replace(/[^a-z0-9]/g, "")
+      .trim();
+
+  const cleanExp = clean(expected);
+  const cleanArt = clean(articleTitle);
+
+  if (!cleanExp || !cleanArt) return false;
+
+  if (cleanExp.includes(cleanArt) || cleanArt.includes(cleanExp)) {
+    return true;
+  }
+
   const normalize = (s: string) =>
     s.toLowerCase().replace(STRIP_WORDS, " ").replace(/[^a-z0-9\s]/g, " ").trim();
   const tokens = (s: string) => normalize(s).split(/\s+/).filter((t) => t.length > 2);
@@ -36,8 +51,33 @@ function cemeteryNamesMatch(expected: string, articleTitle: string): boolean {
   const artTokens = tokens(articleTitle);
   if (!expTokens.size || !artTokens.length) return false;
 
-  // Require at least one non-trivial token to overlap
-  return artTokens.some((t) => expTokens.has(t));
+  for (const t1 of expTokens) {
+    for (const t2 of artTokens) {
+      if (t1.startsWith(t2) || t2.startsWith(t1)) {
+        if (Math.min(t1.length, t2.length) >= 3) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371e3;
+  const phi1 = (lat1 * Math.PI) / 180;
+  const phi2 = (lat2 * Math.PI) / 180;
+  const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
+  const deltaLambda = ((lng2 - lng1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+    Math.cos(phi1) * Math.cos(phi2) *
+    Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
 }
 
 // ── Overpass detail query ─────────────────────────────────────────────────
@@ -61,22 +101,25 @@ export async function fetchOsmCemeteryDetails(
   const query = `
 [out:json][timeout:15];
 (
-  node["landuse"="cemetery"](around:300,${lat},${lng});
-  way["landuse"="cemetery"](around:300,${lat},${lng});
-  relation["landuse"="cemetery"](around:300,${lat},${lng});
-  node["amenity"="grave_yard"](around:300,${lat},${lng});
-  way["amenity"="grave_yard"](around:300,${lat},${lng});
-  relation["amenity"="grave_yard"](around:300,${lat},${lng});
+  node["landuse"="cemetery"](around:800,${lat},${lng});
+  way["landuse"="cemetery"](around:800,${lat},${lng});
+  relation["landuse"="cemetery"](around:800,${lat},${lng});
+  node["amenity"="grave_yard"](around:800,${lat},${lng});
+  way["amenity"="grave_yard"](around:800,${lat},${lng});
+  relation["amenity"="grave_yard"](around:800,${lat},${lng});
+  node["historic"="cemetery"](around:800,${lat},${lng});
+  way["historic"="cemetery"](around:800,${lat},${lng});
+  relation["historic"="cemetery"](around:800,${lat},${lng});
 );
-out tags;
+out center tags;
 `.trim();
 
   try {
     const res = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
         "User-Agent": "GraveLens/1.0 (https://lowhigh.ai)",
+        "Content-Type": "application/x-www-form-urlencoded",
       },
       body: `data=${encodeURIComponent(query)}`,
       signal: AbortSignal.timeout(18000),
@@ -84,20 +127,36 @@ out tags;
     if (!res.ok) return {};
 
     const data = await res.json();
-    const elements: Array<{ type: string; id: number; tags?: Record<string, string> }> =
-      data.elements ?? [];
+    const elements: Array<{
+      type: string;
+      id: number;
+      lat?: number;
+      lon?: number;
+      center?: { lat: number; lon: number };
+      tags?: Record<string, string>;
+    }> = data.elements ?? [];
 
     const named = elements.filter((e) => e.tags?.name);
     if (!named.length) return {};
 
-    // Prefer the element whose name best matches the supplied cemetery name.
-    // If a name is supplied but no element matches it, do NOT fall back to an
-    // unmatched cemetery. Returning the wrong OSM ID causes cache pollution.
     let best = named[0];
     if (name) {
       const nameMatched = named.find((e) => cemeteryNamesMatch(name, e.tags?.name ?? ""));
-      if (!nameMatched) return {};
-      best = nameMatched;
+      if (nameMatched) {
+        best = nameMatched;
+      } else {
+        const closeNamed = named.filter((e) => {
+          const eLat = e.lat ?? e.center?.lat;
+          const eLng = e.lon ?? e.center?.lon;
+          if (eLat === undefined || eLng === undefined) return false;
+          return distanceMeters(lat, lng, eLat, eLng) <= 150;
+        });
+        if (closeNamed.length === 1) {
+          best = closeNamed[0];
+        } else {
+          return {};
+        }
+      }
     } else {
       best = named.find((e) => e.tags?.landuse === "cemetery") ?? named[0];
     }
