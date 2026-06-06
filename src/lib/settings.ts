@@ -59,9 +59,14 @@ export function loadSettings(): AppSettings {
   }
 }
 
+export const SETTINGS_CHANGED_EVENT = "gl_settings_changed";
+
 export function saveSettings(settings: AppSettings): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event(SETTINGS_CHANGED_EVENT));
+    }
   } catch { /* ignore */ }
 }
 

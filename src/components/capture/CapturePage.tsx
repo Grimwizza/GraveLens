@@ -16,7 +16,7 @@ import type { ExtractedGraveData, GeoLocation } from "@/types";
 import { localContrastBoost, unsharpMask } from "@/lib/relief";
 import { resizeForStorage, generateThumbnail, saveToDevice } from "@/lib/imageUtils";
 import OnboardingCarousel from "@/components/onboarding/OnboardingCarousel";
-import { loadSettings } from "@/lib/settings";
+import { loadSettings, SETTINGS_CHANGED_EVENT } from "@/lib/settings";
 
 type Phase = "idle" | "processing" | "queued" | "degraded_prompt";
 
@@ -26,7 +26,18 @@ export default function CapturePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
+  const [settings, setSettings] = useState(() => loadSettings());
   const [phase, setPhase] = useState<Phase>("idle");
+
+  useEffect(() => {
+    const onSettingsChanged = () => {
+      setSettings(loadSettings());
+    };
+    window.addEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged);
+    return () => {
+      window.removeEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged);
+    };
+  }, []);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -241,7 +252,7 @@ export default function CapturePage() {
       const storageDataUrl = await resizeForStorage(pUrl);
       const [thumbnailDataUrl] = await Promise.all([
         generateThumbnail(storageDataUrl),
-        loadSettings().photoSaveTarget === "app-and-device"
+        settings.photoSaveTarget === "app-and-device"
           ? saveToDevice(storageDataUrl, `gravelens-${Date.now()}.jpg`)
           : Promise.resolve(),
       ]);
@@ -307,7 +318,7 @@ export default function CapturePage() {
       const storageDataUrl = await resizeForStorage(previewUrl);
       const [thumbnailDataUrl] = await Promise.all([
         generateThumbnail(storageDataUrl),
-        loadSettings().photoSaveTarget === "app-and-device"
+        settings.photoSaveTarget === "app-and-device"
           ? saveToDevice(storageDataUrl, `gravelens-${Date.now()}.jpg`)
           : Promise.resolve(),
       ]);
@@ -348,7 +359,7 @@ export default function CapturePage() {
             <IdleState
               onUpload={() => fileInputRef.current?.click()}
               onCapture={() => cameraInputRef.current?.click()}
-              showTips={loadSettings().showPhotoTips}
+              showTips={settings.showPhotoTips}
             />
           )
         )}
