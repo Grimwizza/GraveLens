@@ -61,12 +61,12 @@ export async function fetchOsmCemeteryDetails(
   const query = `
 [out:json][timeout:15];
 (
-  node["landuse"="cemetery"](around:800,${lat},${lng});
-  way["landuse"="cemetery"](around:800,${lat},${lng});
-  relation["landuse"="cemetery"](around:800,${lat},${lng});
-  node["amenity"="grave_yard"](around:800,${lat},${lng});
-  way["amenity"="grave_yard"](around:800,${lat},${lng});
-  relation["amenity"="grave_yard"](around:800,${lat},${lng});
+  node["landuse"="cemetery"](around:300,${lat},${lng});
+  way["landuse"="cemetery"](around:300,${lat},${lng});
+  relation["landuse"="cemetery"](around:300,${lat},${lng});
+  node["amenity"="grave_yard"](around:300,${lat},${lng});
+  way["amenity"="grave_yard"](around:300,${lat},${lng});
+  relation["amenity"="grave_yard"](around:300,${lat},${lng});
 );
 out tags;
 `.trim();
@@ -90,12 +90,14 @@ out tags;
     const named = elements.filter((e) => e.tags?.name);
     if (!named.length) return {};
 
-    // Prefer the element whose name best matches the supplied cemetery name,
-    // then fall back to first landuse=cemetery, then first named element.
+    // Prefer the element whose name best matches the supplied cemetery name.
+    // If a name is supplied but no element matches it, do NOT fall back to an
+    // unmatched cemetery. Returning the wrong OSM ID causes cache pollution.
     let best = named[0];
     if (name) {
       const nameMatched = named.find((e) => cemeteryNamesMatch(name, e.tags?.name ?? ""));
-      best = nameMatched ?? named.find((e) => e.tags?.landuse === "cemetery") ?? named[0];
+      if (!nameMatched) return {};
+      best = nameMatched;
     } else {
       best = named.find((e) => e.tags?.landuse === "cemetery") ?? named[0];
     }

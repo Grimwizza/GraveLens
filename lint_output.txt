@@ -34,8 +34,8 @@
   29:9  warning  'textGradId' is assigned a value but never used  @typescript-eslint/no-unused-vars
 
 /Users/benluebbert/Documents/Sites/GraveLens/src/lib/apis/cemetery.ts
-  222:3  warning  'city' is defined but never used   @typescript-eslint/no-unused-vars
-  223:3  warning  'state' is defined but never used  @typescript-eslint/no-unused-vars
+  224:3  warning  'city' is defined but never used   @typescript-eslint/no-unused-vars
+  225:3  warning  'state' is defined but never used  @typescript-eslint/no-unused-vars
 
 /Users/benluebbert/Documents/Sites/GraveLens/src/lib/researchChecklist.ts
   24:10  warning  'hasCoords' is defined but never used      @typescript-eslint/no-unused-vars
