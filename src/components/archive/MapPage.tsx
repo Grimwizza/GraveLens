@@ -33,17 +33,41 @@ export default function MapPage() {
   const [findTrigger, setFindTrigger] = useState(0);
   const [hasManualResults, setHasManualResults] = useState(false);
 
-  // Ghost Tour
+  // Geolocation & Ghost Tour State
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [tourActive, setTourActive] = useState(false);
   const [tourError, setTourError] = useState<string | null>(null);
   const [tourToast, setTourToast] = useState<{ grave: GraveRecord; status: TourEvent["type"] } | null>(null);
   const tourRef = useRef<TourMode | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Central Geolocation Watcher
+  useEffect(() => {
+    if (typeof window === "undefined" || !("geolocation" in navigator)) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setUserLocation([lat, lng]);
+        tourRef.current?.updateLocation(lat, lng);
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
   const handleTourEvent = useCallback((e: TourEvent) => {
+    if (e.type === "finished") {
+      setTourToast(null);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      return;
+    }
     setTourToast({ grave: e.grave, status: e.type });
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setTourToast(null), 8000);
+    if (e.type !== "playing") {
+      toastTimerRef.current = setTimeout(() => setTourToast(null), 8000);
+    }
   }, []);
 
   const toggleTour = useCallback(async () => {
@@ -60,12 +84,15 @@ export default function MapPage() {
     tour.updateGraves(graves);
     try {
       await tour.start();
+      if (userLocation) {
+        tour.updateLocation(userLocation[0], userLocation[1]);
+      }
       tourRef.current = tour;
       setTourActive(true);
     } catch {
       setTourError("Location access is required for Ghost Tour.");
     }
-  }, [tourActive, graves, handleTourEvent]);
+  }, [tourActive, graves, handleTourEvent, userLocation]);
 
   // Keep tour's grave list fresh
   useEffect(() => {
@@ -243,6 +270,7 @@ export default function MapPage() {
           communityGraves={communityGraves}
           findRadius={findRadius}
           findTrigger={findTrigger}
+          userLocation={userLocation}
           onSearchStateChange={(_searching, hasResults) => {
             setHasManualResults(hasResults);
           }}

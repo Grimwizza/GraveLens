@@ -250,6 +250,7 @@ export default function ArchiveMap({
   communityGraves = [],
   findRadius,
   findTrigger,
+  userLocation,
   onSearchStateChange,
   onClearFind,
 }: {
@@ -259,6 +260,7 @@ export default function ArchiveMap({
   communityGraves?: CommunityGraveRecord[];
   findRadius: number;
   findTrigger: number;
+  userLocation: [number, number] | null;
   onSearchStateChange: (searching: boolean, hasResults: boolean) => void;
   onClearFind: () => void;
 }) {
@@ -269,7 +271,6 @@ export default function ArchiveMap({
   const communityLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const overlayLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const userMarkerRef = useRef<import("leaflet").Marker | null>(null);
-  const watchIdRef = useRef<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
   // Search results state
@@ -327,7 +328,7 @@ export default function ArchiveMap({
       let center: [number, number] = [39.8283, -98.5795];
       let zoom = 5;
 
-      const userPos = await getUserLocation();
+      const userPos = userLocation || await getUserLocation();
       if (cancelled) return;
 
       if (userPos) {
@@ -355,38 +356,10 @@ export default function ArchiveMap({
       });
 
       setMapReady(true); // ← signals layer effects to run
-
-      // User location dot
-      const userIcon = L.divIcon({
-        html: `<div style="width:18px;height:18px;border-radius:50%;background:#4a90e2;border:3px solid #fff;box-shadow:0 0 0 4px rgba(74,144,226,0.25),0 2px 8px rgba(0,0,0,0.4);"></div>`,
-        className: "",
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
-      });
-
-      const placeUserDot = (lat: number, lng: number) => {
-        if (userMarkerRef.current) {
-          userMarkerRef.current.setLatLng([lat, lng]);
-        } else {
-          userMarkerRef.current = L.marker([lat, lng], { icon: userIcon, zIndexOffset: 500 }).addTo(map);
-        }
-      };
-
-      if (userPos) placeUserDot(userPos[0], userPos[1]);
-
-      if (navigator.geolocation) {
-        watchIdRef.current = navigator.geolocation.watchPosition(
-          (pos) => { if (!cancelled) placeUserDot(pos.coords.latitude, pos.coords.longitude); },
-          () => {},
-          { enableHighAccuracy: true, maximumAge: 10000 }
-        );
-      }
-
     })();
 
     return () => {
       cancelled = true;
-      if (watchIdRef.current !== null) navigator.geolocation?.clearWatch(watchIdRef.current);
       if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; }
       graveLayerRef.current = null;
       communityLayerRef.current = null;
@@ -395,6 +368,46 @@ export default function ArchiveMap({
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Sync user location marker dot from prop
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const L = leafletRef.current;
+    if (!map || !L || !mapReady) return;
+
+    if (userLocation) {
+      const userIcon = L.divIcon({
+        html: `<div style="width:18px;height:18px;border-radius:50%;background:#4a90e2;border:3px solid #fff;box-shadow:0 0 0 4px rgba(74,144,226,0.25),0 2px 8px rgba(0,0,0,0.4);"></div>`,
+        className: "",
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      });
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setLatLng(userLocation);
+      } else {
+        userMarkerRef.current = L.marker(userLocation, { icon: userIcon, zIndexOffset: 500 }).addTo(map);
+      }
+    } else {
+      if (userMarkerRef.current) {
+        userMarkerRef.current.remove();
+        userMarkerRef.current = null;
+      }
+    }
+  }, [userLocation, mapReady]);
+
+  // Fix initial centering bug when graves load asynchronously
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !mapReady || graves.length === 0) return;
+
+    const center = map.getCenter();
+    if (Math.abs(center.lat - 39.8283) < 0.01 && Math.abs(center.lng - (-98.5795)) < 0.01) {
+      const valid = graves.find(g => g.location?.lat && g.location?.lng);
+      if (valid) {
+        map.setView([valid.location.lat, valid.location.lng], 14);
+      }
+    }
+  }, [graves, mapReady]);
 
   // ── Graves layer (zoom-dependent) ───────────────────────────────────────────
   useEffect(() => {
@@ -704,6 +717,17 @@ export default function ArchiveMap({
   const handleSearchHere = async () => {
     const map = mapInstanceRef.current;
     if (!map) return;
+    
+    const b = map.getBounds();
+    const sw = b.getSouthWest();
+    const ne = b.getNorthEast();
+
+    // Prevent huge queries over large regions
+    if (Math.abs(ne.lat - sw.lat) > 1.2 || Math.abs(ne.lng - sw.lng) > 1.5) {
+      alert("Search area is too large. Please zoom in to search.");
+      return;
+    }
+
     setIsSearching(true);
     
     // Clear old state so legend and map accurately reflect a fresh search
@@ -713,7 +737,6 @@ export default function ArchiveMap({
     setManualRelatives(null);
 
     try {
-      const b = map.getBounds();
       const sw = b.getSouthWest();
       const ne = b.getNorthEast();
       const z = map.getZoom();

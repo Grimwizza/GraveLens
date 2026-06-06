@@ -22,12 +22,12 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
 }
 
 export interface TourEvent {
-  type: "entered" | "playing" | "no_audio" | "error";
+  type: "entered" | "playing" | "no_audio" | "error" | "finished";
   grave: GraveRecord;
 }
 
 export class TourMode {
-  private watchId: number | null = null;
+  private isActive = false;
   private lastPlayed = new Map<string, number>();
   private audio: HTMLAudioElement | null = null;
   private onEvent: (e: TourEvent) => void;
@@ -42,30 +42,19 @@ export class TourMode {
   }
 
   start(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (!("geolocation" in navigator)) {
-        reject(new Error("Geolocation not available"));
-        return;
-      }
-
-      this.watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          this.handlePosition(pos.coords.latitude, pos.coords.longitude);
-          resolve();
-        },
-        (err) => reject(err),
-        { enableHighAccuracy: true, maximumAge: 5000 }
-      );
-    });
+    this.isActive = true;
+    return Promise.resolve();
   }
 
   stop() {
-    if (this.watchId !== null) {
-      navigator.geolocation.clearWatch(this.watchId);
-      this.watchId = null;
-    }
+    this.isActive = false;
     this.audio?.pause();
     this.audio = null;
+  }
+
+  updateLocation(lat: number, lng: number) {
+    if (!this.isActive) return;
+    this.handlePosition(lat, lng);
   }
 
   private async handlePosition(lat: number, lng: number) {
@@ -104,8 +93,20 @@ export class TourMode {
       this.onEvent({ type: "playing", grave });
       this.audio?.pause();
       this.audio = new Audio(dataUrl);
-      this.audio.play().catch(() => this.onEvent({ type: "error", grave }));
+      this.audio.addEventListener("ended", () => {
+        this.onEvent({ type: "finished", grave });
+      });
+      
+      const playPromise = this.audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          if (err.name !== "AbortError") {
+            this.onEvent({ type: "error", grave });
+          }
+        });
+      }
       break; // play one grave at a time
     }
   }
 }
+
