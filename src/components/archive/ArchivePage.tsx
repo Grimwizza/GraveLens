@@ -93,6 +93,20 @@ function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number):
 
 function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
 
+// ── Auto-review predicate ──────────────────────────────────────────────────
+// Records matching any of these conditions are routed to the Review tab and
+// excluded from the main Markers list, regardless of the needsReview flag.
+const TYPICAL_NAME_RE = /^[a-zA-ZÀ-ÿ\s\-'.]+$/;
+
+function shouldReview(g: GraveRecord): boolean {
+  if (g.needsReview) return true;
+  const { confidence, name, birthYear, deathYear } = g.extracted;
+  if (confidence === "low") return true;
+  if (birthYear == null && deathYear == null) return true;
+  if (name && !TYPICAL_NAME_RE.test(name)) return true;
+  return false;
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 export default function ArchivePage() {
   const [graves, setGraves] = useState<GraveRecord[]>([]);
@@ -520,13 +534,13 @@ export default function ArchivePage() {
   }, [graves, cemeteries]);
 
   // ── Working Scans: records flagged for manual completion ─────────────────
-  const workingScans = useMemo(() => graves.filter((g) => g.needsReview), [graves]);
+  const workingScans = useMemo(() => graves.filter(shouldReview), [graves]);
 
   // ── Filtered + sorted graves ──────────────────────────────────────────────
   const filteredGraves = useMemo(() => {
     let result = graves.filter((g) => {
-      // Exclude records flagged for manual review — shown in Working Scans section instead
-      if (g.needsReview) return false;
+      // Exclude records that belong in Review tab
+      if (shouldReview(g)) return false;
       // Exclude records that represent a place (cemetery/graveyard), not an individual marker
       const mType = g.extracted?.markerType?.toLowerCase() ?? "";
       if (PLACE_MARKER_TYPES.has(mType)) return false;
@@ -1041,6 +1055,8 @@ export default function ArchivePage() {
                     const hasDates = g.extracted.birthYear != null || g.extracted.deathYear != null;
                     const hasName = !!g.extracted.name;
                     const hasCemetery = !!g.location?.cemetery;
+                    const isLowConfidence = g.extracted.confidence === "low";
+                    const hasUnusualChars = !!g.extracted.name && !TYPICAL_NAME_RE.test(g.extracted.name);
                     const dateRange = hasDates
                       ? [g.extracted.birthYear ?? "?", g.extracted.deathYear ?? "?"].join(" – ")
                       : null;
@@ -1069,7 +1085,7 @@ export default function ArchivePage() {
                           <p className="text-stone-500 text-xs truncate">
                             {locationLine || "Location unknown"}
                           </p>
-                          {/* Missing-field badges */}
+                          {/* Review-reason badges */}
                           <div className="flex flex-wrap gap-1 mt-1">
                             {!hasName && (
                               <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-amber-500/12 text-amber-400 font-bold uppercase tracking-wide">Name</span>
@@ -1079,6 +1095,12 @@ export default function ArchivePage() {
                             )}
                             {!hasCemetery && (
                               <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-stone-700/80 text-stone-400 font-bold uppercase tracking-wide">Cemetery</span>
+                            )}
+                            {isLowConfidence && (
+                              <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-amber-500/12 text-amber-400 font-bold uppercase tracking-wide">Low confidence</span>
+                            )}
+                            {hasUnusualChars && (
+                              <span className="text-[0.6rem] px-1.5 py-0.5 rounded bg-amber-500/12 text-amber-400 font-bold uppercase tracking-wide">Verify text</span>
                             )}
                           </div>
                         </div>
