@@ -133,12 +133,13 @@ export async function getNotableFiguresInBounds(
 
   const query = `
 SELECT DISTINCT ?item ?itemLabel ?coords ?occupation ?occupationLabel ?wikipedia WHERE {
+  ?item wdt:P119 ?burialPlace .
+  ?item wdt:P31 wd:Q5 .
   SERVICE wikibase:box {
-    ?item wdt:P625 ?coords .
+    ?burialPlace wdt:P625 ?coords .
     bd:serviceParam wikibase:cornerSouthWest "Point(${safeWest} ${safeSouth})"^^geo:wktLiteral .
     bd:serviceParam wikibase:cornerNorthEast "Point(${safeEast} ${safeNorth})"^^geo:wktLiteral .
   }
-  ?item wdt:P119 ?burialPlace .
   ?item wikibase:sitelinks ?sitelinks .
   FILTER(?sitelinks >= ${safeLinks})
 
@@ -160,7 +161,7 @@ LIMIT 100`.trim();
           Accept: "application/sparql-results+json",
           "User-Agent": "GraveLens/1.0 (genealogy research app)",
         },
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(12000),
       }
     );
 
