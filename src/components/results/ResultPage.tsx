@@ -23,6 +23,7 @@ import DesktopNav from "@/components/layout/DesktopNav";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { toNameCase } from "@/lib/nameUtils";
 import { detectConflicts } from "@/lib/conflictDetector";
+import { shouldReview, TYPICAL_NAME_RE } from "@/lib/reviewUtils";
 import type { ResearchLink } from "@/lib/researchLinks";
 import type {
   GraveRecord,
@@ -1289,9 +1290,43 @@ export default function ResultPage({ id }: { id: string }) {
 
           {/* ── ZONE 4: RECORDS ── The evidence ───────────────────────────── */}
 
+          {/* Contextual re-analyze card: shown for archived records flagged for review */}
+          {isArchivedLoad.current && !researchLoading && !refreshing && shouldReview(graveRecord) && (() => {
+            const isLow = extracted.confidence === "low";
+            const missingDates = extracted.birthYear == null && extracted.deathYear == null;
+            const unusualChars = !!extracted.name && !TYPICAL_NAME_RE.test(extracted.name);
+            const reasons = [
+              isLow && "Low confidence scan",
+              missingDates && "Dates missing",
+              unusualChars && "Name contains unusual characters",
+            ].filter(Boolean).join(" · ");
+            return (
+              <div className="rounded-2xl mb-1 overflow-hidden" style={{ border: "1px solid rgba(245,158,11,0.2)", background: "rgba(245,158,11,0.04)" }}>
+                <div className="px-4 pt-3 pb-1">
+                  <p className="text-[0.7rem] font-bold uppercase tracking-widest text-amber-400">Needs attention</p>
+                  {reasons && <p className="text-stone-500 text-[0.72rem] mt-0.5">{reasons}</p>}
+                </div>
+                <div className="flex border-t border-amber-500/10">
+                  <button
+                    onClick={() => handleRefreshData()}
+                    className="flex-1 px-4 py-2.5 text-xs font-semibold text-amber-300 text-center active:bg-white/5 transition-colors border-r border-amber-500/10"
+                  >
+                    Re-analyze photo
+                  </button>
+                  <button
+                    onClick={() => handleRefreshData(extracted, true)}
+                    className="flex-1 px-4 py-2.5 text-xs font-semibold text-stone-400 text-center active:bg-white/5 transition-colors"
+                  >
+                    Refresh research
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Stale-research banner: shown for archived graves loaded from IDB
               that haven't been refreshed this session. Fades once ↺ is tapped. */}
-          {isArchivedLoad.current && !researchLoading && !refreshing && (
+          {isArchivedLoad.current && !researchLoading && !refreshing && !shouldReview(graveRecord) && (
             <button
               onClick={() => handleRefreshData()}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-left mb-1 transition-colors active:opacity-80"
@@ -1306,7 +1341,7 @@ export default function ResultPage({ id }: { id: string }) {
                   Records loaded from archive
                 </p>
                 <p className="text-stone-500 text-[0.72rem] mt-0.5">
-                  Tap to re-run all research lookups and surface the latest records
+                  Tap to re-analyze photo and refresh all research
                 </p>
               </div>
             </button>

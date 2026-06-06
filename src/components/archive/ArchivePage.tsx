@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import PageShell from "@/components/layout/PageShell";
-import { getAllGraves, deleteGrave, saveGrave, getAllCemeteries, deleteCemetery, saveCemetery, getQueuedItems } from "@/lib/storage";
+import { getAllGraves, getGrave, deleteGrave, saveGrave, getAllCemeteries, deleteCemetery, saveCemetery, getQueuedItems } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/browser";
 import { fetchAllFromCloud, deleteFromCloud } from "@/lib/cloudSync";
 import type { GraveRecord, CemeteryRecord, QueuedCapture } from "@/types";
@@ -12,6 +12,9 @@ import { generateThumbnail } from "@/lib/imageUtils";
 import ThematicIllustration from "@/components/ui/ThematicIllustration";
 import { reverseGeocode } from "@/lib/apis/nominatim";
 import { formatOpeningHours, cemeteryId } from "@/lib/apis/cemetery";
+import { shouldReview, TYPICAL_NAME_RE } from "@/lib/reviewUtils";
+import { buildAllResearchLinks } from "@/lib/researchLinks";
+import { CURRENT_RESEARCH_VERSION } from "@/lib/researchVersion";
 
 type SortField = "birthYear" | "deathYear" | "name" | "dateAdded";
 type SortDir = "asc" | "desc";
@@ -93,26 +96,13 @@ function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number):
 
 function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
 
-// ── Auto-review predicate ──────────────────────────────────────────────────
-// Records matching any of these conditions are routed to the Review tab and
-// excluded from the main Markers list, regardless of the needsReview flag.
-const TYPICAL_NAME_RE = /^[a-zA-ZÀ-ÿ\s\-'.]+$/;
-
-function shouldReview(g: GraveRecord): boolean {
-  if (g.needsReview) return true;
-  const { confidence, name, birthYear, deathYear } = g.extracted;
-  if (confidence === "low") return true;
-  if (birthYear == null && deathYear == null) return true;
-  if (name && !TYPICAL_NAME_RE.test(name)) return true;
-  return false;
-}
-
 // ── Component ──────────────────────────────────────────────────────────────
 export default function ArchivePage() {
   const [graves, setGraves] = useState<GraveRecord[]>([]);
   const [cemeteries, setCemeteries] = useState<CemeteryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [enriching, setEnriching] = useState(false);
+  const [bulkEnriching, setBulkEnriching] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [archiveTab, setArchiveTab] = useState<ArchiveTab>("markers");
 
@@ -194,6 +184,106 @@ export default function ArchivePage() {
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Zero-cost backfill: researchLinks for pre-v2 records (runs once) ────
+  // buildAllResearchLinks is pure/free; records saved before this feature
+  // existed have researchLinks: undefined. Guard with localStorage so it
+  // only runs once across all sessions on this device.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (localStorage.getItem("gl_backfill_v2_done")) return;
+    (async () => {
+      const all = await getAllGraves();
+      const needsBackfill = all
+        .filter((g) => g.extracted.name && !g.research?.researchLinks)
+        .slice(0, 20);
+      for (const g of needsBackfill) {
+        try {
+          const links = buildAllResearchLinks({
+            firstName:   g.extracted.firstName ?? "",
+            lastName:    g.extracted.lastName  ?? "",
+            birthYear:   g.extracted.birthYear  ?? null,
+            deathYear:   g.extracted.deathYear  ?? null,
+            state:       g.location?.state      ?? "",
+            inscription: g.extracted.inscription ?? "",
+            symbols:     g.extracted.symbols     ?? [],
+          });
+          if (links.length === 0) continue;
+          const fresh = await getGrave(g.id);
+          const base = fresh ?? g;
+          await saveGrave({ ...base, research: { ...base.research, researchLinks: links } });
+          setGraves((prev) => prev.map((r) =>
+            r.id === g.id ? { ...r, research: { ...r.research, researchLinks: links } } : r
+          ));
+        } catch { /* non-fatal */ }
+      }
+      if (needsBackfill.length === 0) {
+        localStorage.setItem("gl_backfill_v2_done", "1");
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Bulk research re-enrichment (runs on load, capped at 5/session) ──────
+  // Records scanned before new lookup endpoints (NARA items, ±1yr windows,
+  // research links) have stale research. Re-run /api/lookup for up to 5
+  // unversioned records per session; each saves immediately to IDB.
+  useEffect(() => {
+    if (loading) return;
+    let active = true;
+
+    (async () => {
+      const all = await getAllGraves();
+      const stale = all
+        .filter((g) =>
+          g.extracted.name &&
+          (g.research?.researchVersion ?? 0) < CURRENT_RESEARCH_VERSION
+        )
+        .slice(0, 5);
+      if (stale.length === 0) return;
+
+      setBulkEnriching(true);
+      for (const g of stale) {
+        if (!active) break;
+        try {
+          const { birthYear, deathYear, firstName, lastName, inscription, symbols } = g.extracted;
+          const { lat, lng, city, county, state, cemetery } = g.location ?? {};
+          const res = await fetch("/api/lookup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: g.extracted.name, firstName, lastName, birthYear, deathYear, lat, lng, city, county, state, cemetery, inscription, symbols }),
+          });
+          if (!res.ok || !active) continue;
+          const data = await res.json();
+
+          const fresh = await getGrave(g.id);
+          const base = fresh ?? g;
+          const merged: typeof base.research = {
+            ...base.research,
+            ...data,
+            // Preserve user-facing content that should not be overwritten
+            storyScript:    base.research?.storyScript,
+            narrative:      base.research?.narrative,
+            narratives:     base.research?.narratives,
+            epitaphSource:  base.research?.epitaphSource,
+            epitaphMeaning: base.research?.epitaphMeaning,
+            culturalContext: base.research?.culturalContext,
+          };
+          await saveGrave({ ...base, research: merged });
+          if (active) {
+            setGraves((prev) => prev.map((r) =>
+              r.id === g.id ? { ...r, research: merged } : r
+            ));
+          }
+          await sleep(750);
+        } catch { /* non-fatal — will retry on next session */ }
+      }
+      if (active) setBulkEnriching(false);
+    })();
+
+    return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   // ── Load graves ──────────────────────────────────────────────────────────
   // Stale-while-revalidate: show local IndexedDB data immediately, then
@@ -286,7 +376,9 @@ export default function ArchivePage() {
     if (loading) return;
 
     const needsEnrichment = graves.filter(
-      (g) => g.location?.lat && g.location?.lng && !g.location?.cemetery
+      (g) =>
+        g.location?.lat && g.location?.lng &&
+        (!g.location?.cemetery || !g.location?.city || !g.location?.state)
     );
     if (needsEnrichment.length === 0) return;
 
@@ -1045,10 +1137,16 @@ export default function ArchivePage() {
               </div>
             ) : (
               <>
-                <div className="px-5 pt-5 pb-2">
+                <div className="px-5 pt-5 pb-2 flex items-center justify-between gap-3">
                   <p className="text-stone-500 text-xs leading-relaxed">
                     {workingScans.length} {workingScans.length === 1 ? "record" : "records"} pending — tap any entry to complete it.
                   </p>
+                  {bulkEnriching && (
+                    <span className="flex items-center gap-1.5 text-stone-600 text-xs shrink-0">
+                      <span className="w-3 h-3 border border-stone-600 border-t-transparent rounded-full animate-spin" />
+                      Updating…
+                    </span>
+                  )}
                 </div>
                 <div className="divide-y divide-stone-800/60">
                   {workingScans.map((g) => {

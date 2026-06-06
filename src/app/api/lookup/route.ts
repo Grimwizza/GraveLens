@@ -25,6 +25,7 @@ import { buildAllResearchLinks } from "@/lib/researchLinks";
 import type { ResearchData, GeoLocation, NaraItemRecord } from "@/types";
 import { createClient } from "@/lib/supabase/server";
 import { checkLocalHistoryCache, saveLocalHistoryCache } from "@/lib/community";
+import { CURRENT_RESEARCH_VERSION } from "@/lib/researchVersion";
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
@@ -217,6 +218,7 @@ export async function POST(req: NextRequest) {
       surnameSoundex:     surnameSoundex || undefined,
       surnameVariants:    surnameVariants.length > 0 ? surnameVariants : undefined,
       researchLinks:      researchLinks.length  > 0 ? researchLinks  : undefined,
+      researchVersion:    CURRENT_RESEARCH_VERSION,
     });
   } catch (error) {
     console.error("Lookup error:", error);

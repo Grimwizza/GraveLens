@@ -44,4 +44,6 @@ Skill definitions live in `.agent/skills/*/SKILL.md` (custom) and `.claude/skill
 * **`context_handoff`** — When the user asks for a handoff, summary, or the session is clearly running long: read this skill and generate a compressed `handoff.md` in the project root so the next session can resume instantly.
 * **`e2e_value_verification`** — When the user asks "does this work?" or "test this flow": read and apply. Simulate aggressive user paths, not just happy paths.
 * **`git_pr_workflow`** — When the user asks to commit or open a PR: read and apply. Use Conventional Commits format and `gh pr create`.
+* **`genealogical-apis`** — Read and apply when adding, modifying, or debugging external genealogical API searches (OSM, NARA, FamilySearch, SSDI, Immigration, Wikidata) or phonetic query normalization.
+* **`offline-pwa-storage`** — Read and apply when managing IndexedDB databases, TTS audio caching, background synchronization queues, or browser quota limits.
 <!-- END:nextjs-agent-rules -->

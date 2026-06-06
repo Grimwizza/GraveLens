@@ -1,0 +1,1 @@
+export const CURRENT_RESEARCH_VERSION = 2;
