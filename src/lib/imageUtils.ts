@@ -1,5 +1,15 @@
+const isWebpSupported = (() => {
+  if (typeof document === "undefined") return false;
+  try {
+    const canvas = document.createElement("canvas");
+    return canvas.toDataURL("image/webp").indexOf("data:image/webp") === 0;
+  } catch {
+    return false;
+  }
+})();
+
 /**
- * Resize a data URL so the longest edge is at most 1200 px at 80% JPEG quality.
+ * Resize a data URL so the longest edge is at most 1200 px at 80% JPEG/WebP quality.
  * Used for the photoDataUrl stored in IndexedDB (archive thumbnail).
  * Shared between CapturePage and PhotoEditorModal.
  */
@@ -17,7 +27,8 @@ export function resizeForStorage(dataUrl: string): Promise<string> {
       const ctx = canvas.getContext("2d");
       if (!ctx) return reject(new Error("Canvas unavailable"));
       ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL("image/jpeg", 0.80));
+      const format = isWebpSupported ? "image/webp" : "image/jpeg";
+      resolve(canvas.toDataURL(format, 0.80));
     };
     img.onerror = () => reject(new Error("Failed to load image for storage resizing"));
     img.src = dataUrl;
@@ -25,7 +36,7 @@ export function resizeForStorage(dataUrl: string): Promise<string> {
 }
 
 /**
- * Generate a small preview thumbnail (300 px longest edge, 65% JPEG).
+ * Generate a small preview thumbnail (300 px longest edge, 65% JPEG/WebP).
  * Used in archive list/tile/coverflow views to avoid parsing the full photo on each render.
  */
 export function generateThumbnail(dataUrl: string): Promise<string> {
@@ -42,7 +53,8 @@ export function generateThumbnail(dataUrl: string): Promise<string> {
       const ctx = canvas.getContext("2d");
       if (!ctx) return reject(new Error("Canvas unavailable"));
       ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL("image/jpeg", 0.65));
+      const format = isWebpSupported ? "image/webp" : "image/jpeg";
+      resolve(canvas.toDataURL(format, 0.65));
     };
     img.onerror = () => reject(new Error("Failed to load image for thumbnail"));
     img.src = dataUrl;
