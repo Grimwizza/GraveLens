@@ -432,19 +432,37 @@ export default function ArchiveMap({
       validGraves.forEach((grave) => {
         const name = grave.extracted.name || "Unknown";
         const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" – ");
+        
+        const appleUrl = `https://maps.apple.com/?q=${encodeURIComponent(name)}&ll=${grave.location.lat},${grave.location.lng}`;
+        const googleUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&center=${grave.location.lat},${grave.location.lng}`;
+        const wikiUrl = grave.location?.cemeteryWikipedia || (grave.location?.cemetery ? `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(grave.location.cemetery)}` : undefined);
+
         const popup = `
-          <div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
+          <div style="font-family:system-ui;min-width:180px;padding:10px;text-align:center;">
             <a href="/result/${grave.id}" style="text-decoration:none;display:block;">
               <p style="font-family:Georgia,serif;font-size:1rem;font-weight:600;color:var(--t-stone-50);margin:0 0 2px;">${name}</p>
               ${dates ? `<p style="font-size:0.75rem;color:var(--t-gold-500);margin:0 0 6px;">${dates}</p>` : ""}
               <img src="${grave.photoDataUrl}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px;" />
-              <div style="font-size:0.7rem;font-weight:700;color:var(--t-gold-500);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;justify-content:center;gap:4px;">
+              <div style="font-size:0.7rem;font-weight:700;color:var(--t-gold-500);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;justify-content:center;gap:4px;margin-bottom:8px;">
                 View Archive Entry
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="9 18 15 12 9 6"></polyline>
                 </svg>
               </div>
             </a>
+            <div style="display:flex;gap:6px;margin-top:6px;margin-bottom:6px;">
+              <a href="${appleUrl}" target="_blank"
+                 style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:6px 2px;background:var(--t-stone-700);color:var(--t-stone-50);border-radius:8px;font-size:0.7rem;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#007AFF"/><path d="M12 7l4 10-4-2-4 2 4-10z" fill="white"/></svg>
+                Apple
+              </a>
+              <a href="${googleUrl}" target="_blank"
+                 style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:6px 2px;background:var(--t-stone-700);color:var(--t-stone-50);border-radius:8px;font-size:0.7rem;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/><circle cx="12" cy="9" r="2.5" fill="#FBBC05"/></svg>
+                Google
+              </a>
+            </div>
+            ${wikiUrl ? `<a href="${wikiUrl}" target="_blank" style="display:block;padding:6px;background:var(--t-gold-500);color:#1a1917;text-align:center;border-radius:8px;font-size:0.7rem;font-weight:700;text-decoration:none;">Search Wikipedia →</a>` : ""}
           </div>`;
         L.marker([grave.location.lat, grave.location.lng], { icon: graveIcon })
           .addTo(layer)
@@ -466,11 +484,28 @@ export default function ArchiveMap({
       });
 
       visitedCemeteries.forEach((c) => {
+        const appleUrl = `https://maps.apple.com/?q=${encodeURIComponent(c.name)}&ll=${c.lat},${c.lng}`;
+        const googleUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.name)}&center=${c.lat},${c.lng}`;
+        const wikiUrl = `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(c.name)}`;
+
         const popup = `
-          <div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
+          <div style="font-family:system-ui;min-width:180px;padding:10px;text-align:center;">
             <p style="font-family:Georgia,serif;font-size:1rem;font-weight:600;color:var(--t-stone-50);margin:0 0 2px;">${c.name}</p>
             <p style="font-size:0.75rem;color:var(--t-gold-500);margin:0 0 4px;">Visited Location</p>
-            <p style="font-size:0.7rem;color:var(--t-stone-500);">${c.count} archive ${c.count === 1 ? 'record' : 'records'}</p>
+            <p style="font-size:0.7rem;color:var(--t-stone-500);margin-bottom:8px;">${c.count} archive ${c.count === 1 ? 'record' : 'records'}</p>
+            <div style="display:flex;gap:6px;margin-bottom:6px;">
+              <a href="${appleUrl}" target="_blank"
+                 style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:6px 2px;background:var(--t-stone-700);color:var(--t-stone-50);border-radius:8px;font-size:0.7rem;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#007AFF"/><path d="M12 7l4 10-4-2-4 2 4-10z" fill="white"/></svg>
+                Apple
+              </a>
+              <a href="${googleUrl}" target="_blank"
+                 style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:6px 2px;background:var(--t-stone-700);color:var(--t-stone-50);border-radius:8px;font-size:0.7rem;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/><circle cx="12" cy="9" r="2.5" fill="#FBBC05"/></svg>
+                Google
+              </a>
+            </div>
+            <a href="${wikiUrl}" target="_blank" style="display:block;padding:6px;background:var(--t-gold-500);color:#1a1917;text-align:center;border-radius:8px;font-size:0.7rem;font-weight:700;text-decoration:none;">Search Wikipedia →</a>
           </div>`;
         L.marker([c.lat, c.lng], { icon: visitedIcon })
           .addTo(layer)
@@ -510,14 +545,32 @@ export default function ArchiveMap({
       const icon = g.tier === "friend" ? friendIcon : communityIcon;
       const dates = [g.birthDate, g.deathDate].filter(Boolean).join(" – ");
       const rankLabel = `Rank ${g.contributorRank}`;
+      
+      const appleUrl = `https://maps.apple.com/?q=${encodeURIComponent(g.name)}&ll=${g.lat},${g.lng}`;
+      const googleUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(g.name)}&center=${g.lat},${g.lng}`;
+      const wikiUrl = g.cemetery ? `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(g.cemetery)}` : undefined;
+
       const popup = `
-        <div style="font-family:system-ui;min-width:160px;padding:10px;text-align:center;">
+        <div style="font-family:system-ui;min-width:180px;padding:10px;text-align:center;">
           <p style="font-family:Georgia,serif;font-size:1rem;font-weight:600;color:var(--t-stone-50);margin:0 0 2px;">${g.name}</p>
           ${dates ? `<p style="font-size:0.75rem;color:#a855f7;margin:0 0 4px;">${dates}</p>` : ""}
           ${g.cemetery ? `<p style="font-size:0.7rem;color:var(--t-stone-500);margin:0 0 4px;">${g.cemetery}</p>` : ""}
           <img src="${g.photoUrl}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px;" />
-          <p style="font-size:0.7rem;color:var(--t-stone-500);margin:0;">${g.contributorLabel} · ${rankLabel}</p>
-          ${g.communityNote ? `<p style="font-size:0.7rem;color:#d0cbc5;margin:4px 0 0;font-style:italic;">"${g.communityNote}"</p>` : ""}
+          <p style="font-size:0.7rem;color:var(--t-stone-500);margin:0 0 8px;">${g.contributorLabel} · ${rankLabel}</p>
+          ${g.communityNote ? `<p style="font-size:0.7rem;color:#d0cbc5;margin:0 0 8px;font-style:italic;">"${g.communityNote}"</p>` : ""}
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <a href="${appleUrl}" target="_blank"
+               style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:6px 2px;background:var(--t-stone-700);color:var(--t-stone-50);border-radius:8px;font-size:0.7rem;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#007AFF"/><path d="M12 7l4 10-4-2-4 2 4-10z" fill="white"/></svg>
+              Apple
+            </a>
+            <a href="${googleUrl}" target="_blank"
+               style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:6px 2px;background:var(--t-stone-700);color:var(--t-stone-50);border-radius:8px;font-size:0.7rem;font-weight:600;text-decoration:none;border:1px solid #3a3733;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#4285F4"/><circle cx="12" cy="9" r="2.5" fill="#FBBC05"/></svg>
+              Google
+            </a>
+          </div>
+          ${wikiUrl ? `<a href="${wikiUrl}" target="_blank" style="display:block;padding:6px;background:var(--t-gold-500);color:#1a1917;text-align:center;border-radius:8px;font-size:0.7rem;font-weight:700;text-decoration:none;">Search Wikipedia →</a>` : ""}
         </div>`;
       L.marker([g.lat, g.lng], { icon })
         .addTo(layer)
