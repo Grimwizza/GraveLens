@@ -16,7 +16,7 @@ import { shouldReview, TYPICAL_NAME_RE } from "@/lib/reviewUtils";
 import { buildAllResearchLinks } from "@/lib/researchLinks";
 import { CURRENT_RESEARCH_VERSION } from "@/lib/researchVersion";
 
-type SortField = "birthYear" | "deathYear" | "name" | "dateAdded";
+type SortField = "birthYear" | "deathYear" | "name" | "lastName" | "ageAtDeath" | "cemetery" | "dateAdded";
 type SortDir = "asc" | "desc";
 type ConfidenceFilter = "" | "high" | "medium" | "low" | "needs_review";
 type ViewMode = "list" | "tile" | "cover";
@@ -707,11 +707,33 @@ export default function ArchivePage() {
         const cmp = aName.localeCompare(bName);
         return sortDir === "asc" ? cmp : -cmp;
       }
+      if (sortField === "lastName") {
+        const aLast = (a.extracted.lastName ?? "").toLowerCase();
+        const bLast = (b.extracted.lastName ?? "").toLowerCase();
+        if (aLast !== bLast) {
+          const cmp = aLast.localeCompare(bLast);
+          return sortDir === "asc" ? cmp : -cmp;
+        }
+        const aFirst = (a.extracted.firstName ?? "").toLowerCase();
+        const bFirst = (b.extracted.firstName ?? "").toLowerCase();
+        const cmp = aFirst.localeCompare(bFirst);
+        return sortDir === "asc" ? cmp : -cmp;
+      }
+      if (sortField === "cemetery") {
+        const aCem = (a.location?.cemetery ?? "").toLowerCase();
+        const bCem = (b.location?.cemetery ?? "").toLowerCase();
+        const cmp = aCem.localeCompare(bCem);
+        return sortDir === "asc" ? cmp : -cmp;
+      }
       if (sortField === "dateAdded") {
         return sortDir === "asc" ? a.timestamp - b.timestamp : b.timestamp - a.timestamp;
       }
-      const aVal = a.extracted[sortField] ?? null;
-      const bVal = b.extracted[sortField] ?? null;
+      let aVal: number | null = null;
+      let bVal: number | null = null;
+      if (sortField === "birthYear" || sortField === "deathYear" || sortField === "ageAtDeath") {
+        aVal = a.extracted[sortField] ?? null;
+        bVal = b.extracted[sortField] ?? null;
+      }
       if (aVal === null && bVal === null) return 0;
       if (aVal === null) return 1;
       if (bVal === null) return -1;
@@ -908,20 +930,29 @@ export default function ArchivePage() {
                   onChange={(e) => setSortField(e.target.value as SortField)}
                   className="flex-1 bg-stone-800 text-stone-200 text-xs rounded-lg px-3 py-2 border border-stone-700 appearance-none"
                 >
-                  <option value="name">Name</option>
-                  <option value="deathYear">Death year</option>
-                  <option value="birthYear">Birth year</option>
-                  <option value="dateAdded">Date added</option>
+                  <option value="lastName">Last Name (Family)</option>
+                  <option value="name">First Name</option>
+                  <option value="deathYear">Death Year</option>
+                  <option value="birthYear">Birth Year</option>
+                  <option value="ageAtDeath">Age at Death</option>
+                  <option value="cemetery">Cemetery</option>
+                  <option value="dateAdded">Date Added</option>
                 </select>
                 <button
                   onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
                   className="flex items-center gap-1.5 px-3 py-2 bg-stone-800 border border-stone-700 text-stone-300 text-xs rounded-lg shrink-0"
                 >
-                  {sortField === "name" ? (
+                  {sortField === "name" || sortField === "lastName" || sortField === "cemetery" ? (
                     sortDir === "asc" ? (
                       <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v8M3 7l3 3 3-3" /></svg>A → Z</>
                     ) : (
                       <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 10V2M3 5l3-3 3 3" /></svg>Z → A</>
+                    )
+                  ) : sortField === "ageAtDeath" ? (
+                    sortDir === "asc" ? (
+                      <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v8M3 7l3 3 3-3" /></svg>Youngest first</>
+                    ) : (
+                      <><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 10V2M3 5l3-3 3 3" /></svg>Oldest first</>
                     )
                   ) : (
                     sortDir === "asc" ? (
