@@ -12,50 +12,122 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GraveRecord } from "@/types";
 import { getAllGraves, getGrave, saveGrave } from "@/lib/storage";
+import { photoProxyUrl } from "@/lib/photoUrl";
 import {
   loadUnlocks,
   loadStats,
   updateStats,
+  isUnlockSeen,
+  ACHIEVEMENT_UNSEEN_EVENT,
   type UnlockRecord,
   type AppStats,
   totalXP,
   getRank,
 } from "@/lib/achievements";
 
+/**
+ * Merge two unlock lists: union by id, keeping the earliest `unlockedAt` and
+ * treating a record as seen if it was viewed on EITHER device (unseen only when
+ * both sides are unseen). This keeps the Explorer "unseen" badge consistent
+ * across devices — viewing on one device clears it everywhere after sync.
+ */
+function mergeUnlockLists(a: UnlockRecord[], b: UnlockRecord[]): UnlockRecord[] {
+  const map = new Map<string, UnlockRecord>();
+  for (const u of [...a, ...b]) {
+    const prev = map.get(u.id);
+    if (!prev) {
+      map.set(u.id, { ...u });
+      continue;
+    }
+    map.set(u.id, {
+      id: u.id,
+      unlockedAt: Math.min(prev.unlockedAt, u.unlockedAt),
+      seen: isUnlockSeen(prev) || isUnlockSeen(u),
+    });
+  }
+  return Array.from(map.values());
+}
+
 const BUCKET = "grave-photos";
 const SYNC_KEY = "gl_synced_at";
+
+/** Best-effort human-readable message out of an unknown thrown value. */
+function errorMessage(err: unknown): string {
+  if (err && typeof err === "object" && "message" in err) {
+    return String((err as { message: unknown }).message);
+  }
+  return String(err);
+}
+
+/**
+ * Fired (on `window`) after the archive is pushed to the cloud — by the manual
+ * "Back Up Data" action or the background auto-backup. UI that shows a pending
+ * count (e.g. the avatar badge) listens for this to refresh.
+ */
+export const ARCHIVE_SYNCED_EVENT = "gl:archive-synced";
+
+export function notifyArchiveSynced(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(ARCHIVE_SYNCED_EVENT));
+  }
+}
+
+/**
+ * Fired (on `window`) when local explorer progress changes — i.e. new
+ * achievements unlocked, which may raise the user's rank and make a rank reward
+ * claimable. The ecosystem context listens for this to refresh the claimable-
+ * rewards indicator (the account-badge dot) without waiting for the next load.
+ */
+export const EXPLORER_PROGRESS_EVENT = "gl:explorer-progress";
+
+export function notifyExplorerProgress(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(EXPLORER_PROGRESS_EVENT));
+  }
+}
 
 // ── Photo upload ──────────────────────────────────────────────────────────────
 
 /**
- * Upload a base64 data URL to Supabase Storage and return the public CDN URL.
- * If the value is already an https:// URL the upload is skipped (idempotent).
+ * Ensure a grave's photo bytes are in the PRIVATE grave-photos bucket and return
+ * its storage path ({userId}/{graveId}.jpg), which is what gets stored in the
+ * gravelens_graves.photo_url column. The bucket is no longer public — photos are
+ * served through the authenticated /api/photo/[id] proxy (see photoProxyUrl).
+ *
+ * The write goes through POST /api/photo/upload, which uploads via the SERVICE
+ * ROLE (bypassing Storage RLS) and derives the owner from the session. This means
+ * the browser never needs a client-side write policy on the bucket — the same
+ * server-enforced model the read proxy already uses. `userId` is used only to
+ * build the returned path (the server independently derives the real owner).
+ *
+ * Idempotent: if `dataUrl` is not a fresh `data:` URL (i.e. it's an already-
+ * uploaded path or proxy URL), the upload is skipped and the path is returned.
  */
 export async function uploadPhoto(
-  supabase: SupabaseClient,
   userId: string,
   graveId: string,
   dataUrl: string
 ): Promise<string> {
-  if (dataUrl.startsWith("https://")) return dataUrl;
-
-  // Strip the "data:image/jpeg;base64," prefix
-  const base64 = dataUrl.split(",")[1];
-  if (!base64) throw new Error("Invalid data URL");
-
-  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  const blob = new Blob([bytes], { type: "image/jpeg" });
-
   const path = `${userId}/${graveId}.jpg`;
 
-  const { error } = await supabase.storage
-    .from(BUCKET)
-    .upload(path, blob, { upsert: true, contentType: "image/jpeg" });
+  // Already uploaded (value is a storage path or /api/photo URL, not raw bytes).
+  if (!dataUrl.startsWith("data:")) return path;
 
-  if (error) throw error;
+  const res = await fetch("/api/photo/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ graveId, dataUrl }),
+    // Bound a hung upload so background cloud sync can't stall indefinitely.
+    signal: AbortSignal.timeout(30000),
+  });
 
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+  if (!res.ok) {
+    const detail = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(detail.error || `Photo upload failed (HTTP ${res.status})`);
+  }
+
+  const { path: uploadedPath } = (await res.json()) as { path?: string };
+  return uploadedPath || path;
 }
 
 // ── Grave upsert ──────────────────────────────────────────────────────────────
@@ -70,7 +142,7 @@ export async function upsertGrave(
   record: GraveRecord,
   photoUrl: string
 ): Promise<void> {
-  const { error } = await supabase.from("graves").upsert({
+  const { error } = await supabase.from("gravelens_graves").upsert({
     id: record.id,
     user_id: userId,
     timestamp: record.timestamp,
@@ -99,7 +171,7 @@ export async function deleteFromCloud(
   userId: string,
   graveId: string
 ): Promise<void> {
-  await supabase.from("graves").delete().eq("id", graveId);
+  await supabase.from("gravelens_graves").delete().eq("id", graveId);
   await supabase.storage.from(BUCKET).remove([`${userId}/${graveId}.jpg`]);
 }
 
@@ -114,7 +186,7 @@ export async function fetchAllFromCloud(
   userId: string
 ): Promise<GraveRecord[]> {
   const { data, error } = await supabase
-    .from("graves")
+    .from("gravelens_graves")
     .select("*")
     .eq("user_id", userId)
     .order("timestamp", { ascending: false });
@@ -124,7 +196,8 @@ export async function fetchAllFromCloud(
   return (data ?? []).map((row) => ({
     id: row.id,
     timestamp: row.timestamp,
-    photoDataUrl: row.photo_url,
+    // Render via the authenticated proxy, not the raw (now private) storage path.
+    photoDataUrl: photoProxyUrl(row.id),
     location: row.location ?? {},
     extracted: row.extracted ?? {},
     research: row.research ?? {},
@@ -144,13 +217,13 @@ export async function fetchAllFromCloud(
 export async function syncLocalToCloud(
   supabase: SupabaseClient,
   userId: string
-): Promise<{ synced: number; failed: number }> {
+): Promise<{ synced: number; failed: number; firstError?: string }> {
   const local = await getAllGraves();
   if (local.length === 0) return { synced: 0, failed: 0 };
 
   // Get IDs already in the cloud so we don't re-upload
   const { data: existing } = await supabase
-    .from("graves")
+    .from("gravelens_graves")
     .select("id")
     .in(
       "id",
@@ -161,6 +234,10 @@ export async function syncLocalToCloud(
 
   let synced = 0;
   let failed = 0;
+  // Surface the first underlying error so the UI can show WHY a backup failed,
+  // instead of only a silent count (the console.warn below is unreadable on a
+  // mobile PWA where there is no DevTools).
+  let firstError: string | undefined;
 
   // Process in batches of 3
   const CONCURRENCY = 3;
@@ -168,9 +245,11 @@ export async function syncLocalToCloud(
     const batch = pending.slice(i, i + CONCURRENCY);
     await Promise.all(
       batch.map(async (record) => {
+        // Track which boundary we're crossing so a failure reports the exact
+        // layer (photo storage vs. database row) rather than a bare message.
+        let step = "photo upload";
         try {
-          const photoUrl = await uploadPhoto(
-            supabase,
+          const photoPath = await uploadPhoto(
             userId,
             record.id,
             record.photoDataUrl
@@ -180,13 +259,25 @@ export async function syncLocalToCloud(
           // fetched concurrently during the photo upload is not clobbered.
           const fresh = await getGrave(record.id);
           const latest = fresh ?? record;
-          await upsertGrave(supabase, userId, latest, photoUrl);
+          step = "database write";
+          await upsertGrave(supabase, userId, latest, photoPath);
 
-          // Update local copy with the CDN URL so images load from cloud
-          await saveGrave({ ...latest, photoDataUrl: photoUrl, syncedAt: Date.now() });
+          // Point the local copy at the authenticated proxy so images load from
+          // the private bucket online, and from the service-worker cache offline.
+          await saveGrave({ ...latest, photoDataUrl: photoProxyUrl(record.id), syncedAt: Date.now() });
           synced++;
         } catch (err) {
-          console.warn(`[Sync] Failed to sync grave ${record.id}:`, err);
+          // Full technical detail (HTTP status + raw error) goes to the console;
+          // the user-facing caption gets a concise, honest reason.
+          const httpStatus =
+            (err as { status?: number; statusCode?: string | number })?.status ??
+            (err as { statusCode?: string | number })?.statusCode;
+          console.warn(
+            `[Sync] grave ${record.id} failed during ${step}` +
+              (httpStatus != null ? ` (HTTP ${httpStatus})` : ""),
+            err
+          );
+          if (!firstError) firstError = `${step}: ${errorMessage(err)}`;
           failed++;
         }
       })
@@ -199,7 +290,7 @@ export async function syncLocalToCloud(
     } catch { /* ignore */ }
   }
 
-  return { synced, failed };
+  return { synced, failed, firstError };
 }
 
 export function hasEverSynced(): boolean {
@@ -229,7 +320,7 @@ export async function pushExplorerPoints(
 
   // Fetch existing cloud row (may not exist yet)
   const { data: existing } = await supabase
-    .from("user_profiles")
+    .from("gravelens_user_profiles")
     .select("achievement_unlocks, app_stats")
     .eq("user_id", userId)
     .maybeSingle();
@@ -241,15 +332,8 @@ export async function pushExplorerPoints(
     daysActive: [],
   };
 
-  // Merge unlocks — union, keeping earliest timestamp per id
-  const mergedUnlocksMap = new Map<string, UnlockRecord>();
-  for (const u of [...cloudUnlocks, ...localUnlocks]) {
-    const existing = mergedUnlocksMap.get(u.id);
-    if (!existing || u.unlockedAt < existing.unlockedAt) {
-      mergedUnlocksMap.set(u.id, u);
-    }
-  }
-  const mergedUnlocks = Array.from(mergedUnlocksMap.values());
+  // Merge unlocks — union by id, earliest timestamp, seen if seen anywhere
+  const mergedUnlocks = mergeUnlockLists(cloudUnlocks, localUnlocks);
 
   // Merge stats
   const mergedStats: AppStats = {
@@ -266,7 +350,7 @@ export async function pushExplorerPoints(
   const xp = totalXP(mergedUnlocks);
   const rank = getRank(xp).level;
 
-  const { error } = await supabase.from("user_profiles").upsert({
+  const { error } = await supabase.from("gravelens_user_profiles").upsert({
     user_id: userId,
     achievement_unlocks: mergedUnlocks,
     app_stats: mergedStats,
@@ -290,7 +374,7 @@ export async function pullExplorerPoints(
   userId: string
 ): Promise<void> {
   const { data, error } = await supabase
-    .from("user_profiles")
+    .from("gravelens_user_profiles")
     .select("achievement_unlocks, app_stats")
     .eq("user_id", userId)
     .maybeSingle();
@@ -308,13 +392,7 @@ export async function pullExplorerPoints(
   const localUnlocks = loadUnlocks();
   const localStats = loadStats();
 
-  const mergedUnlocksMap = new Map<string, UnlockRecord>();
-  for (const u of [...localUnlocks, ...cloudUnlocks]) {
-    const existing = mergedUnlocksMap.get(u.id);
-    if (!existing || u.unlockedAt < existing.unlockedAt) {
-      mergedUnlocksMap.set(u.id, u);
-    }
-  }
+  const mergedUnlocks = mergeUnlockLists(localUnlocks, cloudUnlocks);
 
   const mergedStats: AppStats = {
     sharesCount: Math.max(localStats.sharesCount, cloudStats.sharesCount),
@@ -331,8 +409,11 @@ export async function pullExplorerPoints(
   try {
     localStorage.setItem(
       "gl_achievement_unlocks",
-      JSON.stringify(Array.from(mergedUnlocksMap.values()))
+      JSON.stringify(mergedUnlocks)
     );
     updateStats(mergedStats);
+    // A pulled unseen unlock from another device should light the badge here.
+    notifyExplorerProgress();
+    window.dispatchEvent(new Event(ACHIEVEMENT_UNSEEN_EVENT));
   } catch { /* ignore */ }
 }

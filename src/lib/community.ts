@@ -17,6 +17,7 @@ import type {
   LocalHistoryContext,
   MilitaryContext,
 } from "@/types";
+import { photoProxyUrl } from "@/lib/photoUrl";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -25,14 +26,18 @@ function geoCell(lat: number, lng: number): string {
   return `${lat.toFixed(1)}_${lng.toFixed(1)}`;
 }
 
-/** Resolve the public display label for a contributor given their profile row. */
+/**
+ * Resolve the public display label for a contributor given their profile row.
+ *
+ * Identity is the single account Display Name, mirrored into `display_name` only
+ * while the contributor has opted to show it (`show_username`). When hidden, the
+ * mirror is null and the contributor is anonymous.
+ */
 function resolveContributorLabel(profile: {
-  username?: string | null;
   display_name?: string | null;
   show_username?: boolean | null;
 }): string {
-  if (profile.show_username && profile.username) return `@${profile.username}`;
-  if (profile.display_name) return profile.display_name;
+  if (profile.show_username && profile.display_name) return profile.display_name;
   return "Community Member";
 }
 
@@ -47,7 +52,7 @@ export async function upsertUserProfile(
   userId: string,
   patch: Partial<{
     username: string;
-    displayName: string;
+    displayName: string | null;
     showUsername: boolean;
     shareAllByDefault: boolean;
     explorerXp: number;
@@ -66,7 +71,7 @@ export async function upsertUserProfile(
   if (patch.graveCount !== undefined)        row.grave_count           = patch.graveCount;
   if (patch.publicGraveCount !== undefined)  row.public_grave_count    = patch.publicGraveCount;
 
-  const { error } = await supabase.from("user_profiles").upsert(row);
+  const { error } = await supabase.from("gravelens_user_profiles").upsert(row);
   if (error) throw error;
 }
 
@@ -78,7 +83,7 @@ export async function fetchOwnProfile(
   userId: string
 ): Promise<UserProfile | null> {
   const { data, error } = await supabase
-    .from("user_profiles")
+    .from("gravelens_user_profiles")
     .select("*")
     .eq("user_id", userId)
     .maybeSingle();
@@ -120,7 +125,7 @@ export async function fetchCommunityGravesInBounds(
 ): Promise<CommunityGraveRecord[]> {
   // 1. Get confirmed friend IDs so we can tag their graves differently
   const { data: friendRows } = await supabase
-    .from("user_relationships")
+    .from("gravelens_user_relationships")
     .select("from_user_id, to_user_id")
     .eq("type", "friend")
     .or(`from_user_id.eq.${userId},to_user_id.eq.${userId}`);
@@ -134,7 +139,7 @@ export async function fetchCommunityGravesInBounds(
   // 2. Fetch public graves in bounds (exclude own graves)
   //    Filter by location jsonb lat/lng — cast to float for comparison
   const { data: graveRows, error } = await supabase
-    .from("graves")
+    .from("gravelens_graves")
     .select(`
       id,
       user_id,
@@ -143,7 +148,6 @@ export async function fetchCommunityGravesInBounds(
       extracted,
       community_note,
       user_profiles!inner (
-        username,
         display_name,
         show_username,
         explorer_rank
@@ -181,7 +185,9 @@ export async function fetchCommunityGravesInBounds(
       birthDate: extracted?.birthDate,
       deathDate: extracted?.deathDate,
       cemetery: loc.cemetery,
-      photoUrl: row.photo_url,
+      // Served through the authenticated proxy (the bucket is private); the
+      // proxy authorizes cross-user views via the grave's is_public flag.
+      photoUrl: photoProxyUrl(row.id),
       communityNote: row.community_note ?? undefined,
       tier: friendIds.has(row.user_id) ? "friend" : "community",
       contributorLabel: profile ? resolveContributorLabel(profile) : "Community Member",
@@ -202,7 +208,7 @@ export async function bulkSetGravesPublic(
   isPublic: boolean
 ): Promise<void> {
   const { error } = await supabase
-    .from("graves")
+    .from("gravelens_graves")
     .update({ is_public: isPublic })
     .eq("user_id", userId);
 
@@ -218,7 +224,7 @@ export async function setGravePublic(
   isPublic: boolean
 ): Promise<void> {
   const { error } = await supabase
-    .from("graves")
+    .from("gravelens_graves")
     .update({ is_public: isPublic })
     .eq("id", graveId);
 
@@ -246,7 +252,7 @@ export async function checkLocalHistoryCache(
   const cell = geoCell(lat, lng);
 
   const { data, error } = await supabase
-    .from("local_history_cache")
+    .from("gravelens_local_history_cache")
     .select("local_history, wikidata_events, nrhp_sites, sources, expires_at")
     .eq("geo_cell", cell)
     .maybeSingle();
@@ -274,7 +280,7 @@ export async function saveLocalHistoryCache(
 ): Promise<void> {
   const cell = geoCell(lat, lng);
 
-  await supabase.from("local_history_cache").upsert({
+  await supabase.from("gravelens_local_history_cache").upsert({
     geo_cell: cell,
     local_history: entry.localHistory,
     wikidata_events: entry.wikidataEvents ?? null,
@@ -306,7 +312,7 @@ export async function checkCemeteryCache(
   osmId: string
 ): Promise<CemeteryResearchEntry | null> {
   const { data, error } = await supabase
-    .from("cemetery_cache")
+    .from("gravelens_cemetery_cache")
     .select("*")
     .eq("osm_id", osmId)
     .maybeSingle();
@@ -333,7 +339,7 @@ export async function saveCemeteryCache(
   osmId: string,
   entry: CemeteryResearchEntry
 ): Promise<void> {
-  await supabase.from("cemetery_cache").upsert({
+  await supabase.from("gravelens_cemetery_cache").upsert({
     osm_id: osmId,
     name: entry.name ?? null,
     description: entry.description ?? null,
@@ -358,7 +364,7 @@ export async function getMilitaryContextCache(
   conflictKey: string
 ): Promise<MilitaryContext | null> {
   const { data, error } = await supabase
-    .from("military_context_cache")
+    .from("gravelens_military_context_cache")
     .select("context")
     .eq("conflict_key", conflictKey)
     .maybeSingle();
@@ -370,19 +376,39 @@ export async function getMilitaryContextCache(
 // ── Grave identity index (deduplication) ─────────────────────────────────────
 
 /**
- * Compute an identity hash for deduplication.
- * Uses: normalized lastName + deathYear + cemeteryOsmId (all lowercased, trimmed).
- * Returns null if insufficient data.
+ * Compute a stable identity hash for cross-user research reuse.
+ *
+ * Key = firstName | lastName | birthYear | deathYear | geo-cell.
+ *
+ * We deliberately key on a rounded geo-cell (the ~11 km grid used for the local
+ * history cache) rather than a cemetery OSM id: OSM tags drift, get re-numbered,
+ * or go missing over time, whereas a grave's physical coordinates are stable, and
+ * an ~11 km cell is coarse enough that GPS jitter never splits the same grave yet
+ * fine enough to separate two unrelated same-named people in different regions.
+ *
+ * Requires at least a surname + death year to identify someone safely; firstName,
+ * birthYear and the geo-cell are folded in whenever present to reduce the chance
+ * of attaching one person's research to a different same-surname individual.
+ * Returns null when the inputs are too sparse to identify safely.
  */
 export function computeGraveIdentityHash(
-  lastName: string,
-  deathYear: number | null,
-  cemeteryOsmId?: string
+  firstName: string | null | undefined,
+  lastName: string | null | undefined,
+  birthYear: number | null | undefined,
+  deathYear: number | null | undefined,
+  lat?: number | null,
+  lng?: number | null
 ): string | null {
-  if (!lastName?.trim() || !deathYear) return null;
-  const parts = [lastName.trim().toLowerCase(), String(deathYear), (cemeteryOsmId ?? "").toLowerCase()];
-  // Simple deterministic key — not cryptographic, just stable for deduplication
-  return parts.join("|");
+  const last = (lastName ?? "").trim().toLowerCase();
+  if (!last || !deathYear) return null;
+
+  const first = (firstName ?? "").trim().toLowerCase();
+  const hasCoords =
+    typeof lat === "number" && typeof lng === "number" && (lat !== 0 || lng !== 0);
+  const cell = hasCoords ? geoCell(lat as number, lng as number) : "";
+
+  // Simple deterministic key — not cryptographic, just stable for deduplication.
+  return [first, last, birthYear ? String(birthYear) : "", String(deathYear), cell].join("|");
 }
 
 export interface GraveIdentityMatch {
@@ -400,7 +426,7 @@ export async function checkGraveIdentityIndex(
   identityHash: string
 ): Promise<GraveIdentityMatch | null> {
   const { data, error } = await supabase
-    .from("grave_identity_index")
+    .from("gravelens_grave_identity_index")
     .select("identity_hash, research_snapshot, contributor_count, expires_at")
     .eq("identity_hash", identityHash)
     .maybeSingle();
@@ -424,7 +450,7 @@ export async function upsertGraveIdentityIndex(
   identityHash: string,
   researchSnapshot: unknown
 ): Promise<void> {
-  const { error } = await supabase.rpc("upsert_grave_identity", {
+  const { error } = await supabase.rpc("gravelens_upsert_grave_identity", {
     hash: identityHash,
     snapshot: researchSnapshot,
   });

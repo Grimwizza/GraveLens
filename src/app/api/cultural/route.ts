@@ -1,6 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { requireAuth } from "@/lib/apiAuth";
+import { admitAiCall } from "@/lib/tokenGate";
+import { requireRateLimit } from "@/lib/rateLimit";
+import { logUsage } from "@/lib/lowhigh";
+import { createClient } from "@/lib/supabase/server";
+import { getAiContentCache, saveAiContentCache, aiContentCacheKey } from "@/lib/researchCache";
 
 // Haiku is ideal here — rich descriptive prose at low cost.
 const MODEL = "claude-haiku-4-5-20251001";
@@ -103,29 +108,63 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "API key missing." }, { status: 500 });
-  }
-
   try {
     const body = await req.json();
-    const { mode, categoryId, categoryLabel, ...person } = body;
+    // categoryLabel is intentionally NOT read from the client — it is derived
+    // server-side from the allowlisted categoryId below, so a caller cannot
+    // inject arbitrary text into the prompt via the label.
+    // tool/component describe the FRONTEND action that invoked this route (e.g.
+    // the "Hear their story" flow reuses this summary as one of its steps). They
+    // are destructured out of rawPerson so they never affect the prompt or the
+    // shared cache key. Falls back to this route's own labels when absent.
+    const { mode, categoryId, promptId, tool, component, ...rawPerson } = body;
 
-    // Allowlist mode and categoryId to prevent unexpected code paths
-    // and prompt injection via unchecked interpolation into AI prompts.
+    // Allowlist mode and categoryId to keep callers on known code paths.
     const VALID_MODES = ["summary", "expand"] as const;
-    const VALID_CATEGORY_IDS = ["popculture", "transport", "homelife", "health", "communication"];
     if (!VALID_MODES.includes(mode)) {
       return NextResponse.json({ error: "Invalid mode" }, { status: 400 });
     }
-    if (mode === "expand" && !VALID_CATEGORY_IDS.includes(categoryId)) {
+    const category = CATEGORY_DEFS.find((c) => c.id === categoryId);
+    if (mode === "expand" && !category) {
       return NextResponse.json({ error: "Invalid categoryId" }, { status: 400 });
+    }
+
+    // Cap free-text fields that feed into the prompt to bound token spend
+    // (mirrors the inscription cap in /api/story).
+    const cap = (v: unknown, n: number) =>
+      typeof v === "string" ? v.slice(0, n) : undefined;
+    const person = {
+      ...rawPerson,
+      name: cap(rawPerson.name, 200),
+      city: cap(rawPerson.city, 120),
+      state: cap(rawPerson.state, 120),
+    };
+
+    // ── Shared cache: cultural context is keyed by era/location + mode, so it
+    // is broadly reusable across users (promptId excluded — it is volatile). ──
+    const supabase = await createClient();
+    const cacheKey = aiContentCacheKey({ mode, categoryId: categoryId ?? null, person });
+    const cached = await getAiContentCache(supabase, "cultural", cacheKey).catch(() => null);
+    if (cached) {
+      return NextResponse.json({ ...cached, fromCache: true });
+    }
+
+    // Cache miss — gate tokens/rate, then generate.
+    const admit = await admitAiCall(auth.userId, "cultural");
+    if (admit.response) return admit.response;
+    if (admit.release) after(admit.release);
+
+    const rl = await requireRateLimit(auth.userId, "cultural");
+    if (rl) return rl;
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "API key missing." }, { status: 500 });
     }
 
     const prompt =
       mode === "expand"
-        ? expandPrompt(person, categoryId, categoryLabel)
+        ? expandPrompt(person, categoryId, category!.label)
         : summaryPrompt(person);
 
     const maxTokens = mode === "expand" ? 1500 : 900;
@@ -146,7 +185,32 @@ export async function POST(req: NextRequest) {
       .replace(/\s*```\s*$/i, "")
       .trim();
 
-    return NextResponse.json(JSON.parse(raw));
+    const result = JSON.parse(raw);
+
+    // Persist the generated content for reuse by any future identical request.
+    after(() => saveAiContentCache(supabase, "cultural", cacheKey, result).catch(() => {}));
+
+    after(() =>
+      logUsage(auth.userId, {
+        endpoint: "/api/cultural",
+        provider: "anthropic",
+        modelId: `anthropic/${MODEL}`,
+        model: MODEL,
+        requestType: mode,
+        inputTokens: message.usage?.input_tokens ?? null,
+        outputTokens: message.usage?.output_tokens ?? null,
+        promptId: typeof promptId === "string" && promptId ? promptId : crypto.randomUUID(),
+        tool: typeof tool === "string" && tool ? tool : "Cultural",
+        component:
+          typeof component === "string" && component
+            ? component
+            : mode === "expand"
+              ? "Expand Category"
+              : "Cultural Summary",
+      })
+    );
+
+    return NextResponse.json(result);
   } catch (err) {
     console.error("[/api/cultural]", err);
     return NextResponse.json(

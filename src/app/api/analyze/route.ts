@@ -1,8 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { requireAuth } from "@/lib/apiAuth";
+import { admitAiCall } from "@/lib/tokenGate";
+import { logUsage, type UsageEvent } from "@/lib/lowhigh";
 import { toNameCase } from "@/lib/nameUtils";
-import { createClient } from "@/lib/supabase/server";
+import { requireRateLimit } from "@/lib/rateLimit";
 
 // Two-tier model strategy:
 //   Haiku   — fast, cheap (~$0.003/scan). Used on every request.
@@ -138,57 +140,20 @@ async function callClaude(
     .replace(/\s*```\s*$/i, "")
     .trim();
 
-  return JSON.parse(rawJson);
-}
-
-const LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour sliding window
-const MAX_REQUESTS = 20;
-
-/**
- * Supabase-backed sliding-window rate limiter.
- * Persists across cold starts and server instances.
- * Returns true if the request should be blocked.
- */
-async function checkRateLimit(userId: string): Promise<boolean> {
-  try {
-    const supabase = await createClient();
-    const now = Date.now();
-    const cutoff = now - LIMIT_WINDOW_MS;
-
-    // Fetch current row
-    const { data } = await supabase
-      .from("rate_limits")
-      .select("requests")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    const recent: number[] = (data?.requests ?? []).filter((t: number) => t > cutoff);
-
-    if (recent.length >= MAX_REQUESTS) return true;
-
-    // Record this request
-    recent.push(now);
-    await supabase
-      .from("rate_limits")
-      .upsert({ user_id: userId, requests: recent, updated_at: new Date().toISOString() });
-
-    return false;
-  } catch {
-    // If Supabase is unavailable, fail open (allow the request)
-    return false;
-  }
+  return { parsed: JSON.parse(rawJson) as Record<string, unknown>, usage: message.usage };
 }
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
-  if (await checkRateLimit(auth.userId)) {
-    return NextResponse.json(
-      { error: "Too many requests. Please try again later." },
-      { status: 429, headers: { "Retry-After": "60" } }
-    );
-  }
+  // Subscription overuse gate (flag-gated) — economic check before abuse check.
+  const admit = await admitAiCall(auth.userId, "analyze");
+  if (admit.response) return admit.response;
+  if (admit.release) after(admit.release);
+
+  const rl = await requireRateLimit(auth.userId, "analyze");
+  if (rl) return rl;
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -203,7 +168,9 @@ export async function POST(req: NextRequest) {
   const MAX_BASE64_CHARS = 10_700_000;
 
   try {
-    const { imageBase64, mimeType } = await req.json();
+    // tool/component name the FRONTEND action (a scan bundles this read with the
+    // auto-loaded cultural summary), falling back to this route's own labels.
+    const { imageBase64, mimeType, promptId, tool, component } = await req.json();
     if (!imageBase64) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
@@ -215,12 +182,38 @@ export async function POST(req: NextRequest) {
     const finalMime = validMime.includes(mimeType) ? mimeType : "image/jpeg";
     const client = new Anthropic({ apiKey });
 
+    // One usage event per Claude call (Haiku + any Sonnet escalation), grouped
+    // under one promptId and logged after the response is flushed. The frontend
+    // may pass a promptId to group a multi-call action; otherwise we mint one
+    // per request so the Haiku→Sonnet escalation pair groups together.
+    const resolvedPromptId =
+      typeof promptId === "string" && promptId ? promptId : crypto.randomUUID();
+    const usageEvents: UsageEvent[] = [];
+    const recordUsage = (
+      model: string,
+      usage: { input_tokens?: number; output_tokens?: number } | undefined,
+    ) =>
+      usageEvents.push({
+        endpoint: "/api/analyze",
+        provider: "anthropic",
+        modelId: `anthropic/${model}`,
+        model,
+        requestType: "analyze",
+        inputTokens: usage?.input_tokens ?? null,
+        outputTokens: usage?.output_tokens ?? null,
+        promptId: resolvedPromptId,
+        tool: typeof tool === "string" && tool ? tool : "Scan",
+        component: typeof component === "string" && component ? component : "Analyze Marker",
+      });
+
     // ── Tier 1: Haiku ────────────────────────────────────────────────────────
     let extracted: Record<string, unknown> | null = null;
     let usedModel = MODEL_HAIKU;
 
     try {
-      extracted = await callClaude(client, MODEL_HAIKU, imageBase64, finalMime, MAX_TOKENS_HAIKU);
+      const haiku = await callClaude(client, MODEL_HAIKU, imageBase64, finalMime, MAX_TOKENS_HAIKU);
+      extracted = haiku.parsed;
+      recordUsage(MODEL_HAIKU, haiku.usage);
     } catch (err) {
       console.warn("[Analyze] Haiku failed, escalating to Sonnet:", err);
     }
@@ -242,13 +235,18 @@ export async function POST(req: NextRequest) {
         !extracted.name ? "name missing" :
         "no dates"
       );
-      extracted = await callClaude(client, MODEL_SONNET, imageBase64, finalMime, MAX_TOKENS_SONNET);
+      const sonnet = await callClaude(client, MODEL_SONNET, imageBase64, finalMime, MAX_TOKENS_SONNET);
+      extracted = sonnet.parsed;
+      recordUsage(MODEL_SONNET, sonnet.usage);
       console.log("[Analyze] Sonnet confidence:", extracted?.confidence, "name:", extracted?.name || "(empty)");
     }
 
     extracted!.source = "claude";
     extracted!.analysisModel = usedModel;
     normalizeExtractedNames(extracted!);
+
+    // Best-effort meter to LowHigh after the response is sent.
+    after(() => Promise.all(usageEvents.map((ev) => logUsage(auth.userId, ev))));
 
     return NextResponse.json({ extracted, _model: usedModel });
   } catch (error: unknown) {

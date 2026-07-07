@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import BrandLogo from "@/components/ui/BrandLogo";
 import PageShell from "@/components/layout/PageShell";
+import { useAuth } from "@/lib/auth";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { fileToDataUrl, extractExifLocation, correctOrientation, generateId } from "@/lib/exif";
 import { savePendingResult, addToQueue, getQueueCount } from "@/lib/storage";
@@ -12,6 +13,7 @@ import { QUEUE_CHANGED_EVENT } from "@/lib/queue";
 import { reverseGeocode } from "@/lib/apis/nominatim";
 import { getDeviceLocation } from "@/lib/geo";
 import { takePendingCaptureFile } from "@/lib/pendingCapture";
+import { SCAN_USAGE } from "@/lib/usageActions";
 import type { ExtractedGraveData, GeoLocation } from "@/types";
 import { localContrastBoost, unsharpMask } from "@/lib/relief";
 import { resizeForStorage, generateThumbnail, saveToDevice } from "@/lib/imageUtils";
@@ -23,8 +25,24 @@ type Phase = "idle" | "processing" | "queued" | "degraded_prompt";
 export default function CapturePage() {
   const router = useRouter();
   const isDesktop = useIsDesktop();
+  const { user, loading: authLoading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Scanning is the core AI/cloud feature, so it requires a LowHigh login.
+  // We read auth through a ref so a tap during the brief auth-loading window
+  // never falsely redirects an already-signed-in user. Local browsing of the
+  // saved archive stays open to signed-out users elsewhere in the app.
+  const authRef = useRef({ user, loading: authLoading });
+  authRef.current = { user, loading: authLoading };
+  const requireAuthForScan = useCallback(() => {
+    const auth = authRef.current;
+    if (!auth.loading && !auth.user) {
+      router.push("/login?next=/");
+      return false;
+    }
+    return true;
+  }, [router]);
 
   const [settings, setSettings] = useState(() => loadSettings());
   const [phase, setPhase] = useState<Phase>("idle");
@@ -49,6 +67,10 @@ export default function CapturePage() {
   // Prevents stale analyses from saving and cancels in-flight fetches
   const analysisNonceRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // One usage id per scan, shared by the marker read (/api/analyze) and the
+  // cultural summary the result page auto-loads, so both log under one
+  // "Scan a marker" action. Persisted onto the pending record for the handoff.
+  const scanPromptIdRef = useRef<string | null>(null);
 
 
   // Offline detection
@@ -80,12 +102,13 @@ export default function CapturePage() {
   useEffect(() => {
     const handler = () => {
       if (phase === "idle") {
+        if (!requireAuthForScan()) return;
         cameraInputRef.current?.click();
       }
     };
     window.addEventListener("gravelens:open-camera", handler);
     return () => window.removeEventListener("gravelens:open-camera", handler);
-  }, [phase]);
+  }, [phase, requireAuthForScan]);
 
   // Keep the screen awake while the user is on this page
   useEffect(() => {
@@ -123,6 +146,10 @@ export default function CapturePage() {
   }, []);
 
   const handleFileChosen = useCallback(async (file: File) => {
+    // Gate the whole scan funnel on login — covers camera, file picker, drag-drop,
+    // and the pending-capture handoff from the BottomNav FAB.
+    if (!requireAuthForScan()) return;
+
     // Invalidate any in-flight analysis for the previous photo
     analysisNonceRef.current += 1;
     abortControllerRef.current?.abort();
@@ -135,13 +162,16 @@ export default function CapturePage() {
     setPhase("processing");
     setProgress(10);
     setProgressLabel("Reading image…");
-  }, []);
+  }, [requireAuthForScan]);
 
   const handleAnalyze = useCallback(async () => {
     if (!selectedFile || !previewUrl) return;
 
     // Snapshot the nonce at the start — if it changes, a newer photo was taken
     const nonce = analysisNonceRef.current;
+    // Fresh usage id for this scan (shared with the cultural summary auto-loaded
+    // on the result page) so the whole scan sums to one "Scan a marker" action.
+    scanPromptIdRef.current = crypto.randomUUID();
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -173,7 +203,12 @@ export default function CapturePage() {
         const claudeRes = await fetch("/api/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: preprocessed.base64, mimeType: preprocessed.mimeType }),
+          body: JSON.stringify({
+            imageBase64: preprocessed.base64,
+            mimeType: preprocessed.mimeType,
+            promptId: scanPromptIdRef.current,
+            ...SCAN_USAGE,
+          }),
           signal: controller.signal,
         });
 
@@ -185,8 +220,12 @@ export default function CapturePage() {
               setProgressLabel("Enhanced analysis complete…");
             }
           }
-        } else if (claudeRes.status === 429) {
-          // Rate limited — queue this image and let the user keep scanning
+        } else if (claudeRes.status === 429 || claudeRes.status >= 500) {
+          // Rate limited (429) or a transient backend error (5xx): queue the
+          // capture and let the user keep scanning. The queue retries once the
+          // backend recovers, instead of silently degrading to a low-confidence
+          // local scan. Other 4xx (e.g. 402 out-of-tokens, 400) intentionally
+          // fall through to the local OCR path below rather than retry forever.
           await handleQueueCapture("rate_limited");
           return;
         } else {
@@ -264,6 +303,7 @@ export default function CapturePage() {
         extracted: dataOrRef,
         location: locOrRef,
         timestamp: Date.now(),
+        scanPromptId: scanPromptIdRef.current ?? undefined,
       });
       setProgress(100);
       router.push(`/result/${id}`);
@@ -345,21 +385,27 @@ export default function CapturePage() {
   }, [selectedFile, previewUrl, handleReset]);
 
   return (
-    <PageShell showLogo={true} customMainClasses="items-center px-5 pb-28" backgroundClass="bg-transparent">
+    <PageShell
+      showLogo={true}
+      customMainClasses="items-center px-5 pb-28"
+      backgroundClass="bg-transparent"
+    >
       <OnboardingCarousel />
       {/* Main content */}
       <>
         {phase === "idle" && (
           isDesktop ? (
             <DesktopIdleState
-              onUpload={() => fileInputRef.current?.click()}
+              onUpload={() => { if (requireAuthForScan()) fileInputRef.current?.click(); }}
               onFileDrop={(file) => handleFileChosen(file)}
+              signedOut={!authLoading && !user}
             />
           ) : (
             <IdleState
-              onUpload={() => fileInputRef.current?.click()}
-              onCapture={() => cameraInputRef.current?.click()}
+              onUpload={() => { if (requireAuthForScan()) fileInputRef.current?.click(); }}
+              onCapture={() => { if (requireAuthForScan()) cameraInputRef.current?.click(); }}
               showTips={settings.showPhotoTips}
+              signedOut={!authLoading && !user}
             />
           )
         )}
@@ -454,77 +500,133 @@ const PHOTO_TIPS = [
   { icon: "💧", text: "Wetting a dry stone with water can sharpen contrast" },
 ];
 
-function IdleState({
+function ViewfinderGraphic({ dragging = false, desktop = false }: { dragging?: boolean; desktop?: boolean }) {
+  return (
+    <div className={`relative flex items-center justify-center w-[200px] h-[200px] sm:w-64 sm:h-64 ${desktop ? "lg:w-80 lg:h-80" : ""} flex-shrink-0 transition-transform ${dragging ? "scale-[1.02]" : ""}`}>
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 256 256">
+        {/* Corner brackets — pulse on mobile, stay still on the calmer desktop hero */}
+        <g className={desktop ? "" : "motion-safe:animate-pulse-slow"}>
+          <path d="M32 80 L32 32 L80 32" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          <path d="M176 32 L224 32 L224 80" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          <path d="M32 176 L32 224 L80 224" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          <path d="M176 224 L224 224 L224 176" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+        </g>
+      </svg>
+
+      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+        {/* Central focal point */}
+        <div className="relative translate-y-[1px]">
+          {/* Outer glow ring — breathes on mobile, calm on desktop (anti-slop) */}
+          <div className={`absolute inset-0 -m-8 rounded-full bg-[var(--t-gold-500)]/5 blur-2xl ${desktop ? "" : "motion-safe:animate-pulse"}`} />
+
+          {/* Logo with drop shadow for depth — lighter, directional shadow on desktop */}
+          <div className={`relative scale-90 sm:scale-110 ${desktop ? "lg:scale-125 drop-shadow-[0_2px_12px_rgba(201,168,76,0.28)]" : "drop-shadow-[0_0_15px_rgba(201,168,76,0.5)]"}`}>
+            <BrandLogo size={100} color="var(--t-gold-500)" />
+          </div>
+        </div>
+
+        {/* Status text */}
+        <div className={`absolute bottom-0 sm:bottom-2 left-1/2 -translate-x-1/2 ${desktop ? "" : "motion-safe:animate-pulse-slow"}`}>
+          <span className={`${dragging ? "text-[var(--t-gold-500)]" : "text-[var(--t-gold-500)]/80"} text-[0.7rem] sm:text-xs font-bold tracking-[0.4em] whitespace-nowrap uppercase`}>
+            {dragging ? "Drop to scan" : "Ready to scan"}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Shared idle hero (mobile camera + desktop upload/drag-drop) ──────────────
+
+function IdleHero({
+  variant,
+  onPrimary,
   onUpload,
-  onCapture,
+  onFileDrop,
   showTips = true,
+  signedOut = false,
 }: {
+  variant: "mobile" | "desktop";
+  onPrimary: () => void;
   onUpload: () => void;
-  onCapture: () => void;
+  onFileDrop?: (file: File) => void;
   showTips?: boolean;
+  signedOut?: boolean;
 }) {
+  const desktop = variant === "desktop";
   const [tipsOpen, setTipsOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
+
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      onFileDrop?.(file);
+    }
+  }, [onFileDrop]);
+
+  // Desktop is the only variant that accepts dropped files (no camera).
+  const dragHandlers = desktop
+    ? {
+        onDragOver: (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); setDragging(true); },
+        onDragLeave: () => setDragging(false),
+        onDrop: handleDrop,
+      }
+    : {};
+
+  const actionIcon = signedOut ? (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+      <polyline points="10 17 15 12 10 7"/>
+      <line x1="15" y1="12" x2="3" y2="12"/>
+    </svg>
+  ) : (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+  );
 
   return (
-    <div className="flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 pt-2 pb-0 sm:pb-4 justify-between" style={{ paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
-      {/* Graphic + text — takes all available space and centers content within it */}
-      <div className="flex flex-col items-center justify-center gap-4 pt-2">
-        
-        {/* Viewfinder graphic */}
-        <button onClick={onCapture} className="group relative flex items-center justify-center w-[200px] h-[200px] sm:w-64 sm:h-64 flex-shrink-0 active:scale-95 transition-transform touch-none select-none">
-          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 256 256">
-            {/* Animated corner brackets */}
-            <g className="animate-pulse-slow">
-              <path d="M32 80 L32 32 L80 32" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-              <path d="M176 32 L224 32 L224 80" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-              <path d="M32 176 L32 224 L80 224" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-              <path d="M176 224 L224 224 L224 176" stroke="var(--t-gold-500)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-            </g>
-            
-            {/* Headstone silhouette backdrop */}
-            <path
-              d="M96 175 L96 105 Q96 81 128 81 Q160 81 160 105 L160 175 Z"
-              fill="rgba(201,168,76,0.03)"
-              stroke="#3a3633"
-              strokeWidth="2"
-              className="transition-colors group-hover:stroke-[var(--t-gold-500)]/30"
-            />
-          </svg>
-          
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-            {/* Central scanning focal point */}
-            <div className="relative translate-y-[1px]">
-              {/* Outer glow ring */}
-              <div className="absolute inset-0 -m-8 rounded-full bg-[var(--t-gold-500)]/5 blur-2xl animate-pulse" />
-              
-              {/* Logo with drop shadow for depth */}
-              <div className="relative drop-shadow-[0_0_15px_rgba(201,168,76,0.5)] scale-90 sm:scale-110">
-                <BrandLogo size={100} color="var(--t-gold-500)" />
-              </div>
-            </div>
-
-            {/* Status text - precision positioned to ensure ~11px gap and ZERO overlap */}
-            <div className="absolute bottom-0 sm:bottom-2 left-1/2 -translate-x-1/2 animate-pulse-slow">
-              <span className="text-[var(--t-gold-500)]/80 text-[0.7rem] sm:text-xs font-bold tracking-[0.4em] whitespace-nowrap uppercase">
-                Ready to scan
-              </span>
-            </div>
-          </div>
+    <div
+      {...dragHandlers}
+      className={
+        desktop
+          ? `flex flex-col items-center w-full max-w-sm lg:max-w-md mx-auto animate-fade-in flex-1 justify-center lg:-translate-y-4 rounded-3xl transition-colors ${dragging ? "bg-[var(--t-gold-500)]/[0.03]" : ""}`
+          : "flex flex-col items-center w-full max-w-sm mx-auto animate-fade-in flex-1 pt-2 pb-0 sm:pb-4 justify-between"
+      }
+      style={desktop ? undefined : { paddingBottom: "env(safe-area-inset-bottom, 16px)" }}
+    >
+      {/* Graphic + text */}
+      <div className={`flex flex-col items-center justify-center gap-4 ${desktop ? "lg:gap-6" : ""} pt-2`}>
+        <button
+          onClick={onPrimary}
+          aria-label={desktop ? "Upload a grave photo to analyze" : "Open camera to scan a headstone"}
+          className="group relative flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform touch-none select-none rounded-3xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--t-gold-500)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+        >
+          <ViewfinderGraphic dragging={dragging} desktop={desktop} />
         </button>
 
         <div className="flex flex-col items-center gap-2 text-center px-2">
-          <h1 className="font-serif text-2xl sm:text-3xl font-semibold text-stone-100 leading-tight">
+          <h1 className={`font-serif text-2xl sm:text-3xl ${desktop ? "lg:text-4xl" : ""} font-semibold text-stone-100 leading-tight`}>
             Bring the story behind every stone into focus.
           </h1>
           <p className="text-stone-400 text-sm sm:text-lg leading-relaxed">
             Photograph any headstone and experience history like never before.
           </p>
+          {desktop && (
+            <p className="text-stone-500 text-xs mt-1">
+              Drop a photo anywhere, or use the button below.
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Action buttons — anchored to bottom */}
-      <div className="flex flex-col items-center gap-3 w-full pt-4 mt-auto mb-28">
-        {/* Tips toggle */}
+      {/* Action buttons */}
+      <div className={`flex flex-col items-center gap-3 w-full pt-4 ${desktop ? "lg:pt-6" : "mt-auto mb-28"}`}>
+        {/* Tips toggle (mobile only — desktop users already took their photo) */}
         {showTips && <button
           onClick={() => setTipsOpen((o) => !o)}
           className="flex items-center gap-1.5 text-xs text-stone-500 active:text-stone-300 transition-colors py-1"
@@ -537,14 +639,14 @@ function IdleState({
           Tips for better scans
           <svg
             width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            style={{ transform: tipsOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}
+            style={{ transform: tipsOpen ? "rotate(0deg)" : "rotate(180deg)", transition: "transform 0.2s" }}
           >
             <polyline points="6 9 12 15 18 9"/>
           </svg>
         </button>}
 
         {/* Tips panel */}
-        {tipsOpen && (
+        {showTips && tipsOpen && (
           <div
             className="w-full rounded-2xl p-4 flex flex-col gap-2.5 animate-fade-in"
             style={{ background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.15)" }}
@@ -558,17 +660,36 @@ function IdleState({
           </div>
         )}
 
-        <button
-          onClick={onUpload}
-          className="flex items-center justify-center gap-3 w-full h-12 rounded-2xl border border-stone-600 text-stone-200 font-medium text-base transition-all active:scale-[0.97] bg-stone-800/50"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-          Upload from Library
-        </button>
+        {desktop ? (
+          <button
+            onClick={onUpload}
+            className="flex items-center justify-center gap-3 w-full h-12 rounded-2xl font-semibold text-base transition-all active:scale-[0.97] hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--t-gold-500)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+            style={{ background: "linear-gradient(135deg, #c9a84c 0%, #a07830 100%)", color: "#1a1917" }}
+          >
+            {actionIcon}
+            {signedOut ? "Sign In to use GraveLens AI" : "Browse Files"}
+          </button>
+        ) : (
+          <button
+            onClick={onUpload}
+            className="flex items-center justify-center gap-3 w-full h-12 rounded-2xl border border-stone-600 text-stone-200 font-medium text-base transition-all active:scale-[0.97] bg-stone-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--t-gold-500)]"
+          >
+            {actionIcon}
+            {signedOut ? "Sign In to use GraveLens AI" : "Upload from Library"}
+          </button>
+        )}
+
+        {signedOut && (
+          <p className="text-xs text-stone-400 text-center px-4">
+            You&apos;ll sign in with a free LowHigh account to scan. Browsing your saved archive stays free.
+          </p>
+        )}
+
+        {desktop && (
+          <p className="text-stone-400 text-xs text-center">
+            Supports JPG, PNG, HEIC · EXIF GPS extracted automatically
+          </p>
+        )}
 
         <QueueLink />
       </div>
@@ -576,68 +697,42 @@ function IdleState({
   );
 }
 
+// ── Idle state wrappers ──────────────────────────────────────────────────────
+
+function IdleState({
+  onUpload,
+  onCapture,
+  showTips = true,
+  signedOut = false,
+}: {
+  onUpload: () => void;
+  onCapture: () => void;
+  showTips?: boolean;
+  signedOut?: boolean;
+}) {
+  return (
+    <IdleHero
+      variant="mobile"
+      onPrimary={onCapture}
+      onUpload={onUpload}
+      showTips={showTips}
+      signedOut={signedOut}
+    />
+  );
+}
+
 // ── Desktop idle state (file upload / drag-and-drop) ────────────────────────
 
-function DesktopIdleState({ onUpload, onFileDrop }: { onUpload: () => void; onFileDrop: (file: File) => void }) {
-  const [dragging, setDragging] = useState(false);
-
-  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith("image/")) {
-      onFileDrop(file);
-    }
-  }, [onFileDrop]);
-
+function DesktopIdleState({ onUpload, onFileDrop, signedOut = false }: { onUpload: () => void; onFileDrop: (file: File) => void; signedOut?: boolean }) {
   return (
-    <div className="flex flex-col items-center justify-center w-full flex-1 px-8 py-12 max-w-xl mx-auto">
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={handleDrop}
-        onClick={onUpload}
-        className="w-full flex flex-col items-center justify-center gap-5 rounded-2xl border-2 border-dashed cursor-pointer transition-colors px-8 py-14"
-        style={{
-          borderColor: dragging ? "var(--t-gold-500)" : "var(--t-stone-700)",
-          background: dragging ? "rgba(201,168,76,0.06)" : "rgba(255,255,255,0.02)",
-        }}
-      >
-        <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center"
-          style={{ background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.2)" }}
-        >
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-        </div>
-
-        <div className="text-center">
-          <p className="text-stone-200 font-medium text-base">
-            {dragging ? "Drop to analyze" : "Drop a grave photo here"}
-          </p>
-          <p className="text-stone-500 text-sm mt-1">or click to browse your files</p>
-        </div>
-
-        <button
-          onClick={(e) => { e.stopPropagation(); onUpload(); }}
-          className="px-6 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90"
-          style={{ background: "linear-gradient(135deg, #c9a84c 0%, #a07830 100%)", color: "#1a1917" }}
-        >
-          Browse Files
-        </button>
-      </div>
-
-      <p className="text-stone-600 text-xs text-center mt-5">
-        Supports JPG, PNG, HEIC · EXIF GPS extracted automatically
-      </p>
-
-      <div className="mt-3">
-        <QueueLink />
-      </div>
-    </div>
+    <IdleHero
+      variant="desktop"
+      onPrimary={onUpload}
+      onUpload={onUpload}
+      onFileDrop={onFileDrop}
+      showTips={false}
+      signedOut={signedOut}
+    />
   );
 }
 

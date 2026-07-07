@@ -873,7 +873,8 @@ export default function ArchivePage() {
       }
       headerTitleActions={null}
       headerActions={
-        graves.length > 0 && (
+        <>
+          {graves.length > 0 && (
           <div className="flex bg-stone-800/60 rounded-full p-1 border border-white/5 shadow-[inset_0_1px_4px_rgba(0,0,0,0.5)]">
             <button
               onClick={() => {
@@ -907,7 +908,8 @@ export default function ArchivePage() {
               )}
             </button>
           </div>
-        )
+          )}
+        </>
       }
       headerBottomRow={
         <>
