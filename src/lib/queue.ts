@@ -70,9 +70,9 @@ function preprocessForClaude(
       }
       const range = max - min || 1;
       for (let i = 0; i < data.length; i += 4) {
-        data[i]     = Math.min(255, ((data[i]     - min) / range) * 255);
-        data[i + 1] = Math.min(255, ((data[i + 1] - min) / range) * 255);
-        data[i + 2] = Math.min(255, ((data[i + 2] - min) / range) * 255);
+        data[i]     = Math.min(255, Math.max(0, ((data[i]     - min) / range) * 255));
+        data[i + 1] = Math.min(255, Math.max(0, ((data[i + 1] - min) / range) * 255));
+        data[i + 2] = Math.min(255, Math.max(0, ((data[i + 2] - min) / range) * 255));
       }
 
       // 2. CLAHE-lite: local contrast boost (8×8 tile grid)

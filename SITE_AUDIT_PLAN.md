@@ -116,3 +116,22 @@ Seeded from symptoms + June P-list (re-validated): capture quality tips + live b
 **Working well (no action):** onboarding carousel, archive empty state, review-tab badges naming what's wrong (NAME / LOW CONFIDENCE), inline name-entry flow UI, mobile bottom-nav layout, light-on-data console (zero JS errors across all pages visited).
 
 **Not yet covered (needs authed session / real photos):** capture → analyze pipeline quality (2A/2B), research sections rendering with live data, TTS story, Places tab with cemetery data, light mode sweep, /explorer, /queue offline flow.
+
+---
+
+## Remediated Findings (Phase 2 & Phase 3 Walkthrough Checks)
+
+| # | Sev | Area | Fix Action / Resolution | Status |
+|---|---|---|---|---|
+| F1 | **High** | Review tab | Human edits or human clicking "Looks correct" sets `reviewedAt` and clears `needsReview`, allowing low-confidence records to graduate from Review to Markers. | ✅ Fixed |
+| F2 | **High** | Cost/perf | Attached AbortControllers and single-flight guards to ResultPage research queries to prevent duplicate/race POST requests. | ✅ Fixed |
+| F3 | **High** | Flow/UX | Handled HTTP 401 on lookup to display a friendly sign-in card rather than empty sections. | ✅ Fixed |
+| F4 | Med | Archive | Implemented `formatDates()` helper to display `birthYear — deathYear` as fallback for year-only gravestones. | ✅ Fixed |
+| F5 | Med | Archive/multi-person | Added `+N person` badges to markers cards and search rows. Made co-buried names (`people[]`) searchable in text query filters. | ✅ Fixed |
+| F7 | Med | Review UX | Changed Review Sheet secondary button text to "Keep in review" when launched from Working Scans to prevent circular naming. | ✅ Fixed |
+| F8 | Low | A11y | Added explicit `aria-label` tags to all delete buttons in Grave List, Grid, and Cemetery views. Reduced tab list horizontal padding on mobile to prevent view toggle collisions. | ✅ Fixed |
+| F9 | Low | Home | Upgraded contrast of capture helper text on the Home page from `text-stone-600` to `text-stone-400`. | ✅ Fixed |
+| API | Med | Reliability | Migrated all NARA and FamilySearch pension search APIs in `nara.ts` to use `fetchSourceJson` with logs and retries. | ✅ Fixed |
+| CSV | Med | Usability | Implemented client-side CSV Export helper and download button to easily export database as spreadsheet. | ✅ Fixed |
+| TIPS | Med | UX | Added dynamic Guided Review Tips panel explaining exactly how to fix low confidence or missing dates on flagged items. | ✅ Fixed |
+| MATH | Med | Preprocessing | Clamped contrast stretching color channels to prevent negative pixel array values. | ✅ Fixed |

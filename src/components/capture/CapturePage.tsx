@@ -630,7 +630,7 @@ function DesktopIdleState({ onUpload, onFileDrop }: { onUpload: () => void; onFi
         </button>
       </div>
 
-      <p className="text-stone-600 text-xs text-center mt-5">
+      <p className="text-stone-400 text-xs text-center mt-5">
         Supports JPG, PNG, HEIC · EXIF GPS extracted automatically
       </p>
 
@@ -798,9 +798,9 @@ function preprocessAndResize(
       }
       const range = max - min || 1;
       for (let i = 0; i < data.length; i += 4) {
-        data[i]     = Math.min(255, ((data[i]     - min) / range) * 255);
-        data[i + 1] = Math.min(255, ((data[i + 1] - min) / range) * 255);
-        data[i + 2] = Math.min(255, ((data[i + 2] - min) / range) * 255);
+        data[i]     = Math.min(255, Math.max(0, ((data[i]     - min) / range) * 255));
+        data[i + 1] = Math.min(255, Math.max(0, ((data[i + 1] - min) / range) * 255));
+        data[i + 2] = Math.min(255, Math.max(0, ((data[i + 2] - min) / range) * 255));
       }
 
       // ── 2. CLAHE-lite: local contrast boost (8×8 tile grid) ───────────────

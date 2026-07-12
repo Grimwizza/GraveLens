@@ -1,3 +1,4 @@
+import { fetchSourceJson } from "./client";
 import type { NaraRecord, NaraItemRecord } from "@/types";
 
 // NARA Catalog API v2 — Elasticsearch-backed catalog of holdings.
@@ -118,14 +119,16 @@ async function searchCivilWarPension(
     params.set("q.birthLikeDate.from", String(birthYear - 5));
     params.set("q.birthLikeDate.to", String(birthYear + 5));
   }
-  try {
-    const res = await fetch(`${FS_SEARCH}?${params}`, {
+  const outcome = await fetchSourceJson<{ entries?: FsEntry[] }>(
+    `${FS_SEARCH}?${params}`,
+    {
+      source: "familysearch-pensions",
       headers: FS_HEADERS,
-      signal: AbortSignal.timeout(9000),
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    const entries: FsEntry[] = data?.entries ?? [];
+      timeoutMs: 9000,
+    }
+  );
+  if (!outcome.ok) return [];
+  const entries: FsEntry[] = outcome.data?.entries ?? [];
     return entries.slice(0, 3).map((entry) => ({
       title: entry.title?.trim() || `Civil War Pension — ${firstName} ${lastName}`,
       recordGroup: "RG 15",
@@ -136,9 +139,6 @@ async function searchCivilWarPension(
         entry.links?.["self"]?.href ??
         `https://www.familysearch.org/search/record/results?f.collectionId=${CIVIL_WAR_PENSION_COLLECTION}&q.surname=${encodeURIComponent(lastName)}`,
     }));
-  } catch {
-    return [];
-  }
 }
 
 /**
@@ -238,28 +238,24 @@ export async function searchNaraRecords(
   ];
 
   for (const url of urls) {
-    try {
-      const res = await fetch(url, {
-        headers: {
-          "Accept": "application/json",
-          "x-api-key": API_KEY,
-        },
-        signal: AbortSignal.timeout(8000),
-      });
+    const outcome = await fetchSourceJson<any>(url, {
+      source: "nara-catalog",
+      headers: {
+        "Accept": "application/json",
+        "x-api-key": API_KEY,
+      },
+      timeoutMs: 8000,
+    });
 
-      if (!res.ok) continue;
+    if (!outcome.ok) continue;
 
-      const data = await res.json();
-      const hits = hitsFromResponse(data);
-      if (hits.length === 0) continue;
+    const hits = hitsFromResponse(outcome.data);
+    if (hits.length === 0) continue;
 
-      return hits
-        .map(mapHit)
-        .filter((r): r is NaraRecord => r !== null)
-        .slice(0, 5);
-    } catch {
-      continue;
-    }
+    return hits
+      .map(mapHit)
+      .filter((r): r is NaraRecord => r !== null)
+      .slice(0, 5);
   }
 
   return [];

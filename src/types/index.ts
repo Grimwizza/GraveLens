@@ -182,6 +182,11 @@ export interface LocalHistoryContext {
   nrhpSites?: NrhpSite[];
   censusPopulation?: CensusEntry[];
   wikidataEvents?: WikidataEvent[];
+  sanbornMap?: {
+    title: string;
+    url: string;
+    thumbnailUrl?: string;
+  };
 }
 
 export interface CulturalCategory {

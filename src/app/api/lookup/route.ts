@@ -1,3 +1,4 @@
+import { searchSanbornMap } from "@/lib/apis/sanborn";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/apiAuth";
 import { searchNewspapers, searchLocalAreaNews } from "@/lib/apis/chronicling";
@@ -84,6 +85,7 @@ export async function POST(req: NextRequest) {
         const [
           cityContext, decadeSnaps, localNewspaper,
           nrhpSites, censusPopulation, wikidataEvents,
+          sanbornMapResult,
         ] = await Promise.allSettled([
           getCityContext(city, county, state),
           getDecadeSnapshots(state, birthYear, deathYear),
@@ -91,6 +93,7 @@ export async function POST(req: NextRequest) {
           hasCoords ? searchNrhpSites(lat, lng, birthYear, deathYear) : Promise.resolve([]),
           (hasCoords && (!deathYear || deathYear >= 1970)) ? getCountyPopulation(lat, lng, birthYear, deathYear) : Promise.resolve([]),
           hasCoords ? getLocalWikidataEvents(lat, lng, birthYear, deathYear) : Promise.resolve([]),
+          searchSanbornMap(city, state, deathYear ?? birthYear),
         ]);
 
         const cityCtx    = cityContext.status      === "fulfilled" ? cityContext.value      : {};
@@ -99,6 +102,7 @@ export async function POST(req: NextRequest) {
         const nrhp       = nrhpSites.status        === "fulfilled" ? nrhpSites.value        : [];
         const census     = censusPopulation.status === "fulfilled" ? censusPopulation.value : [];
         const wikiEvents = wikidataEvents.status   === "fulfilled" ? wikidataEvents.value   : [];
+        const sanborn    = sanbornMapResult.status === "fulfilled" ? sanbornMapResult.value : null;
 
         localHistory = {
           ...(cityCtx.cityArticle   ? { cityArticle:   cityCtx.cityArticle   } : {}),
@@ -108,6 +112,7 @@ export async function POST(req: NextRequest) {
           ...(nrhp.length        > 0 ? { nrhpSites:       nrhp        } : {}),
           ...(census.length      > 0 ? { censusPopulation: census     } : {}),
           ...(wikiEvents.length  > 0 ? { wikidataEvents:  wikiEvents  } : {}),
+          ...(sanborn                  ? { sanbornMap:        sanborn      } : {}),
         };
 
         if (hasCoords) {

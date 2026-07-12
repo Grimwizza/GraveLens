@@ -5,7 +5,7 @@ import PageShell from "@/components/layout/PageShell";
 import { getAllGraves, getGrave, deleteGrave, saveGrave, getAllCemeteries, deleteCemetery, saveCemetery, getQueuedItems } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/browser";
 import { fetchAllFromCloud, deleteFromCloud } from "@/lib/cloudSync";
-import type { GraveRecord, CemeteryRecord, QueuedCapture } from "@/types";
+import type { GraveRecord, CemeteryRecord, QueuedCapture, ExtractedGraveData } from "@/types";
 import { QUEUE_CHANGED_EVENT } from "@/lib/queue";
 import Link from "next/link";
 import { generateThumbnail } from "@/lib/imageUtils";
@@ -23,6 +23,15 @@ type ViewMode = "list" | "tile" | "cover";
 type ArchiveTab = "markers" | "places" | "review";
 
 const PLACE_MARKER_TYPES = new Set(["cemetery", "graveyard", "mausoleum"]);
+
+function formatDates(extracted: ExtractedGraveData): string {
+  const dates = [extracted.birthDate, extracted.deathDate].filter(Boolean).join(" — ");
+  if (dates) return dates;
+  if (extracted.birthYear != null || extracted.deathYear != null) {
+    return [extracted.birthYear ?? "?", extracted.deathYear ?? "?"].join(" — ");
+  }
+  return "Dates unknown";
+}
 
 // ── Viewed-item tracking (dismisses "Recently Added" badge) ───────────────
 const VIEWED_KEY = "gl_viewed_ids";
@@ -104,7 +113,14 @@ export default function ArchivePage() {
   const [enriching, setEnriching] = useState(false);
   const [bulkEnriching, setBulkEnriching] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [archiveTab, setArchiveTab] = useState<ArchiveTab>("markers");
+  const [archiveTab, setArchiveTab] = useState<ArchiveTab>(() => {
+    if (typeof window === "undefined") return "markers";
+    try {
+      const stored = sessionStorage.getItem("gl_archive_filters");
+      if (stored) return (JSON.parse(stored).archiveTab as ArchiveTab) ?? "markers";
+    } catch {}
+    return "markers";
+  });
 
   // ── Assignment flow state ─────────────────────────────────────────────
   // Queue of grave IDs that still need a cemetery name after auto-enrichment
@@ -216,11 +232,12 @@ export default function ArchivePage() {
       filterTag,
       filterConfidence,
       searchQuery,
+      archiveTab,
     };
     try {
       sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(data));
     } catch {}
-  }, [sortField, sortDir, filterState, filterCity, filterCemetery, filterTag, filterConfidence, searchQuery]);
+  }, [sortField, sortDir, filterState, filterCity, filterCemetery, filterTag, filterConfidence, searchQuery, archiveTab]);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "list";
     return (localStorage.getItem("gl_archive_view") as ViewMode) ?? "list";
@@ -772,6 +789,10 @@ export default function ArchivePage() {
         const state = g.location?.state?.toLowerCase() || "";
         const tags = (g.tags || []).join(" ").toLowerCase();
         const inscription = g.extracted.inscription?.toLowerCase() || "";
+        const peopleNames = (g.extracted.people || [])
+          .map((p) => p.name?.toLowerCase() || "")
+          .filter(Boolean)
+          .join(" ");
 
         if (
           !name.includes(q) &&
@@ -779,7 +800,8 @@ export default function ArchivePage() {
           !city.includes(q) &&
           !state.includes(q) &&
           !tags.includes(q) &&
-          !inscription.includes(q)
+          !inscription.includes(q) &&
+          !peopleNames.includes(q)
         ) {
           return false;
         }
@@ -853,6 +875,99 @@ export default function ArchivePage() {
     } catch { /* offline or not logged in */ }
   };
 
+  const handleExportCsv = useCallback(() => {
+    if (graves.length === 0) return;
+
+    const headers = [
+      "ID",
+      "Name",
+      "First Name",
+      "Last Name",
+      "Birth Date",
+      "Birth Year",
+      "Death Date",
+      "Death Year",
+      "Age At Death",
+      "Inscription",
+      "Epitaph",
+      "Marker Type",
+      "Material",
+      "Condition",
+      "Confidence",
+      "Cemetery",
+      "City",
+      "County",
+      "State",
+      "Latitude",
+      "Longitude",
+      "Tags",
+      "Co-Buried Names",
+      "Scan Date"
+    ];
+
+    const rows = graves.map((g) => {
+      const secondaryNames = (g.extracted.people || [])
+        .slice(1)
+        .map((p) => p.name)
+        .filter(Boolean)
+        .join("; ");
+
+      const scanDate = new Date(g.timestamp).toISOString();
+
+      return [
+        g.id,
+        g.extracted.name || "",
+        g.extracted.firstName || "",
+        g.extracted.lastName || "",
+        g.extracted.birthDate || "",
+        g.extracted.birthYear !== null ? String(g.extracted.birthYear) : "",
+        g.extracted.deathDate || "",
+        g.extracted.deathYear !== null ? String(g.extracted.deathYear) : "",
+        g.extracted.ageAtDeath !== null ? String(g.extracted.ageAtDeath) : "",
+        g.extracted.inscription || "",
+        g.extracted.epitaph || "",
+        g.extracted.markerType || "",
+        g.extracted.material || "",
+        g.extracted.condition || "",
+        g.extracted.confidence || "",
+        g.location?.cemetery || "",
+        g.location?.city || "",
+        g.location?.county || "",
+        g.location?.state || "",
+        g.location?.lat !== undefined ? String(g.location.lat) : "",
+        g.location?.lng !== undefined ? String(g.location.lng) : "",
+        (g.tags || []).join("; "),
+        secondaryNames,
+        scanDate
+      ];
+    });
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) =>
+        row
+          .map((val) => {
+            const escaped = String(val).replace(/"/g, '""');
+            if (/[,"\n\r]/.test(escaped)) {
+              return `"${escaped}"`;
+            }
+            return escaped;
+          })
+          .join(",")
+      )
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `gravelens-export-${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, [graves]);
+
   const handleFilterState = (val: string) => { setFilterState(val); setFilterCity(""); setFilterCemetery(""); };
   const handleFilterCity = (val: string) => { setFilterCity(val); setFilterCemetery(""); };
 
@@ -906,6 +1021,18 @@ export default function ArchivePage() {
                 <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-gold-400 rounded-full shadow-[0_0_4px_rgba(201,168,76,0.8)]" />
               )}
             </button>
+            <button
+              onClick={handleExportCsv}
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5 transition-all text-stone-500 hover:text-stone-300"
+              aria-label="Export database as CSV"
+              title="Export as CSV"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </button>
           </div>
         )
       }
@@ -915,7 +1042,7 @@ export default function ArchivePage() {
             {/* Markers */}
             <button
               onClick={() => setArchiveTab("markers")}
-              className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[10px] transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 sm:px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[10px] transition-all flex items-center gap-1.5 ${
                 archiveTab === "markers"
                   ? "bg-stone-700/80 text-gold-400 shadow-[0_2px_8px_rgba(0,0,0,0.5)] border border-stone-600/50"
                   : "text-stone-500 hover:text-stone-300 border border-transparent"
@@ -929,7 +1056,7 @@ export default function ArchivePage() {
             {/* Places */}
             <button
               onClick={() => setArchiveTab("places")}
-              className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[10px] transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 sm:px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[10px] transition-all flex items-center gap-1.5 ${
                 archiveTab === "places"
                   ? "bg-stone-700/80 text-gold-400 shadow-[0_2px_8px_rgba(0,0,0,0.5)] border border-stone-600/50"
                   : "text-stone-500 hover:text-stone-300 border border-transparent"
@@ -943,7 +1070,7 @@ export default function ArchivePage() {
             {/* Review — pending completion */}
             <button
               onClick={() => setArchiveTab("review")}
-              className={`relative px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[10px] transition-all flex items-center gap-1.5 ${
+              className={`relative px-2.5 sm:px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-[10px] transition-all flex items-center gap-1.5 ${
                 archiveTab === "review"
                   ? "bg-stone-700/80 text-gold-400 shadow-[0_2px_8px_rgba(0,0,0,0.5)] border border-stone-600/50"
                   : "text-stone-500 hover:text-stone-300 border border-transparent"
@@ -1330,8 +1457,13 @@ export default function ArchivePage() {
                           className="w-14 h-14 rounded-xl object-cover shrink-0 opacity-90 mt-0.5"
                         />
                         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                          <p className="text-stone-200 text-sm font-semibold leading-snug">
+                          <p className="text-stone-200 text-sm font-semibold leading-snug flex items-center gap-1.5 flex-wrap">
                             {hasName ? g.extracted.name : <span className="text-stone-500 italic font-normal">Name unknown</span>}
+                            {g.extracted.people && g.extracted.people.length > 1 && (
+                              <span className="px-1.5 py-0.5 rounded text-[0.62rem] font-semibold bg-stone-700/80 text-stone-300 font-sans">
+                                +{g.extracted.people.length - 1} person
+                              </span>
+                            )}
                           </p>
                           {dateRange && (
                             <p className="text-stone-400 text-xs">{dateRange}</p>
@@ -1454,7 +1586,7 @@ function AssignmentSheet({
                 {grave.extracted.name || "Unknown"}
               </p>
               <p className="text-stone-500 text-xs mt-0.5">
-                {[grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" — ") || "Dates unknown"}
+                {formatDates(grave.extracted)}
               </p>
             </div>
           </div>
@@ -1537,7 +1669,7 @@ function NearbyConfirmSheet({
                     {g.extracted.name || "Unknown"}
                   </p>
                   <p className="text-stone-500 text-xs">
-                    {[g.extracted.birthDate, g.extracted.deathDate].filter(Boolean).join(" — ") || "Dates unknown"}
+                    {formatDates(g.extracted)}
                   </p>
                 </div>
               </div>
@@ -1605,7 +1737,7 @@ function GraveTileGrid({
       {graves.map((grave) => {
         const hasCemetery = Boolean(grave.location?.cemetery);
         const hasGps = Boolean(grave.location?.lat && grave.location?.lng);
-        const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" — ");
+        const dates = formatDates(grave.extracted);
         const isNew = now > 0 && now - grave.timestamp < RECENT_DAYS && !viewedIds.has(grave.id);
 
         return (
@@ -1632,6 +1764,11 @@ function GraveTileGrid({
                   <p className="font-serif text-white text-sm font-medium leading-tight line-clamp-2">
                     {grave.extracted.name || "Unknown"}
                   </p>
+                  {grave.extracted.people && grave.extracted.people.length > 1 && (
+                    <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[0.62rem] font-semibold bg-stone-700/80 text-stone-300">
+                      +{grave.extracted.people.length - 1} person
+                    </span>
+                  )}
                   {dates && (
                     <p className="text-stone-400 text-[0.8rem] mt-0.5">{dates}</p>
                   )}
@@ -1685,6 +1822,7 @@ function GraveTileGrid({
                 <button
                   onClick={() => onDeleteRequest(grave.id)}
                   className="w-7 h-7 flex items-center justify-center rounded-full bg-stone-900/70 text-stone-500 active:text-red-400"
+                  aria-label="Delete grave"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
                     <polyline points="3 6 5 6 21 6" />
@@ -1747,7 +1885,7 @@ function GraveCoverFlow({
     >
       {graves.map((grave) => {
         const hasGps = Boolean(grave.location?.lat && grave.location?.lng);
-        const dates = [grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" — ");
+        const dates = formatDates(grave.extracted);
         const locationLine = [grave.location?.cemetery, grave.location?.city, grave.location?.state]
           .filter(Boolean)
           .join(", ");
@@ -1787,6 +1925,11 @@ function GraveCoverFlow({
                   <h2 className="font-serif text-white text-2xl font-bold leading-tight">
                     {grave.extracted.name || "Unknown"}
                   </h2>
+                  {grave.extracted.people && grave.extracted.people.length > 1 && (
+                    <span className="inline-block mt-1.5 px-2 py-0.5 rounded text-xs font-semibold bg-stone-800/80 text-stone-300">
+                      +{grave.extracted.people.length - 1} person
+                    </span>
+                  )}
                   {dates && (
                     <p className="text-stone-300 text-sm mt-1.5">{dates}</p>
                   )}
@@ -1934,15 +2077,20 @@ function GraveList({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <p className="font-serif text-stone-100 font-medium truncate">
+                  <p className="font-serif text-stone-100 font-medium truncate flex items-center gap-1.5">
                     {grave.extracted.name || "Unknown"}
+                    {grave.extracted.people && grave.extracted.people.length > 1 && (
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[0.62rem] font-semibold bg-stone-700/80 text-stone-300 font-sans">
+                        +{grave.extracted.people.length - 1} person
+                      </span>
+                    )}
                   </p>
                   {isNew && (
                     <span className="shrink-0 px-1.5 py-0.5 rounded text-[0.75rem] font-bold uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.18)", color: "var(--t-gold-500)", border: "1px solid rgba(201,168,76,0.35)" }}>New</span>
                   )}
                 </div>
                 <p className="text-stone-500 text-xs mt-0.5">
-                  {[grave.extracted.birthDate, grave.extracted.deathDate].filter(Boolean).join(" — ") || "Dates unknown"}
+                  {formatDates(grave.extracted)}
                 </p>
                 {editingId === grave.id ? (
                   <div className="flex items-center gap-1.5 mt-1" onClick={(e) => e.preventDefault()}>
@@ -2018,7 +2166,7 @@ function GraveList({
                       </svg>
                     </button>
                   )}
-                  <button onClick={() => onDeleteRequest(grave.id)} className="w-10 h-10 flex items-center justify-center text-stone-600 active:text-red-400 rounded-lg">
+                  <button onClick={() => onDeleteRequest(grave.id)} className="w-10 h-10 flex items-center justify-center text-stone-600 active:text-red-400 rounded-lg" aria-label="Delete grave">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="3 6 5 6 21 6"/>
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
@@ -2169,7 +2317,7 @@ function CemeterySection({
                       <button onClick={() => setDeleteId(null)} className="text-xs text-stone-500">Cancel</button>
                     </div>
                   ) : (
-                    <button onClick={() => setDeleteId(c.id)} className="w-8 h-8 flex items-center justify-center text-stone-500 active:text-red-400 rounded-lg">
+                    <button onClick={() => setDeleteId(c.id)} className="w-8 h-8 flex items-center justify-center text-stone-500 active:text-red-400 rounded-lg" aria-label="Delete cemetery">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
                       </svg>

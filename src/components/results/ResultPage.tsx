@@ -44,6 +44,8 @@ interface PendingResult {
   extracted: ExtractedGraveData;
   location: GeoLocation | null;
   timestamp: number;
+  needsReview?: boolean;
+  reviewedAt?: number;
 }
 
 export default function ResultPage({ id }: { id: string }) {
@@ -55,6 +57,7 @@ export default function ResultPage({ id }: { id: string }) {
   // True when this result was loaded from the archive (not a fresh scan).
   // Used to surface the "refresh for latest records" banner.
   const isArchivedLoad = useRef(false);
+  const [authRequired, setAuthRequired] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
   const [achievementToasts, setAchievementToasts] = useState<Achievement[]>([]);
@@ -88,6 +91,7 @@ export default function ResultPage({ id }: { id: string }) {
   // Null means person 0 (primary) — callers fall back to pending.extracted.
   const [selectedPersonData, setSelectedPersonData] = useState<ExtractedGraveData | null>(null);
   const [reviewPrompt, setReviewPrompt] = useState(false);
+  const [reviewHelpOpen, setReviewHelpOpen] = useState(false);
   const reviewPromptShownRef = useRef(false);
 
   useEffect(() => {
@@ -105,6 +109,8 @@ export default function ResultPage({ id }: { id: string }) {
           extracted: archived.extracted,
           location: archived.location,
           timestamp: archived.timestamp,
+          needsReview: archived.needsReview,
+          reviewedAt: archived.reviewedAt,
         });
 
         // Backfill lifetimeLandmarks for records saved before the feature existed
@@ -250,7 +256,14 @@ export default function ResultPage({ id }: { id: string }) {
         signal: initialAbort.signal,
         body: JSON.stringify(lookupPayload),
       })
-        .then((r) => r.json())
+        .then((r) => {
+          if (r.status === 401) {
+            setAuthRequired(true);
+            throw new Error("Unauthorized");
+          }
+          setAuthRequired(false);
+          return r.json();
+        })
         .then((d) => {
           const researchData: ResearchData = {
             sourceStatus:      d.sourceStatus ?? undefined,
@@ -368,6 +381,36 @@ export default function ResultPage({ id }: { id: string }) {
       research: {},
       tags: [],
     }), needsReview: true });
+  }, [pending]);
+
+  const handleMarkReviewed = useCallback(async () => {
+    if (!pending) return;
+    const nextPending = {
+      ...pending,
+      reviewedAt: Date.now(),
+      needsReview: false,
+    };
+    setPending(nextPending);
+
+    const existing = await getGrave(pending.id);
+    if (existing) {
+      const updatedRecord = {
+        ...existing,
+        reviewedAt: nextPending.reviewedAt,
+        needsReview: false,
+      };
+      await saveGrave(updatedRecord);
+
+      (async () => {
+        try {
+          const supabase = createClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+          const photoUrl = await uploadPhoto(supabase, user.id, existing.id, existing.photoDataUrl);
+          await upsertGrave(supabase, user.id, updatedRecord, photoUrl);
+        } catch { /* offline or not logged in */ }
+      })();
+    }
   }, [pending]);
 
   const handleShare = useCallback(async () => {
@@ -508,13 +551,26 @@ export default function ResultPage({ id }: { id: string }) {
         };
         setCulturalContext(updatedCtx);
         setResearch((r) => ({ ...(r ?? {}), culturalContext: updatedCtx }));
+        if (selectedPersonIdx === 0) {
+          getGrave(pending.id).then((existing) => {
+            if (existing) {
+              saveGrave({
+                ...existing,
+                research: {
+                  ...existing.research,
+                  culturalContext: updatedCtx,
+                },
+              });
+            }
+          }).catch(() => {});
+        }
       }
     } catch (err) {
       console.warn("Category expand failed:", err);
     } finally {
       setExpandingCategory(null);
     }
-  }, [pending, expandingCategory, culturalContext, selectedPersonData, locationOverride]);
+  }, [pending, expandingCategory, culturalContext, selectedPersonData, locationOverride, selectedPersonIdx]);
 
 
   // Auto-load cultural context once the main research fetch completes
@@ -702,9 +758,13 @@ export default function ResultPage({ id }: { id: string }) {
     // ────────────────────────────────────────────────────────────────────────
 
     const current = extractedData ?? { ...(freshExtracted ?? pending.extracted), ...(extractedOverride ?? {}) };
+    const phase1Abort = new AbortController();
+    const phase2Abort = new AbortController();
     try {
       isArchivedLoad.current = false; // refresh clears the stale banner
       setResearchLoading(true);
+      initialFetchAbortRef.current = phase1Abort;
+      supplementalFetchAbortRef.current = phase2Abort;
 
       const refreshPayload = {
         name: current.name,
@@ -730,14 +790,27 @@ export default function ResultPage({ id }: { id: string }) {
         fetch("/api/lookup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: phase1Abort.signal,
           body: JSON.stringify(refreshPayload),
         }),
         fetch("/api/lookup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: phase2Abort.signal,
           body: JSON.stringify({ ...refreshPayload, supplemental: true }),
         }),
       ]);
+
+      if (phase1Res.status === 401 || phase2Res.status === 401) {
+        setAuthRequired(true);
+        if (initialFetchAbortRef.current === phase1Abort && supplementalFetchAbortRef.current === phase2Abort) {
+          setResearchLoading(false);
+          refreshingRef.current = false;
+          setRefreshing(false);
+        }
+        return;
+      }
+      setAuthRequired(false);
 
       if (phase1Res.ok) {
         const d = await phase1Res.json();
@@ -800,10 +873,16 @@ export default function ResultPage({ id }: { id: string }) {
           });
         }
       }
-    } catch { /* non-fatal */ } finally {
-      setResearchLoading(false);
-      refreshingRef.current = false;
-      setRefreshing(false);
+    } catch (err: any) {
+      if (err?.name !== "AbortError") {
+        console.error("handleRefreshData error:", err);
+      }
+    } finally {
+      if (initialFetchAbortRef.current === phase1Abort && supplementalFetchAbortRef.current === phase2Abort) {
+        setResearchLoading(false);
+        refreshingRef.current = false;
+        setRefreshing(false);
+      }
     }
   }, [pending, extractedOverride, currentLocation]);
 
@@ -1144,6 +1223,8 @@ export default function ResultPage({ id }: { id: string }) {
     extracted,
     research: research ?? {},
     tags,
+    needsReview: pending.needsReview,
+    reviewedAt: pending.reviewedAt,
   };
 
   return (
@@ -1333,22 +1414,60 @@ export default function ResultPage({ id }: { id: string }) {
             ].filter(Boolean).join(" · ");
             return (
               <div className="rounded-2xl mb-1 overflow-hidden" style={{ border: "1px solid rgba(245,158,11,0.2)", background: "rgba(245,158,11,0.04)" }}>
-                <div className="px-4 pt-3 pb-1">
-                  <p className="text-[0.7rem] font-bold uppercase tracking-widest text-amber-400">Needs attention</p>
+                <div className="px-4 pt-3 pb-2">
+                  <div className="flex justify-between items-center">
+                    <p className="text-[0.7rem] font-bold uppercase tracking-widest text-amber-400">Needs attention</p>
+                    <button
+                      onClick={() => setReviewHelpOpen((o) => !o)}
+                      className="text-stone-400 hover:text-amber-400 text-[0.68rem] font-semibold flex items-center gap-1 transition-colors"
+                      title="Why was this flagged?"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                      </svg>
+                      {reviewHelpOpen ? "Hide tips" : "Guided help"}
+                    </button>
+                  </div>
                   {reasons && <p className="text-stone-500 text-[0.72rem] mt-0.5">{reasons}</p>}
+
+                  {reviewHelpOpen && (
+                    <div className="mt-2.5 mb-1.5 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-stone-300 text-xs leading-relaxed animate-fade-in">
+                      <p className="font-semibold text-amber-400 mb-1.5 flex items-center gap-1">
+                        💡 How to resolve this scan:
+                      </p>
+                      <ul className="list-disc pl-4 space-y-1.5 text-stone-400 text-[0.72rem]">
+                        {isLow && (
+                          <li><strong>Verify Inscription:</strong> Use the <strong>Relief Lens</strong> on the photo to enhance weathered carvings and verify the transcription.</li>
+                        )}
+                        {missingDates && (
+                          <li><strong>Add Missing Dates:</strong> Tap the pencil edit icon next to details to supply birth or death years if they are visible but were missed by the AI.</li>
+                        )}
+                        {unusualChars && (
+                          <li><strong>Clean Up Name:</strong> Names containing special symbols, brackets, or numbers should be cleaned up via editing.</li>
+                        )}
+                        <li>If the details are fully correct, tap <strong>Looks correct</strong> to approve the scan and move it to your active Markers library.</li>
+                      </ul>
+                    </div>
+                  )}
                 </div>
-                <div className="flex border-t border-amber-500/10">
+                <div className="flex border-t border-amber-500/10 divide-x divide-amber-500/10">
                   <button
                     onClick={() => handleRefreshData()}
-                    className="flex-1 px-4 py-2.5 text-xs font-semibold text-amber-300 text-center active:bg-white/5 transition-colors border-r border-amber-500/10"
+                    className="flex-1 px-2 py-2.5 text-[0.72rem] font-semibold text-amber-300 text-center active:bg-white/5 transition-colors"
                   >
                     Re-analyze photo
                   </button>
                   <button
                     onClick={() => handleRefreshData(extracted, true)}
-                    className="flex-1 px-4 py-2.5 text-xs font-semibold text-stone-400 text-center active:bg-white/5 transition-colors"
+                    className="flex-1 px-2 py-2.5 text-[0.72rem] font-semibold text-stone-400 text-center active:bg-white/5 transition-colors"
                   >
                     Refresh research
+                  </button>
+                  <button
+                    onClick={() => handleMarkReviewed()}
+                    className="flex-1 px-2 py-2.5 text-[0.72rem] font-semibold text-amber-400 text-center active:bg-white/5 transition-colors"
+                  >
+                    Looks correct
                   </button>
                 </div>
               </div>
@@ -1378,7 +1497,30 @@ export default function ResultPage({ id }: { id: string }) {
             </button>
           )}
 
-          {/* Military context — most significant record type, always first */}
+                    {/* Sign in to unlock research card */}
+          {authRequired && !researchLoading && (
+            <div className="rounded-2xl p-4 mb-4 border border-amber-500/20 bg-amber-500/5 text-center">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--t-gold-500)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2 text-amber-500">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <h4 className="text-stone-200 text-sm font-semibold">Sign in to unlock historical research</h4>
+              <p className="text-stone-500 text-xs mt-1 leading-relaxed max-w-[280px] mx-auto">
+                GraveLens queries public records APIs to reconstruct this person's life history. Sign in with a free account to view them.
+              </p>
+              <Link
+                href="/login"
+                className="inline-block mt-3 px-4 py-2 rounded-xl text-xs font-semibold text-[#1a1917]"
+                style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
+              >
+                Sign In / Sign Up
+              </Link>
+            </div>
+          )}
+
+          {!authRequired && (
+            <>
+              {/* Military context — most significant record type, always first */}
           {(research?.militaryContext || researchLoading) && (
             <MilitaryCard
               context={research?.militaryContext}
@@ -1502,6 +1644,8 @@ export default function ResultPage({ id }: { id: string }) {
           {(research?.researchChecklist?.items?.length || researchLoading) ? (
             <ResearchChecklistCard checklist={research?.researchChecklist} loading={researchLoading} />
           ) : null}
+            </>
+          )}
 
           {/* External search links (Find A Grave, BillionGraves, FamilySearch) */}
           {!researchLoading && activeExtracted.name && (
@@ -1603,6 +1747,7 @@ export default function ResultPage({ id }: { id: string }) {
             handleExtractedEdit({ name });
           }}
           onSaveLater={handleSaveForLater}
+          isArchived={isArchivedLoad.current}
         />
       )}
 
@@ -3214,7 +3359,8 @@ function LocalHistoryCard({
     localHistory.localNewspaper?.length ||
     localHistory.nrhpSites?.length ||
     localHistory.censusPopulation?.length ||
-    localHistory.wikidataEvents?.length;
+    localHistory.wikidataEvents?.length ||
+    localHistory.sanbornMap;
 
   if (!hasContent) return null;
 
@@ -3423,6 +3569,46 @@ function LocalHistoryCard({
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* Sanborn Fire Insurance Map */}
+        {localHistory.sanbornMap && (
+          <div className="bg-stone-900 border border-stone-800 rounded-xl overflow-hidden shadow-md flex flex-col sm:flex-row">
+            {localHistory.sanbornMap.thumbnailUrl && (
+              <div className="sm:w-1/3 shrink-0 relative bg-stone-950 flex items-center justify-center border-b sm:border-b-0 sm:border-r border-stone-800">
+                <img
+                  src={localHistory.sanbornMap.thumbnailUrl}
+                  alt="Historical Sanborn Map thumbnail"
+                  className="max-h-48 sm:max-h-none sm:h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            )}
+            <div className="p-4 flex flex-col justify-between flex-1 min-w-0">
+              <div>
+                <span className="text-[0.65rem] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                  Historical Map
+                </span>
+                <h4 className="font-serif text-stone-100 text-sm font-semibold mt-2 mb-1.5 leading-snug">
+                  {localHistory.sanbornMap.title}
+                </h4>
+                <p className="text-stone-400 text-xs leading-normal">
+                  View the high-resolution fire insurance maps for this city and decade from the Library of Congress collections.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-stone-800/60">
+                <a
+                  href={localHistory.sanbornMap.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center text-xs font-semibold hover:text-white"
+                  style={{ color: "var(--t-gold-500)" }}
+                >
+                  Explore map sheets on loc.gov ↗
+                </a>
+              </div>
+            </div>
           </div>
         )}
 
@@ -4641,9 +4827,11 @@ function SectionHeader({
 function ReviewPromptSheet({
   onEnterName,
   onSaveLater,
+  isArchived = false,
 }: {
   onEnterName: (name: string) => void;
   onSaveLater: () => void;
+  isArchived?: boolean;
 }) {
   const [nameValue, setNameValue] = useState("");
   const [entering, setEntering] = useState(false);
@@ -4705,7 +4893,7 @@ function ReviewPromptSheet({
             onClick={onSaveLater}
             className="w-full py-3 rounded-2xl text-sm font-medium text-stone-400 border border-stone-700"
           >
-            Save to Working Scans — complete later
+            {isArchived ? "Keep in review" : "Save to Working Scans — complete later"}
           </button>
         </div>
       </div>
