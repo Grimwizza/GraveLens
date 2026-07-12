@@ -1,26 +1,29 @@
 # GraveLens Context Handoff
 
 ## Accomplished Tasks
-- **Phase 2 & Phase 3 Audit:** Fixed contrast stretching logic bounds in `CapturePage.tsx`/`queue.ts`, solved Review tab record graduation (`reviewedAt`), enabled multi-person text searches, persisted expanded cultural categories to DB, and migrated NARA/FamilySearch API wrappers to the robust `fetchSourceJson` client.
-- **CSV Database Export:** Implemented client-side CSV spreadsheet downloads from the Archive header.
-- **Guided Review UX:** Created contextual Review Tips panels explaining name/date resolution workflows.
-- **F10 Sanborn Maps:** Integrated Library of Congress Sanborn Map search client (`src/lib/apis/sanborn.ts`), added `sanbornMap` property to `LocalHistoryContext`, and rendered a map viewer card under Local History.
-- **A11y & Mobile Polish:** Added missing `aria-label` tags to delete buttons and adjusted tab segment paddings for 375px mobile screens.
-- **Git Push:** Committed all changes under conventional commit format and pushed to remote `main` branch.
-- **Clean Linters & Type Safety:** Reordered hooks and callback functions in `CapturePage.tsx` to solve TDZ block-scoped hoisting compiler errors. Resolved all 26 ESLint warnings across 10 files. `npm run lint` and `npx tsc --noEmit` now compile with 0 warnings and 0 errors.
-- **NARA API Key Wiring:** Configured `nara.ts` to support real API keys via `process.env.NARA_API_KEY`, preserving the `DEMO_KEY` as a fallback.
+- **F7: USGenWeb Probate & Land Record Search:**
+  - Implemented the directory scraper client (`src/lib/apis/usgenweb.ts`) searching `files.usgwarchives.net/[state]/[county]/` with regex-based parsing for Wills, Deeds, and Land abstracts.
+  - Built a resilient fallback to targeted Google Site Searches when `usgwarchives.net` is unreachable or times out (which handles the current global outage of the domain).
+  - Integrated the lookup conditionally on BLM GLO land patents in `route.ts`, caching results cell-wide in the shared geography cache database.
+  - Rendered results in `ResultPage.tsx` under the Local History card panel with category tags.
+- **F9: FamilySearch Tree Collision Detection:**
+  - Built token negotiation for unauthenticated OAuth sessions via `https://ident.familysearch.org/cis-web/oauth2/v3/token` in `src/lib/apis/familysearch.ts`.
+  - Added public space searches via `/platform/tree/search` utilizing name, birth, and death year range logic.
+  - Implemented a biographical confidence validator (requiring score >= 0.7 to register a tree match hit).
+  - Rendered a non-intrusive matching warning card on the details page with deep-links to pre-filled searches.
+- **Linter & Test Verification:**
+  - Added Vitest tests for the FamilySearch collision matching confidence scoring logic.
+  - `npx tsc --noEmit` compiles with **0 errors**.
+  - `npm run lint` completes with **0 warnings and 0 errors**.
+  - `npm run test` passes with **37/37 tests successful**.
+- **Git Push:** Committed and pushed all changes to `main` branch.
 
 ## Unresolved Bugs
-- None. Linter and TypeScript compiler checks pass completely warning-free and error-free.
+- None.
 
 ## Knowledge Gained
-- **Library of Congress JSON API:** Sanborn fire insurance maps can be queried cleanly using `https://www.loc.gov/collections/sanborn-maps/?q="..."&fo=json`.
-- **Identity Matching:** Surnames are hashed/indexed on Soundex codes instead of exact names for fuzzy matching.
-- **FamilySearch Restriction:** The platform search endpoint requires OAuth, meaning direct record fetching is degraded to parameterized web search deep-links.
-- **React Hook Hoisting:** Referencing callback functions declared with `const` inside earlier hooks or dependency arrays triggers compiler warnings/errors under strict mode. Declaring callbacks before effects resolves this temporal dead zone issue cleanly.
-- **NARA API Limits:** Using the shared `DEMO_KEY` tier throttles the app to ~30 requests/hour per Vercel edge IP. Real keys signed up at api.data.gov bypass this limit.
+- **FamilySearch Unauthenticated Sessions:** The public tree search can be queried using a client ID/App Key without a user session token.
+- **Sinkholed Sites Fallback:** For volunteer repositories experiencing downtime, pre-filled Google Site searches serve as a viable and extremely useful fallback.
 
 ## Immediate Next Steps
-- **F7 USGenWeb probate lookup:** Parse deed book and probate abstract references from volunteer indexes at `usgwarchives.net`.
-- **F9 FamilySearch Tree Collision:** Implement Persons tree search using OAuth app keys for inline tree matching badges.
-- **Phase 5 Verification:** Verify authed features (persistence, skeleton loaders, story playback) with a test user login.
+- **Phase 5 Verification:** Verify offline PWA sync queue behavior, multi-person marker recognition, and auth features using browser devtools and manual scans.
