@@ -52,11 +52,11 @@ export default function SourceStatusCard({ sourceStatus }: Props) {
             <div className="flex-1 min-w-0">
               <p className="text-stone-300 text-[0.78rem] leading-snug">
                 {SOURCE_LABELS[key] ?? key}
-                <span className="text-stone-500">
-                  {s.status === "failed"
-                    ? " — didn't respond, try again later"
-                    : " — no API access; search it directly"}
-                </span>
+                {s.status === "failed" && (
+                  <span className="text-stone-500">
+                    {" — didn't respond, try again later"}
+                  </span>
+                )}
               </p>
               {s.fallbackUrl && (
                 <a
