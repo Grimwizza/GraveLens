@@ -135,3 +135,27 @@ Seeded from symptoms + June P-list (re-validated): capture quality tips + live b
 | CSV | Med | Usability | Implemented client-side CSV Export helper and download button to easily export database as spreadsheet. | ✅ Fixed |
 | TIPS | Med | UX | Added dynamic Guided Review Tips panel explaining exactly how to fix low confidence or missing dates on flagged items. | ✅ Fixed |
 | MATH | Med | Preprocessing | Clamped contrast stretching color channels to prevent negative pixel array values. | ✅ Fixed |
+
+---
+
+## Regression & Walkthrough Checklist (Phase 5)
+
+This checklist defines manual and automated verification checks to run before releasing:
+
+### 1. Offline PWA Synchronization (Airplane Mode)
+- `[ ]` Turn off internet connection or enable offline mode in browser devtools.
+- `[ ]` Scan or upload a gravestone. Confirm it is added to the IndexedDB queue with "pending" status and shows up in "Working Scans" under the Review tab.
+- `[ ]` Turn internet connection back on.
+- `[ ]` Confirm that the queue processor automatically triggers, performs OCR/analysis, enriches the data, and graduates the record to the Archive.
+
+### 2. Multi-Person Stones (End-to-End)
+- `[ ]` Scan or upload a stone containing multiple names (e.g. spouse co-burials).
+- `[ ]` Verify that the OCR extractor identifies all names and populates the `people[]` array in the record.
+- `[ ]` Go to the Archive list/grid view and verify that a badge stating `+1 person` (or similar) is rendered on the card.
+- `[ ]` Search the Archive for the co-buried person's name and confirm that the card is correctly filtered and displayed.
+
+### 3. Build & CI Guardrails
+- `[ ]` Run `npx tsc --noEmit` and confirm 0 TypeScript compiler errors.
+- `[ ]` Run `npm run lint` and confirm no ESLint errors/warnings.
+- `[ ]` Run `npm run test` and confirm all vitest unit tests pass.
+

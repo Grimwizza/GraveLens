@@ -236,9 +236,8 @@ export async function searchNaraRecords(
     `${BASE}/records?${params}`,
     `${BASE}?${params}`,
   ];
-
   for (const url of urls) {
-    const outcome = await fetchSourceJson<any>(url, {
+    const outcome = await fetchSourceJson<Record<string, unknown>>(url, {
       source: "nara-catalog",
       headers: {
         "Accept": "application/json",

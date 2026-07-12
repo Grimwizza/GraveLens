@@ -30,6 +30,7 @@ export async function searchSanbornMap(
     at: "results",
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const outcome = await fetchSourceJson<any>(`${BASE_URL}?${params}`, {
     source: "loc-sanborn",
     timeoutMs: 8000,

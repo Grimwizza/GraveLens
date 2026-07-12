@@ -873,8 +873,8 @@ export default function ResultPage({ id }: { id: string }) {
           });
         }
       }
-    } catch (err: any) {
-      if (err?.name !== "AbortError") {
+    } catch (err: unknown) {
+      if ((err as { name?: string })?.name !== "AbortError") {
         console.error("handleRefreshData error:", err);
       }
     } finally {
@@ -1506,7 +1506,7 @@ export default function ResultPage({ id }: { id: string }) {
               </svg>
               <h4 className="text-stone-200 text-sm font-semibold">Sign in to unlock historical research</h4>
               <p className="text-stone-500 text-xs mt-1 leading-relaxed max-w-[280px] mx-auto">
-                GraveLens queries public records APIs to reconstruct this person's life history. Sign in with a free account to view them.
+                GraveLens queries public records APIs to reconstruct this person&apos;s life history. Sign in with a free account to view them.
               </p>
               <Link
                 href="/login"
