@@ -13,6 +13,7 @@ import ThematicIllustration from "@/components/ui/ThematicIllustration";
 import { reverseGeocode } from "@/lib/apis/nominatim";
 import { formatOpeningHours, cemeteryId } from "@/lib/apis/cemetery";
 import { shouldReview, TYPICAL_NAME_RE } from "@/lib/reviewUtils";
+import GraveEditSheet, { type GraveEditPatch } from "@/components/archive/GraveEditSheet";
 import { buildAllResearchLinks } from "@/lib/researchLinks";
 import { CURRENT_RESEARCH_VERSION } from "@/lib/researchVersion";
 
@@ -132,6 +133,8 @@ export default function ArchivePage() {
     name: string;
     graves: GraveRecord[];
   } | null>(null);
+  // Full-record edit sheet opened from an archive row (F6)
+  const [editSheetGrave, setEditSheetGrave] = useState<GraveRecord | null>(null);
 
   const [failedQueueItems, setFailedQueueItems] = useState<QueuedCapture[]>([]);
 
@@ -686,26 +689,52 @@ export default function ArchivePage() {
   };
 
   // ── Manual cemetery edit ──────────────────────────────────────────────────
-  const handleCemeteryEdit = async (id: string, name: string) => {
+  // Full-record edit from an archive row: name, dates, cemetery in one save.
+  // Applies the same derivations as ResultPage edits (first/last name split,
+  // year extraction) and counts as a human review of the record.
+  const handleGraveEdit = async (id: string, patch: GraveEditPatch) => {
     const grave = graves.find((g) => g.id === id);
     if (!grave) return;
 
-    const updated = { ...grave, location: { ...grave.location, cemetery: name } };
-    await saveGrave(updated);
-    if (grave.location?.lat && grave.location?.lng) {
-      learnCemetery(name, grave.location.lat, grave.location.lng);
+    const YEAR_RE = /\b(1[5-9]\d\d|20[0-2]\d)\b/;
+    const extracted = { ...grave.extracted };
+    if (patch.name !== undefined) {
+      extracted.name = patch.name;
+      const parts = patch.name.split(/\s+/).filter(Boolean);
+      extracted.firstName = parts[0] ?? "";
+      extracted.lastName = parts.length > 1 ? parts[parts.length - 1] : "";
     }
-    setGraves((prev) => prev.map((g) => g.id === id ? updated : g));
+    if (patch.birthDate !== undefined) {
+      extracted.birthDate = patch.birthDate;
+      extracted.birthYear = patch.birthDate.match(YEAR_RE) ? parseInt(patch.birthDate.match(YEAR_RE)![1], 10) : null;
+    }
+    if (patch.deathDate !== undefined) {
+      extracted.deathDate = patch.deathDate;
+      extracted.deathYear = patch.deathDate.match(YEAR_RE) ? parseInt(patch.deathDate.match(YEAR_RE)![1], 10) : null;
+    }
 
-    // Check for other records near this location to offer bulk update
-    if (grave.location?.lat && grave.location?.lng) {
+    const updated: GraveRecord = {
+      ...grave,
+      extracted,
+      ...(patch.cemetery !== undefined
+        ? { location: { ...grave.location, cemetery: patch.cemetery } }
+        : {}),
+      // A human edit that leaves the record with a name counts as review
+      ...(extracted.name ? { reviewedAt: Date.now(), needsReview: false } : {}),
+    };
+    await saveGrave(updated);
+    setGraves((prev) => prev.map((g) => (g.id === id ? updated : g)));
+
+    // Cemetery changed — learn it and offer the nearby bulk update
+    if (patch.cemetery && grave.location?.lat && grave.location?.lng) {
+      learnCemetery(patch.cemetery, grave.location.lat, grave.location.lng);
       const nearby = graves.filter((g) => {
         if (g.id === id) return false;
         if (!g.location?.lat || !g.location?.lng) return false;
         return distanceMeters(grave.location.lat, grave.location.lng, g.location.lat, g.location.lng) < PROXIMITY_METERS;
       });
       if (nearby.length > 0) {
-        setNearbyConfirm({ name, graves: nearby });
+        setNearbyConfirm({ name: patch.cemetery, graves: nearby });
       }
     }
   };
@@ -1270,6 +1299,13 @@ export default function ArchivePage() {
               onNo={handleNearbyNo}
             />
           )}
+          {editSheetGrave && (
+            <GraveEditSheet
+              grave={editSheetGrave}
+              onSave={(patch) => handleGraveEdit(editSheetGrave.id, patch)}
+              onClose={() => setEditSheetGrave(null)}
+            />
+          )}
         </>
       }
     >
@@ -1383,7 +1419,7 @@ export default function ArchivePage() {
                 onDeleteRequest={setDeleteConfirm}
                 onDeleteConfirm={handleDelete}
                 onDeleteCancel={() => setDeleteConfirm(null)}
-                onCemeteryEdit={handleCemeteryEdit}
+                onEdit={setEditSheetGrave}
                 viewedIds={viewedIds}
                 onView={handleView}
               />
@@ -2042,7 +2078,7 @@ function GraveList({
   onDeleteRequest,
   onDeleteConfirm,
   onDeleteCancel,
-  onCemeteryEdit,
+  onEdit,
   viewedIds,
   onView,
 }: {
@@ -2052,7 +2088,7 @@ function GraveList({
   onDeleteRequest: (id: string) => void;
   onDeleteConfirm: (id: string) => void;
   onDeleteCancel: () => void;
-  onCemeteryEdit?: (id: string, name: string) => Promise<void>;
+  onEdit?: (grave: GraveRecord) => void;
   viewedIds: Set<string>;
   onView: (id: string) => void;
 }) {
@@ -2061,8 +2097,6 @@ function GraveList({
     const t = setTimeout(() => setNow(Date.now()), 0);
     return () => clearTimeout(t);
   }, []);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
   if (graves.length === 0) {
     return (
       <div className="flex items-center justify-center flex-1 mt-16">
@@ -2102,46 +2136,13 @@ function GraveList({
                 <p className="text-stone-500 text-xs mt-0.5">
                   {formatDates(grave.extracted)}
                 </p>
-                {editingId === grave.id ? (
-                  <div className="flex items-center gap-1.5 mt-1" onClick={(e) => e.preventDefault()}>
-                    <input
-                      autoFocus
-                      type="text"
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          const name = editValue.trim();
-                          if (name && onCemeteryEdit) onCemeteryEdit(grave.id, name).then(() => setEditingId(null));
-                        }
-                        if (e.key === "Escape") setEditingId(null);
-                      }}
-                      placeholder="Cemetery name"
-                      className="flex-1 min-w-0 bg-stone-700 text-stone-200 text-xs rounded px-2 py-1 border border-stone-600 focus:outline-none"
-                    />
-                    <button
-                      onClick={() => {
-                        const name = editValue.trim();
-                        if (name && onCemeteryEdit) onCemeteryEdit(grave.id, name).then(() => setEditingId(null));
-                      }}
-                      className="text-[0.75rem] font-semibold px-2 py-1 rounded"
-                      style={{ background: "var(--t-gold-500)", color: "#1a1917" }}
-                    >
-                      Save
-                    </button>
-                    <button onClick={() => setEditingId(null)} className="text-stone-500 text-xs">✕</button>
-                  </div>
-                ) : (
-                  <>
-                    {hasCemetery || grave.location?.city ? (
-                      <p className="text-stone-600 text-xs truncate mt-0.5">
-                        {[grave.location.cemetery, grave.location.city, grave.location.state].filter(Boolean).join(", ")}
-                      </p>
-                    ) : enriching && hasGps ? (
-                      <span className="text-stone-600 text-xs mt-0.5">Looking up cemetery…</span>
-                    ) : null}
-                  </>
-                )}
+                {hasCemetery || grave.location?.city ? (
+                  <p className="text-stone-600 text-xs truncate mt-0.5">
+                    {[grave.location.cemetery, grave.location.city, grave.location.state].filter(Boolean).join(", ")}
+                  </p>
+                ) : enriching && hasGps ? (
+                  <span className="text-stone-600 text-xs mt-0.5">Looking up cemetery…</span>
+                ) : null}
                 {grave.tags && grave.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {grave.tags.map((tag) => (
@@ -2164,11 +2165,11 @@ function GraveList({
                 </div>
               ) : (
                 <>
-                  {onCemeteryEdit && editingId !== grave.id && (
+                  {onEdit && (
                     <button
-                      onClick={() => { setEditValue(grave.location?.cemetery ?? ""); setEditingId(grave.id); }}
+                      onClick={() => onEdit(grave)}
                       className="w-10 h-10 flex items-center justify-center text-stone-600 active:text-stone-300 rounded-lg"
-                      aria-label="Edit cemetery"
+                      aria-label="Edit details"
                     >
                       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>

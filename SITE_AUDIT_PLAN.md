@@ -149,7 +149,9 @@ Independently re-tested the remediated findings with fresh bundles (see SW note 
 | F2 duplicate lookups | ⚠️ Was incomplete — ResultPage got abort controllers, but the real volume came from ArchivePage bulk re-enrichment: "capped at 5/session" was actually 5 per **mount** with no 401 bail (observed 40+ signed-out requests across visits). **Fixed:** sessionStorage session cap + break on 401. Verified live: 1 request per session signed out, 0 on repeat visits. |
 | **New finding (SW-DEV)** | The service worker registers in dev and serves stale bundles — caused hydration-mismatch errors on every archive load and made three verification rounds test *old* code. **Fixed:** `sw-register.tsx` now unregisters instead of registering when `NODE_ENV !== "production"`. Production behavior unchanged. |
 
-**Still open:** F6 (archive rows only expose cemetery-edit + delete; full edit sheet needed) · F10 (verify grave pins render on Discovery Map with real scan data) · Phase 2 area audits not yet run systematically (2A capture, 2B recognition prompts, 2C archive scale, 2E context relevance/caching).
+**F6 fixed (2026-07-12):** archive row pencil now opens `GraveEditSheet` (name, birth/death dates, cemetery in one save) replacing the cemetery-only inline editor. Applies the same derivations as ResultPage edits (first/last split, year extraction), counts as a human review (`reviewedAt`), and keeps the learn-cemetery + nearby-bulk-update behavior. Verified live: edited a year-only record, dates + derived years persisted to IDB, row updated.
+
+**Still open:** F10 (verify grave pins render on Discovery Map with real scan data) · Phase 2 area audits not yet run systematically (2A capture, 2B recognition prompts, 2C archive scale, 2E context relevance/caching) · multi-person (people[]) editing still only via ResultPage person pills.
 
 ## Regression & Walkthrough Checklist (Phase 5)
 
