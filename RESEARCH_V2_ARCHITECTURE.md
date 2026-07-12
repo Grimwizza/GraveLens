@@ -98,9 +98,17 @@ Every era has at least one real-data path; the thin band (2015+) is exactly wher
 
 ## Build order (greenfield)
 
-1. Identity Layer (`personQuery.ts` + `scoreCandidate`) — 3–4 sessions
-2. Tier 2 deep-link panel driven by it — 2 sessions
-3. Shared fetch client + loc.gov + WikiTree + NARA key inline — 3 sessions
-4. First state death index ingestion (home state) — 2 sessions
-5. Tier 3 agent + quota — 2–3 sessions
-6. (Parallel, free option) FamilySearch Solution Provider application — if ever approved, FS records move from Tier 2 into Tier 1 with zero rearchitecture, because everything consumes the same PersonQuery/score interfaces.
+1. Identity Layer (`personQuery.ts` + `scoreCandidate`) — ✅ **DONE** (`buildPersonQuery` wired into lookup; `scoreCandidate` activated by WikiTree below)
+2. Tier 2 deep-link panel driven by it — ⚠️ partial (`researchLinks.ts` links render, but not the unified era-filtered panel)
+3. Shared fetch client + loc.gov + WikiTree + NARA key inline — ✅ client + loc.gov done; ✅ **WikiTree done (2026-07-12)**; ⚠️ NARA still on DEMO_KEY
+4. First state death index ingestion (home state) — ⚠️ infra done (`burial_index` table harvests every scan) but no external state data ingested yet, and nothing queries it back
+5. Tier 3 agent + quota — ❌ not started
+6. (Parallel, free option) FamilySearch Solution Provider application — external, not started
+
+### WikiTree implementation notes (2026-07-12)
+- `src/lib/apis/wikitree.ts` — `searchPerson` (open API, no key/auth), each candidate scored via `scoreCandidate` against the stone's dates + place; only medium/high returned, capped at 3, best first.
+- **First real inline data source and the activator of `scoreCandidate`** — results carry a confidence badge + plain-English "matched on:" reasons.
+- Renders as `WikiTreeCard` in ResultPage, persists into `GraveRecord.research.wikitree` (archivable, cloud-synced, offline-durable), participates in `sourceStatus` (failed → fallback search link).
+- Verified live: "Hans Larson b1861 d1948" → high match with real dates + South Dakota; surfaces the Danish-spelling "Larsen" as a phonetic surname-variant match; wrong-era queries correctly return empty.
+- Bug caught in verification: WikiTree omits `LastName` in search results, so the surname is recovered from the ID (`Larson-6533` → "Larson"), else `scoreCandidate` wrongly penalizes every match. Guarded by `wikitree.test.ts`.
+- **Next WikiTree upgrades:** query surname *variants* (`pq.surnames[1..]`) as separate calls to catch Schmitt/Schmidt at the API level; add a `getRelatives` follow-up to surface family links.

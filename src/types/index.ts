@@ -302,6 +302,8 @@ export interface ResearchData {
   narratives?: LifeNarrative[];
   localHistory?: LocalHistoryContext;
   culturalContext?: CulturalContext;
+  /** WikiTree public profile matches (real inline data, scored by confidence) */
+  wikitree?: import("@/lib/apis/wikitree").WikiTreeMatch[];
   /** FamilySearch public record collection hints */
   familySearchHints?: FamilySearchHint[];
   /** Social Security Death Index matches (1936–2014) */

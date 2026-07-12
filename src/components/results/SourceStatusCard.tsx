@@ -13,6 +13,7 @@ import type { ResearchSourceStatus } from "@/types";
 
 const SOURCE_LABELS: Record<string, string> = {
   newspapers: "Historic newspapers (Library of Congress)",
+  wikitree: "WikiTree profiles",
   familySearchHints: "FamilySearch records",
   ssdi: "Social Security Death Index",
   immigration: "Immigration & passenger lists",

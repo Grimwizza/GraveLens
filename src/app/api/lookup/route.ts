@@ -19,6 +19,7 @@ import { searchSSdI } from "@/lib/apis/ssdi";
 import { searchImmigrationRecords, isLikelyImmigrant } from "@/lib/apis/immigration";
 import { searchHistoricalCensus } from "@/lib/apis/historicalCensus";
 import { searchEnlistmentRecords } from "@/lib/apis/nara";
+import { searchWikiTree } from "@/lib/apis/wikitree";
 
 import { getSoundex, variantsFor } from "@/lib/phonetic";
 import { buildPersonQuery } from "@/lib/research/personQuery";
@@ -193,6 +194,7 @@ export async function POST(req: NextRequest) {
     const [
       newspapers, naraRecords, landRecords, historical, cemeteryWikiUrl,
       familySearchHints, ssdiRecords, immigrationRecords, historicalCensusRecords,
+      wikitreeMatches,
     ] = await Promise.allSettled([
       searchNewspapers({
         name: bestFullName,
@@ -225,6 +227,10 @@ export async function POST(req: NextRequest) {
       (!deathYear || deathYear <= 1950)
         ? searchHistoricalCensus(firstName, lastName, birthYear, deathYear, state)
         : Promise.resolve(EMPTY_SOURCE),
+      // WikiTree — open API, real inline data; needs a surname + one date anchor
+      (lastName && (birthYear || deathYear))
+        ? searchWikiTree(pq)
+        : Promise.resolve(EMPTY_SOURCE),
     ]);
 
     // ── Tier 2: Military context (local, instant) ───────────────────────────
@@ -253,12 +259,14 @@ export async function POST(req: NextRequest) {
     const ssdiR        = unwrap(ssdiRecords);
     const immigrationR = unwrap(immigrationRecords);
     const censusR      = unwrap(historicalCensusRecords);
+    const wikitreeR    = unwrap(wikitreeMatches);
 
     const toStatus = ({ status, fallbackUrl }: SourceResult<unknown>): ResearchSourceStatus =>
       fallbackUrl ? { status, fallbackUrl } : { status };
 
     const sourceStatus: Record<string, ResearchSourceStatus> = {
       newspapers:        toStatus(newspapersR),
+      wikitree:          toStatus(wikitreeR),
       familySearchHints: toStatus(fsHintsR),
       ssdi:              toStatus(ssdiR),
       immigration:       toStatus(immigrationR),
@@ -303,6 +311,7 @@ export async function POST(req: NextRequest) {
       cemeteryWikiUrl:    cemeteryWikiUrl.status === "fulfilled" ? cemeteryWikiUrl.value : undefined,
       militaryContext,
       localHistory:       Object.keys(localHistory).length > 0 ? localHistory : undefined,
+      wikitree:           wikitreeR.records.length     > 0 ? wikitreeR.records   : undefined,
       familySearchHints:  fsHintsR.records.length     > 0 ? fsHintsR.records     : undefined,
       ssdi:               ssdiR.records.length        > 0 ? ssdiR.records        : undefined,
       immigration:        immigrationR.records.length > 0 ? immigrationR.records : undefined,

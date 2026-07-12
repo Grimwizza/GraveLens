@@ -306,7 +306,8 @@ export default function ResultPage({ id }: { id: string }) {
             historical:        d.historical ?? {},
             militaryContext:   d.militaryContext ?? undefined,
             localHistory:      d.localHistory ?? undefined,
-            familySearchHints: d.familySearchHints ?? undefined,
+            wikitree:          d.wikitree ?? undefined,
+          familySearchHints: d.familySearchHints ?? undefined,
             ssdi:              d.ssdi ?? undefined,
             immigration:       d.immigration ?? undefined,
             historicalCensus:  d.historicalCensus ?? undefined,
@@ -827,6 +828,7 @@ export default function ResultPage({ id }: { id: string }) {
           localHistory:      s.localHistory
             ? { ...(d.localHistory ?? {}), ...s.localHistory }
             : (d.localHistory ?? undefined),
+          wikitree:          d.wikitree ?? undefined,
           familySearchHints: d.familySearchHints ?? undefined,
           ssdi:              d.ssdi ?? undefined,
           immigration:       d.immigration ?? undefined,
@@ -1072,6 +1074,7 @@ export default function ResultPage({ id }: { id: string }) {
           historical:        d.historical ?? {},
           militaryContext:   d.militaryContext ?? undefined,
           localHistory:      d.localHistory ?? undefined,
+          wikitree:          d.wikitree ?? undefined,
           familySearchHints: d.familySearchHints ?? undefined,
           ssdi:              d.ssdi ?? undefined,
           immigration:       d.immigration ?? undefined,
@@ -1641,6 +1644,11 @@ export default function ResultPage({ id }: { id: string }) {
           {!researchLoading && (
             <SourceStatusCard sourceStatus={research?.sourceStatus} />
           )}
+
+          {/* WikiTree — real inline profile data, scored by confidence */}
+          {(research?.wikitree?.length || researchLoading) ? (
+            <WikiTreeCard records={research?.wikitree ?? []} loading={researchLoading} />
+          ) : null}
 
           {/* SSDI — death confirmation */}
           {(research?.ssdi?.length || researchLoading) ? (
@@ -2884,6 +2892,80 @@ const CONFIDENCE_STYLE: Record<string, { color: string; bg: string; label: strin
   medium: { color: "var(--t-gold-500)", bg: "rgba(150,100,20,0.18)", label: "Possible match" },
   low:    { color: "#a07060", bg: "rgba(120,60,40,0.18)",  label: "Low confidence" },
 };
+
+function WikiTreeCard({
+  records,
+  loading,
+}: {
+  records: import("@/lib/apis/wikitree").WikiTreeMatch[];
+  loading?: boolean;
+}) {
+  if (loading && !records.length) {
+    return (
+      <div className="py-5 animate-fade-up">
+        <SectionHeader icon="🌳" title="WikiTree Profiles" />
+        <div className="mt-3 space-y-2">
+          {[1, 2].map((n) => (
+            <div key={n} className="flex items-start gap-3 p-3 rounded-xl bg-stone-800/40 border border-stone-700/50">
+              <div className="shrink-0 w-14 h-5 rounded bg-stone-700/40 shimmer" />
+              <div className="flex-1 min-w-0">
+                <div className="h-4 shimmer rounded w-1/3 mb-2" />
+                <div className="h-3 shimmer rounded w-1/2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (!records.length) return null;
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="🌳" title="WikiTree Profiles" />
+      <p className="text-stone-500 text-xs mt-1 mb-3">
+        Collaborative family-tree profiles matched to this marker. Confidence reflects how well the dates and place line up.
+      </p>
+      <ul className="space-y-2">
+        {records.map((r, i) => {
+          const conf = CONFIDENCE_STYLE[r.confidence] ?? CONFIDENCE_STYLE.low;
+          return (
+            <li key={i}>
+              <a
+                href={r.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
+              >
+                <div
+                  className="shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[0.65rem] font-semibold uppercase tracking-wide whitespace-nowrap"
+                  style={{ background: conf.bg, color: conf.color }}
+                >
+                  {conf.label}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-stone-200 text-sm font-medium leading-snug">{r.name}</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                    {r.birthDate && <span className="text-stone-400 text-xs">b. {r.birthDate}</span>}
+                    {r.deathDate && <span className="text-stone-400 text-xs">d. {r.deathDate}</span>}
+                    {(r.deathPlace || r.birthPlace) && (
+                      <span className="text-stone-400 text-xs truncate">{r.deathPlace || r.birthPlace}</span>
+                    )}
+                  </div>
+                  {r.reasons.length > 0 && (
+                    <p className="text-stone-500 text-[0.7rem] mt-1 leading-snug">
+                      Matched on: {r.reasons.filter((x) => !/differs|different/.test(x)).slice(0, 3).join(", ")}
+                    </p>
+                  )}
+                  <p className="text-xs mt-1.5" style={{ color: "var(--t-gold-500)" }}>View WikiTree profile →</p>
+                </div>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 function SSDICard({
   records,
