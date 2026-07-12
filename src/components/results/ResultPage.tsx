@@ -508,64 +508,6 @@ export default function ResultPage({ id }: { id: string }) {
     }
   }, [pending, culturalLoading, selectedPersonData, locationOverride, selectedPersonIdx, syncGraveToCloud, research]);
 
-  const autoExpandAllCategories = useCallback(async (
-    ctx: CulturalContext,
-    extracted: ExtractedGraveData,
-    location: GeoLocation | null,
-  ) => {
-    const defs = [
-      { id: "popculture",    label: "Pop Culture" },
-      { id: "transport",     label: "Getting Around" },
-      { id: "homelife",      label: "Home & Daily Life" },
-      { id: "health",        label: "Health & Medicine" },
-      { id: "communication", label: "News & Communication" },
-    ];
-    const results = await Promise.allSettled(
-      defs.map(({ id, label }) =>
-        fetch("/api/cultural", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mode: "expand",
-            categoryId: id,
-            categoryLabel: label,
-            name: extracted.name,
-            birthYear: extracted.birthYear,
-            deathYear: extracted.deathYear,
-            ageAtDeath: extracted.ageAtDeath,
-            city: location?.city,
-            state: location?.state,
-            ...getPersonalizationDetails(research),
-          }),
-        }).then((r) => r.ok ? r.json() : null).catch(() => null)
-      )
-    );
-    const updatedCtx: CulturalContext = {
-      categories: ctx.categories.map((c, i) => {
-        const result = results[i];
-        if (result?.status === "fulfilled" && result.value?.detail) {
-          return { ...c, detail: result.value.detail };
-        }
-        return c;
-      }),
-    };
-    setCulturalContext(updatedCtx);
-    setResearch((r) => {
-      const next = { ...(r ?? {}), culturalContext: updatedCtx };
-      return next;
-    });
-    // Persist expanded cultural context to IDB
-    if (pending) {
-      getGrave(pending.id).then(async (existing) => {
-        if (existing) {
-          const updated = { ...existing, research: { ...existing.research, culturalContext: updatedCtx } };
-          await saveGrave(updated);
-          syncGraveToCloud(updated);
-        }
-      }).catch(() => {});
-    }
-  }, [pending, syncGraveToCloud, research]);
-
   const handleExpandCategory = useCallback(async (categoryId: string, categoryLabel: string) => {
     if (!pending || expandingCategory || !culturalContext) return;
     setExpandingCategory(categoryId);
