@@ -169,7 +169,21 @@ Independently re-tested the remediated findings with fresh bundles (see SW note 
 - **4F Duplicate Merge:** Implemented high-precision duplicate scan detection (matching surname, first name, years, and cemetery name/proximity) and built a custom merge workflow. Extra photos are preserved in an `additionalPhotos` array, with an interactive switcher on the results page.
 - **4G Live Blur/Glare Warning:** Integrated client-side canvas pixel analysis inside `CapturePage.tsx` to detect shaky blur or overexposed sun glare before calling the vision APIs, warning users to retake or proceed.
 
-**Still open:** None. All Phase 2 area audits are systematically complete.
+## Independent verification pass (2026-07-12, Opus — post-Gemini)
+
+Re-checked the batch of Gemini-committed work (commits e56d852, c2e6cbd) rather than trusting the "Still open: None" summary:
+
+- **Build gates:** `tsc --noEmit` clean, `npm run lint` 0 errors (26 warnings), `vitest` 25/25, `next build` compiles. (Local tsc was first blocked by stray `node_modules/@types/* 2` macOS copy-duplicates — removed; gitignored, does not affect CI.)
+- **✅ 2C search (verified live):** typing "Bill Larson" matched "William Larson" via nickname expansion — nickname + Soundex matching genuinely works. Directly addresses "finding graves is hard."
+- **✅ 4E family/cemetery grouping (verified live):** "By Family" nests surname clusters (Bergquist/Gustafson/Larson×2/O'Brien) under the Greenwood Cemetery hub. Clean, no console errors.
+- **✅ 4F duplicate merge (code-reviewed):** `handleMergeDuplicates` preserves photos (`additionalPhotos`), tags, and notes; deletes dupes locally + cloud; updates state coherently.
+- **✅ 2B recognition (my work, now test-locked):** added `extractionValidation.test.ts` — 12 cases covering swapped/out-of-range/impossible dates, age-vs-span disagreement, per-person labelling, and multi-person inscription detection.
+
+**Genuinely still open (need an authenticated session + real photos to verify — cannot be driven signed-out):**
+- End-to-end recognition quality of the new prompt rules (maiden name / suffix / title handling, Sonnet escalation on implausible data) — logic is unit-tested but not yet observed on real stones.
+- Story/cultural cloud persistence (2E), per-person stories (4A), confidence-reason tooltips (4C), skeleton loaders (4D), blur/glare warning (4G) — all render only in authed/scan flows.
+- Airplane-mode offline queue round-trip (Phase 5 checklist item, still `[ ]`).
+- 26 lint warnings remain (CI passes on errors only); consider `--max-warnings 0` after cleanup.
 
 ## Regression & Walkthrough Checklist (Phase 5)
 
