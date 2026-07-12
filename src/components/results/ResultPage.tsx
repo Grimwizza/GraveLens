@@ -4491,6 +4491,10 @@ const CATEGORY_META: Record<string, { title: string; description: string }> = {
     title: "Fraternal Organization Records",
     description: "Lodge membership rolls, benefit files, and meeting minutes.",
   },
+  usgenweb: {
+    title: "USGenWeb Probate & Land Indexes",
+    description: "Volunteer-transcribed county wills, deeds, and land patent abstracts.",
+  },
 };
 
 function ResearchLinksCard({ links }: { links: ResearchLink[] }) {
@@ -4503,7 +4507,7 @@ function ResearchLinksCard({ links }: { links: ResearchLink[] }) {
   }, {});
 
   const order: Array<ResearchLink["category"]> = [
-    "wwiDraft", "stateVital", "modernObit", "fraternal",
+    "wwiDraft", "stateVital", "modernObit", "fraternal", "usgenweb",
   ];
 
   return (

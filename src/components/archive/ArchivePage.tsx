@@ -315,6 +315,7 @@ export default function ArchivePage() {
             state:       g.location?.state      ?? "",
             inscription: g.extracted.inscription ?? "",
             symbols:     g.extracted.symbols     ?? [],
+            county:      g.location?.county     ?? null,
           });
           if (links.length === 0) continue;
           const fresh = await getGrave(g.id);

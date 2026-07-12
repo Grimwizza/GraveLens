@@ -283,7 +283,6 @@ export async function POST(req: NextRequest) {
       partialLocation
     );
 
-    // ── P3: Research deep-links (zero-cost, computed from existing data) ─────
     const researchLinks = buildAllResearchLinks({
       firstName:      firstName ?? "",
       lastName:       lastName  ?? "",
@@ -293,6 +292,7 @@ export async function POST(req: NextRequest) {
       inscription:    inscription,
       symbols:        symbols,
       likelyConflict: militaryContext?.likelyConflict ?? null,
+      county:         county    ?? null,
     });
 
     const responseBody = {
