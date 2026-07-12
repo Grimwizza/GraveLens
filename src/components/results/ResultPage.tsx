@@ -3625,7 +3625,8 @@ function LocalHistoryCard({
     localHistory.nrhpSites?.length ||
     localHistory.censusPopulation?.length ||
     localHistory.wikidataEvents?.length ||
-    localHistory.sanbornMap;
+    localHistory.sanbornMap ||
+    localHistory.usGenWebRecords?.length;
 
   if (!hasContent) return null;
 
@@ -3834,6 +3835,36 @@ function LocalHistoryCard({
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* USGenWeb Probate & Land Records */}
+        {localHistory.usGenWebRecords && localHistory.usGenWebRecords.length > 0 && (
+          <div>
+            <p className="text-xs text-stone-500 uppercase tracking-widest mb-2.5">
+              USGenWeb Wills & Deeds Indexes
+            </p>
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              {localHistory.usGenWebRecords.map((rec, i) => (
+                <a
+                  key={i}
+                  href={rec.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col justify-between p-3 rounded-xl bg-stone-900/60 border border-stone-800 hover:border-stone-700/80 active:bg-stone-850 transition-all min-w-0"
+                >
+                  <div>
+                    <span className="text-[0.6rem] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide bg-gold-500/10 text-gold-500 border border-gold-500/20">
+                      {rec.category}
+                    </span>
+                    <h5 className="text-stone-200 text-sm font-serif mt-2 mb-1.5 leading-snug line-clamp-2">
+                      {rec.title}
+                    </h5>
+                  </div>
+                  <p className="text-gold-500 text-xs mt-1.5 font-medium">View index file ↗</p>
+                </a>
+              ))}
+            </div>
           </div>
         )}
 

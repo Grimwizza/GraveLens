@@ -187,6 +187,13 @@ export interface LocalHistoryContext {
     url: string;
     thumbnailUrl?: string;
   };
+  usGenWebRecords?: UsGenWebRecord[];
+}
+
+export interface UsGenWebRecord {
+  title: string;
+  url: string;
+  category: "probate" | "deeds" | "wills" | "other";
 }
 
 export interface CulturalCategory {
