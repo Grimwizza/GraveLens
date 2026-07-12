@@ -22,7 +22,8 @@ import { getSoundex } from "@/lib/phonetic";
 type SortField = "birthYear" | "deathYear" | "name" | "lastName" | "ageAtDeath" | "cemetery" | "dateAdded";
 type SortDir = "asc" | "desc";
 type ConfidenceFilter = "" | "high" | "medium" | "low" | "needs_review";
-type ViewMode = "list" | "tile" | "cover";
+type ViewMode = "list" | "compact" | "tile" | "cover";
+const PAGE_SIZE = 30;
 type ArchiveTab = "markers" | "places" | "review";
 type GroupingMode = "flat" | "cemetery" | "family";
 
@@ -299,6 +300,12 @@ export default function ArchivePage() {
     setViewMode(mode);
     try { localStorage.setItem("gl_archive_view", mode); } catch { /* ignore */ }
   };
+
+  // ── Pagination ────────────────────────────────────────────────────────────
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  // Reset to first page whenever the filtered set changes
+  const filteredKey = `${searchQuery}|${filterState}|${filterCity}|${filterCemetery}|${filterTag}|${filterConfidence}|${sortField}|${sortDir}`;
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [filteredKey]);
 
   const [groupingMode, setGroupingMode] = useState<GroupingMode>(() => {
     if (typeof window === "undefined") return "flat";
@@ -1370,9 +1377,10 @@ export default function ArchivePage() {
             <div className="flex items-center gap-1 shrink-0">
               {(
                 [
-                  { mode: "list" as ViewMode, label: "List", icon: <path d="M2 4h12M2 8h12M2 12h12" /> },
-                  { mode: "tile" as ViewMode, label: "Tile", icon: <><rect x="1" y="1" width="6" height="6" rx="1" /><rect x="9" y="1" width="6" height="6" rx="1" /><rect x="1" y="9" width="6" height="6" rx="1" /><rect x="9" y="9" width="6" height="6" rx="1" /></> },
-                  { mode: "cover" as ViewMode, label: "Cover", icon: <><rect x="1" y="2" width="14" height="12" rx="2" /><path d="M4 13V9" strokeWidth="1" opacity="0.5" /><path d="M12 13V9" strokeWidth="1" opacity="0.5" /></> },
+                  { mode: "list" as ViewMode,    label: "List",    icon: <path d="M2 4h12M2 8h12M2 12h12" /> },
+                  { mode: "compact" as ViewMode, label: "Compact", icon: <><path d="M2 3h12M2 6.5h12M2 10h12M2 13.5h12" /></> },
+                  { mode: "tile" as ViewMode,    label: "Tile",    icon: <><rect x="1" y="1" width="6" height="6" rx="1" /><rect x="9" y="1" width="6" height="6" rx="1" /><rect x="1" y="9" width="6" height="6" rx="1" /><rect x="9" y="9" width="6" height="6" rx="1" /></> },
+                  { mode: "cover" as ViewMode,   label: "Cover",   icon: <><rect x="1" y="2" width="14" height="12" rx="2" /><path d="M4 13V9" strokeWidth="1" opacity="0.5" /><path d="M12 13V9" strokeWidth="1" opacity="0.5" /></> },
                 ] as const
               ).map(({ mode, label, icon }) => (
                 <button
@@ -1705,9 +1713,19 @@ export default function ArchivePage() {
 
             {groupingMode === "flat" ? (
               <>
+                {viewMode === "compact" && (
+                  <GraveCompactList
+                    graves={filteredGraves.slice(0, visibleCount)}
+                    onDeleteRequest={setDeleteConfirm}
+                    onDeleteConfirm={handleDelete}
+                    onDeleteCancel={() => setDeleteConfirm(null)}
+                    deleteConfirm={deleteConfirm}
+                    onView={handleView}
+                  />
+                )}
                 {viewMode === "list" && (
                   <GraveList
-                    graves={filteredGraves}
+                    graves={filteredGraves.slice(0, visibleCount)}
                     enriching={enriching}
                     deleteConfirm={deleteConfirm}
                     onDeleteRequest={setDeleteConfirm}
@@ -1720,7 +1738,7 @@ export default function ArchivePage() {
                 )}
                 {viewMode === "tile" && (
                   <GraveTileGrid
-                    graves={filteredGraves}
+                    graves={filteredGraves.slice(0, visibleCount)}
                     enriching={enriching}
                     deleteConfirm={deleteConfirm}
                     onDeleteRequest={setDeleteConfirm}
@@ -1732,7 +1750,7 @@ export default function ArchivePage() {
                 )}
                 {viewMode === "cover" && (
                   <GraveCoverFlow
-                    graves={filteredGraves}
+                    graves={filteredGraves.slice(0, visibleCount)}
                     enriching={enriching}
                     deleteConfirm={deleteConfirm}
                     onDeleteRequest={setDeleteConfirm}
@@ -1741,6 +1759,17 @@ export default function ArchivePage() {
                     viewedIds={viewedIds}
                     onView={handleView}
                   />
+                )}
+                {/* Load More */}
+                {filteredGraves.length > visibleCount && (
+                  <div className="flex justify-center py-6">
+                    <button
+                      onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+                      className="px-6 py-2.5 rounded-full text-sm font-semibold border border-stone-700 text-stone-300 hover:bg-stone-800 active:scale-95 transition-all"
+                    >
+                      Load more · {filteredGraves.length - visibleCount} remaining
+                    </button>
+                  </div>
                 )}
               </>
             ) : groupingMode === "cemetery" ? (
@@ -1756,6 +1785,16 @@ export default function ArchivePage() {
                         <span className="text-[0.65rem] text-stone-500 font-medium">{group.locationDesc}</span>
                       )}
                     </div>
+                    {viewMode === "compact" && (
+                      <GraveCompactList
+                        graves={group.graves}
+                        deleteConfirm={deleteConfirm}
+                        onDeleteRequest={setDeleteConfirm}
+                        onDeleteConfirm={handleDelete}
+                        onDeleteCancel={() => setDeleteConfirm(null)}
+                        onView={handleView}
+                      />
+                    )}
                     {viewMode === "list" && (
                       <GraveList
                         graves={group.graves}
@@ -1820,6 +1859,16 @@ export default function ArchivePage() {
                               {fam.graves.length} {fam.graves.length === 1 ? "marker" : "markers"}
                             </span>
                           </div>
+                          {viewMode === "compact" && (
+                            <GraveCompactList
+                              graves={fam.graves}
+                              deleteConfirm={deleteConfirm}
+                              onDeleteRequest={setDeleteConfirm}
+                              onDeleteConfirm={handleDelete}
+                              onDeleteCancel={() => setDeleteConfirm(null)}
+                              onView={handleView}
+                            />
+                          )}
                           {viewMode === "list" && (
                             <GraveList
                               graves={fam.graves}
@@ -2605,6 +2654,104 @@ function GraveList({
                 </>
               )}
             </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── GraveCompactList — dense 48px single-line rows ────────────────────────────
+function GraveCompactList({
+  graves,
+  deleteConfirm,
+  onDeleteRequest,
+  onDeleteConfirm,
+  onDeleteCancel,
+  onView,
+}: {
+  graves: GraveRecord[];
+  deleteConfirm: string | null;
+  onDeleteRequest: (id: string) => void;
+  onDeleteConfirm: (id: string) => void;
+  onDeleteCancel: () => void;
+  onView: (id: string) => void;
+}) {
+  if (graves.length === 0) {
+    return (
+      <div className="flex items-center justify-center flex-1 mt-16">
+        <p className="text-stone-500 text-sm">No markers match the current filters.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col divide-y divide-stone-800/60 mt-1">
+      {graves.map((grave) => {
+        const name = grave.extracted.name || "Unknown";
+        const dates = (() => {
+          if (grave.extracted.birthYear != null || grave.extracted.deathYear != null) {
+            return `${grave.extracted.birthYear ?? "?"} – ${grave.extracted.deathYear ?? "?"}`;
+          }
+          return null;
+        })();
+        const location = [grave.location?.cemetery, grave.location?.state].filter(Boolean).join(", ");
+        const extraPeople = (grave.extracted.people?.length ?? 0) - 1;
+
+        return (
+          <div key={grave.id} className="flex items-center gap-2.5 px-4 py-0" style={{ minHeight: "48px" }}>
+            <Link
+              href={`/result/${grave.id}`}
+              className="flex items-center gap-2.5 flex-1 min-w-0 py-2"
+              onClick={() => onView(grave.id)}
+            >
+              {/* Tiny thumbnail */}
+              <div className="w-8 h-8 rounded-lg overflow-hidden bg-stone-800 shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={grave.thumbnailDataUrl ?? grave.photoDataUrl}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+              {/* Name */}
+              <p className="font-serif text-stone-200 text-sm truncate flex-1 min-w-0">
+                {name}
+                {extraPeople > 0 && (
+                  <span className="ml-1 text-[0.6rem] font-semibold text-stone-500 font-sans">+{extraPeople}</span>
+                )}
+              </p>
+              {/* Dates — hidden on very small screens */}
+              {dates && (
+                <span className="hidden xs:block text-stone-500 text-[0.72rem] shrink-0 tabular-nums">{dates}</span>
+              )}
+              {/* Cemetery/State */}
+              {location && (
+                <span className="text-stone-600 text-[0.72rem] shrink-0 truncate max-w-[30%] hidden sm:block">{location}</span>
+              )}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--t-stone-700)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </Link>
+            {/* Delete action */}
+            {deleteConfirm === grave.id ? (
+              <div className="flex gap-1.5 shrink-0">
+                <button onClick={() => onDeleteConfirm(grave.id)} className="text-[0.7rem] text-red-400 px-2 py-1 rounded-md bg-red-500/10 border border-red-500/20">Delete</button>
+                <button onClick={onDeleteCancel} className="text-[0.7rem] text-stone-500">Cancel</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => onDeleteRequest(grave.id)}
+                className="shrink-0 w-8 h-8 flex items-center justify-center text-stone-700 active:text-red-400 rounded-lg"
+                aria-label="Delete"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+              </button>
+            )}
           </div>
         );
       })}
