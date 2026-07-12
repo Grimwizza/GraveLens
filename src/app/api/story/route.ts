@@ -235,13 +235,22 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Cap string fields that feed directly into the prompt to bound token spend.
-    // A single oversized inscription could push a Haiku call into Sonnet territory.
+    // Cap string/array fields that feed directly into the prompt to bound token spend.
+    // A single oversized field could push a Haiku call into Sonnet territory.
     if (typeof body.inscription === "string") {
       body.inscription = body.inscription.slice(0, 2000);
     }
+    if (typeof body.epitaph === "string") {
+      body.epitaph = body.epitaph.slice(0, 1000);
+    }
     if (Array.isArray(body.culturalSummary)) {
       body.culturalSummary = body.culturalSummary.slice(0, 10);
+    }
+    if (Array.isArray(body.symbols)) {
+      body.symbols = body.symbols.slice(0, 20);
+    }
+    if (Array.isArray(body.symbolMeanings)) {
+      body.symbolMeanings = body.symbolMeanings.slice(0, 20);
     }
 
     const client = new Anthropic({ apiKey });
@@ -267,7 +276,7 @@ export async function POST(req: NextRequest) {
     } catch (parseErr) {
       console.error("[story] JSON parse failed on text:", content.text, parseErr);
       return NextResponse.json(
-        { error: "Claude returned malformed JSON", details: rawJson },
+        { error: "Claude returned malformed JSON" },
         { status: 502 }
       );
     }
