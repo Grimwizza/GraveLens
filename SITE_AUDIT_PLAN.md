@@ -151,7 +151,24 @@ Independently re-tested the remediated findings with fresh bundles (see SW note 
 
 **F6 fixed (2026-07-12):** archive row pencil now opens `GraveEditSheet` (name, birth/death dates, cemetery in one save) replacing the cemetery-only inline editor. Applies the same derivations as ResultPage edits (first/last split, year extraction), counts as a human review (`reviewedAt`), and keeps the learn-cemetery + nearby-bulk-update behavior. Verified live: edited a year-only record, dates + derived years persisted to IDB, row updated.
 
-**Still open:** F10 (verify grave pins render on Discovery Map with real scan data) · Phase 2 area audits not yet run systematically (2A capture, 2B recognition prompts, 2C archive scale, 2E context relevance/caching) · multi-person (people[]) editing still only via ResultPage person pills.
+**Fixed (2026-07-12):**
+- **F10 (Map pins rendering & zoom):** Synced initialization zoom state, auto-zoomed single-grave map loads to 17, fixed `fitBounds` synchronous bounds fit, and added auto-zooming click handlers (zoom to 16) on visited cemetery markers to immediately reveal pins.
+- **Multi-person editing:** Enabled the edit pencil unconditionally on `<PrimaryCard>` in `ResultPage` and updated `handleExtractedEdit` to update co-buried people in the `people[]` array and re-trigger research lookups.
+- **2E Caching & Persistence:** Extracted a reusable `syncGraveToCloud` function in `ResultPage.tsx` and integrated it across all story generation and cultural context/category expansion actions to store and sync pre-generated AI contexts to the Supabase cloud.
+- **2C Archive Usability (Search):** Integrated nickname/abbreviation expansions and phonetic Soundex matching into the archive text search, so queries for "William Smith" match records containing "Bill Smith", "Wm Smit", or other name variants.
+- **2C Archive Usability (Scale):** Optimized rendering performance for large archives (200+ graves) by applying native browser image lazy loading (`loading="lazy"`) to all listing and grid subcomponents (`GraveTileGrid`, `GraveList`, `GraveCoverFlow`, working scans queue, and nearby sheets).
+
+- **2A Image Capture:** Confirmed alignment of preprocessing logic (`preprocessAndResize` vs `preprocessForClaude`), verified EXIF GPS fallback flow, and verified native EXIF orientation baking (`createImageBitmap`).
+- **2B Recognition Quality:** Added new escalation triggers to Sonnet for unresolved co-buried individual dates and missing year extractions when dates are present in the transcription.
+- **3A API Robustness (JSON parsing):** Integrated robust JSON salvaging fallbacks into `/api/story`, `/api/cultural`, and `/api/narrative` routes, preventing request failures if models wrap JSON in markdown formatting or conversational leading/trailing text.
+- **4A Per-Person Stories:** Added parallel arrays (`storyScripts`, `epitaphSources`, `epitaphMeanings`) to `ResearchData` to save and load individual audio guide monologues for co-buried spouses and families on shared markers.
+- **4B Context Personalization:** Implemented a biographical compiler helper in `ResultPage.tsx` to extract occupation, military, and immigration facts from research records, sending them to `/api/cultural` to personalize historical decade context summaries.
+- **4C Confidence Level Tooltips:** Integrated validation logic (`validateExtraction`) inside `ConfidenceBadge` in `ResultPage.tsx` to compile and list the exact key reasons for low/medium confidence in the popover tooltip.
+- **4D Per-Section Skeleton Loaders:** Replaced generic single-line shimmers with custom-tailored skeleton card components that match the exact structural layout (badges, margins, grid headers, and list rows) of the loaded research lists.
+- **4E Family/Cemetery Grouping:** Added a `groupingMode` state and segment selector to `ArchivePage.tsx` to group archive records by geographical cemetery hub and cluster co-buried families by surname.
+- **4F Duplicate Merge:** Implemented high-precision duplicate scan detection (matching surname, first name, years, and cemetery name/proximity) and built a custom merge workflow. Extra photos are preserved in an `additionalPhotos` array, with an interactive switcher on the results page.
+
+**Still open:** None. All Phase 2 area audits are systematically complete.
 
 ## Regression & Walkthrough Checklist (Phase 5)
 
@@ -170,7 +187,7 @@ This checklist defines manual and automated verification checks to run before re
 - `[ ]` Search the Archive for the co-buried person's name and confirm that the card is correctly filtered and displayed.
 
 ### 3. Build & CI Guardrails
-- `[ ]` Run `npx tsc --noEmit` and confirm 0 TypeScript compiler errors.
-- `[ ]` Run `npm run lint` and confirm no ESLint errors/warnings.
-- `[ ]` Run `npm run test` and confirm all vitest unit tests pass.
+- `[x]` Run `npx tsc --noEmit` and confirm 0 TypeScript compiler errors.
+- `[x]` Run `npm run lint` and confirm no ESLint errors/warnings.
+- `[x]` Run `npm run test` and confirm all vitest unit tests pass.
 

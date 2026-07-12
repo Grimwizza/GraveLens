@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import PageShell from "@/components/layout/PageShell";
 import { getAllGraves, getGrave, deleteGrave, saveGrave, getAllCemeteries, deleteCemetery, saveCemetery, getQueuedItems } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/browser";
-import { fetchAllFromCloud, deleteFromCloud } from "@/lib/cloudSync";
+import { fetchAllFromCloud, deleteFromCloud, upsertGrave } from "@/lib/cloudSync";
 import type { GraveRecord, CemeteryRecord, QueuedCapture, ExtractedGraveData } from "@/types";
 import { QUEUE_CHANGED_EVENT } from "@/lib/queue";
 import Link from "next/link";
@@ -16,14 +16,62 @@ import { shouldReview, TYPICAL_NAME_RE } from "@/lib/reviewUtils";
 import GraveEditSheet, { type GraveEditPatch } from "@/components/archive/GraveEditSheet";
 import { buildAllResearchLinks } from "@/lib/researchLinks";
 import { CURRENT_RESEARCH_VERSION } from "@/lib/researchVersion";
+import { expandGivenName } from "@/lib/research/personQuery";
+import { getSoundex } from "@/lib/phonetic";
 
 type SortField = "birthYear" | "deathYear" | "name" | "lastName" | "ageAtDeath" | "cemetery" | "dateAdded";
 type SortDir = "asc" | "desc";
 type ConfidenceFilter = "" | "high" | "medium" | "low" | "needs_review";
 type ViewMode = "list" | "tile" | "cover";
 type ArchiveTab = "markers" | "places" | "review";
+type GroupingMode = "flat" | "cemetery" | "family";
+
+interface CemeteryGroup {
+  cemeteryName: string;
+  locationDesc: string;
+  graves: GraveRecord[];
+}
+
+interface FamilyGroup {
+  surname: string;
+  graves: GraveRecord[];
+}
+
+interface CemeteryFamilyGroup {
+  cemeteryName: string;
+  locationDesc: string;
+  families: FamilyGroup[];
+}
 
 const PLACE_MARKER_TYPES = new Set(["cemetery", "graveyard", "mausoleum"]);
+
+function matchesNameQuery(recordName: string, queryWords: string[]): boolean {
+  if (!recordName) return false;
+  const recordWords = recordName.trim().split(/\s+/).filter(Boolean);
+  if (recordWords.length === 0) return false;
+
+  return queryWords.every((qw) => {
+    const qwLower = qw.toLowerCase();
+    const qwSoundex = getSoundex(qw);
+
+    return recordWords.some((rw) => {
+      const rwLower = rw.toLowerCase();
+      if (rwLower.includes(qwLower) || qwLower.includes(rwLower)) return true;
+
+      const rwExpansions = expandGivenName(rwLower).map((x) => x.toLowerCase());
+      const qwExpansions = expandGivenName(qwLower).map((x) => x.toLowerCase());
+
+      if (rwExpansions.includes(qwLower) || qwExpansions.includes(rwLower)) return true;
+      if (rwExpansions.some((e) => qwExpansions.includes(e))) return true;
+
+      if (rwLower.length >= 3 && qwLower.length >= 3 && qwSoundex && qwSoundex === getSoundex(rwLower)) {
+        return true;
+      }
+
+      return false;
+    });
+  });
+}
 
 function formatDates(extracted: ExtractedGraveData): string {
   const dates = [extracted.birthDate, extracted.deathDate].filter(Boolean).join(" — ");
@@ -135,6 +183,7 @@ export default function ArchivePage() {
   } | null>(null);
   // Full-record edit sheet opened from an archive row (F6)
   const [editSheetGrave, setEditSheetGrave] = useState<GraveRecord | null>(null);
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
 
   const [failedQueueItems, setFailedQueueItems] = useState<QueuedCapture[]>([]);
 
@@ -249,6 +298,16 @@ export default function ArchivePage() {
   const handleViewMode = (mode: ViewMode) => {
     setViewMode(mode);
     try { localStorage.setItem("gl_archive_view", mode); } catch { /* ignore */ }
+  };
+
+  const [groupingMode, setGroupingMode] = useState<GroupingMode>(() => {
+    if (typeof window === "undefined") return "flat";
+    return (localStorage.getItem("gl_archive_grouping") as GroupingMode) ?? "flat";
+  });
+
+  const handleGroupingMode = (mode: GroupingMode) => {
+    setGroupingMode(mode);
+    try { localStorage.setItem("gl_archive_grouping", mode); } catch {}
   };
 
   const [viewedIds, setViewedIds] = useState<Set<string>>(() =>
@@ -821,29 +880,39 @@ export default function ArchivePage() {
       if (hasPlaceTag) return false;
       // Text search
       if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const name = g.extracted.name?.toLowerCase() || "";
-        const cemetery = g.location?.cemetery?.toLowerCase() || "";
-        const city = g.location?.city?.toLowerCase() || "";
-        const state = g.location?.state?.toLowerCase() || "";
-        const tags = (g.tags || []).join(" ").toLowerCase();
-        const inscription = g.extracted.inscription?.toLowerCase() || "";
-        const peopleNames = (g.extracted.people || [])
-          .map((p) => p.name?.toLowerCase() || "")
-          .filter(Boolean)
-          .join(" ");
+        const q = searchQuery.toLowerCase().trim();
+        const queryWords = q.split(/\s+/).filter(Boolean);
 
-        if (
-          !name.includes(q) &&
-          !cemetery.includes(q) &&
-          !city.includes(q) &&
-          !state.includes(q) &&
-          !tags.includes(q) &&
-          !inscription.includes(q) &&
-          !peopleNames.includes(q)
-        ) {
-          return false;
+        const name = g.extracted.name || "";
+        let isMatch = matchesNameQuery(name, queryWords);
+
+        if (!isMatch && Array.isArray(g.extracted.people)) {
+          isMatch = g.extracted.people.some((p) => matchesNameQuery(p.name || "", queryWords));
         }
+
+        if (!isMatch) {
+          const cemetery = g.location?.cemetery?.toLowerCase() || "";
+          const city = g.location?.city?.toLowerCase() || "";
+          const state = g.location?.state?.toLowerCase() || "";
+          const tags = (g.tags || []).join(" ").toLowerCase();
+          const inscription = g.extracted.inscription?.toLowerCase() || "";
+
+          isMatch =
+            cemetery.includes(q) ||
+            city.includes(q) ||
+            state.includes(q) ||
+            tags.includes(q) ||
+            inscription.includes(q) ||
+            queryWords.every((qw: string) =>
+              cemetery.includes(qw) ||
+              city.includes(qw) ||
+              state.includes(qw) ||
+              tags.includes(qw) ||
+              inscription.includes(qw)
+            );
+        }
+
+        if (!isMatch) return false;
       }
 
       if (filterState && g.location?.state !== filterState) return false;
@@ -901,6 +970,178 @@ export default function ArchivePage() {
     });
     return result;
   }, [graves, filterState, filterCity, filterCemetery, filterTag, filterConfidence, searchQuery, sortField, sortDir]);
+
+  const groupedGraves = useMemo(() => {
+    if (groupingMode === "flat") return null;
+
+    const cemeteryMap = new Map<string, { cemeteryName: string; locationDesc: string; graves: GraveRecord[] }>();
+
+    for (const g of filteredGraves) {
+      const cemeteryName = g.location?.cemetery || "Unknown Cemetery";
+      const city = g.location?.city || "";
+      const state = g.location?.state || "";
+      const locationDesc = [city, state].filter(Boolean).join(", ");
+
+      let group = cemeteryMap.get(cemeteryName);
+      if (!group) {
+        group = { cemeteryName, locationDesc, graves: [] };
+        cemeteryMap.set(cemeteryName, group);
+      }
+      group.graves.push(g);
+    }
+
+    const sortedCemeteries = Array.from(cemeteryMap.values()).sort((a, b) => {
+      if (a.cemeteryName === "Unknown Cemetery") return 1;
+      if (b.cemeteryName === "Unknown Cemetery") return -1;
+      return a.cemeteryName.localeCompare(b.cemeteryName);
+    });
+
+    if (groupingMode === "cemetery") {
+      return sortedCemeteries as CemeteryGroup[];
+    }
+
+    // groupingMode === "family"
+    return sortedCemeteries.map((c) => {
+      const familyMap = new Map<string, { surname: string; graves: GraveRecord[] }>();
+
+      for (const g of c.graves) {
+        const surname = g.extracted.lastName?.trim() || "Unknown";
+        let fam = familyMap.get(surname);
+        if (!fam) {
+          fam = { surname, graves: [] };
+          familyMap.set(surname, fam);
+        }
+        fam.graves.push(g);
+      }
+
+      const sortedFamilies = Array.from(familyMap.values()).sort((a, b) => {
+        if (a.surname === "Unknown") return 1;
+        if (b.surname === "Unknown") return -1;
+        return a.surname.localeCompare(b.surname);
+      });
+
+      return {
+        cemeteryName: c.cemeteryName,
+        locationDesc: c.locationDesc,
+        families: sortedFamilies,
+      } as CemeteryFamilyGroup;
+    });
+  }, [filteredGraves, groupingMode]);
+
+  // ── Duplicate Detection & Merging ───────────────────────────────────────
+  const duplicateGroups = useMemo(() => {
+    if (graves.length < 2) return [];
+
+    const groups: Array<{ primary: GraveRecord; duplicates: GraveRecord[] }> = [];
+    const processedIds = new Set<string>();
+
+    for (let i = 0; i < graves.length; i++) {
+      const a = graves[i];
+      if (processedIds.has(a.id) || !a.extracted?.name) continue;
+
+      const dupsForA: GraveRecord[] = [];
+      const aLast = (a.extracted.lastName || "").toLowerCase().trim();
+      const aFirst = (a.extracted.firstName || "").toLowerCase().trim();
+      const aBirth = a.extracted.birthYear;
+      const aDeath = a.extracted.deathYear;
+      const aCemetery = (a.location?.cemetery || "").toLowerCase().trim();
+
+      for (let j = i + 1; j < graves.length; j++) {
+        const b = graves[j];
+        if (processedIds.has(b.id) || !b.extracted?.name) continue;
+
+        const bLast = (b.extracted.lastName || "").toLowerCase().trim();
+        const bFirst = (b.extracted.firstName || "").toLowerCase().trim();
+        const bBirth = b.extracted.birthYear;
+        const bDeath = b.extracted.deathYear;
+        const bCemetery = (b.location?.cemetery || "").toLowerCase().trim();
+
+        const surnameMatch = aLast === bLast || (aLast.length >= 3 && bLast.length >= 3 && getSoundex(aLast) === getSoundex(bLast));
+        const firstMatch = aFirst.includes(bFirst) || bFirst.includes(aFirst) || getSoundex(aFirst) === getSoundex(bFirst);
+
+        let geoMatch = false;
+        if (aCemetery && bCemetery && aCemetery === bCemetery) {
+          geoMatch = true;
+        } else if (a.location?.lat && a.location?.lng && b.location?.lat && b.location?.lng) {
+          const dist = distanceMeters(a.location.lat, a.location.lng, b.location.lat, b.location.lng);
+          if (dist < 15) geoMatch = true;
+        }
+
+        const yearMatch = (aBirth != null && bBirth != null && aBirth === bBirth) ||
+                          (aDeath != null && bDeath != null && aDeath === bDeath) ||
+                          (aBirth == null && aDeath == null && bBirth == null && bDeath == null);
+
+        if (surnameMatch && firstMatch && geoMatch && yearMatch) {
+          dupsForA.push(b);
+          processedIds.add(b.id);
+        }
+      }
+
+      if (dupsForA.length > 0) {
+        processedIds.add(a.id);
+        groups.push({ primary: a, duplicates: dupsForA });
+      }
+    }
+
+    return groups;
+  }, [graves]);
+
+  const handleMergeDuplicates = async (primaryId: string, duplicateIds: string[]) => {
+    const primary = graves.find((g) => g.id === primaryId);
+    if (!primary) return;
+
+    const merged = { ...primary };
+
+    for (const dupId of duplicateIds) {
+      const dup = graves.find((g) => g.id === dupId);
+      if (!dup) continue;
+
+      const combinedTags = Array.from(new Set([...(merged.tags || []), ...(dup.tags || [])]));
+      merged.tags = combinedTags;
+
+      const combinedPhotos = Array.from(new Set([
+        ...(merged.additionalPhotos || []),
+        dup.photoDataUrl,
+        ...(dup.additionalPhotos || [])
+      ]));
+      merged.additionalPhotos = combinedPhotos;
+
+      if (dup.userNotes) {
+        merged.userNotes = merged.userNotes
+          ? `${merged.userNotes}\n\n[Merged Scan Notes]: ${dup.userNotes}`
+          : dup.userNotes;
+      }
+      if (dup.communityNote) {
+        merged.communityNote = merged.communityNote
+          ? `${merged.communityNote}\n\n[Merged Scan Notes]: ${dup.communityNote}`
+          : dup.communityNote;
+      }
+
+      await deleteGrave(dup.id);
+
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) await deleteFromCloud(supabase, user.id, dup.id);
+      } catch {}
+    }
+
+    await saveGrave(merged);
+
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await upsertGrave(supabase, user.id, merged, merged.photoDataUrl);
+      }
+    } catch {}
+
+    setGraves((prev) =>
+      prev
+        .filter((g) => !duplicateIds.includes(g.id))
+        .map((g) => (g.id === primaryId ? merged : g))
+    );
+  };
 
   const handleDelete = async (id: string) => {
     await deleteGrave(id);
@@ -1188,6 +1429,32 @@ export default function ArchivePage() {
           )}
           {filtersOpen && graves.length > 0 && (
             <div className="px-4 pb-3 border-t border-stone-800 pt-3 flex flex-col gap-2">
+              {/* Grouping Control */}
+              <div className="flex flex-col gap-1 mb-1">
+                <span className="text-[0.6rem] font-bold text-stone-500 uppercase tracking-widest">Grouping Mode</span>
+                <div className="flex bg-stone-900/50 p-0.5 rounded-lg border border-stone-800/80">
+                  {(
+                    [
+                      { mode: "flat", label: "Flat List" },
+                      { mode: "cemetery", label: "By Cemetery" },
+                      { mode: "family", label: "By Family" }
+                    ] as const
+                  ).map((item) => (
+                    <button
+                      key={item.mode}
+                      onClick={() => handleGroupingMode(item.mode)}
+                      className={`flex-1 text-[0.7rem] font-semibold py-1 rounded-md transition-all ${
+                        groupingMode === item.mode
+                          ? "bg-stone-800 text-gold-400 shadow-sm border border-stone-700/60"
+                          : "text-stone-500 hover:text-stone-300"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Sort row */}
               <div className="flex gap-2">
                 <select
@@ -1306,6 +1573,13 @@ export default function ArchivePage() {
               onClose={() => setEditSheetGrave(null)}
             />
           )}
+          {mergeModalOpen && duplicateGroups.length > 0 && (
+            <DuplicateMergeModal
+              groups={duplicateGroups}
+              onMerge={handleMergeDuplicates}
+              onClose={() => setMergeModalOpen(false)}
+            />
+          )}
         </>
       }
     >
@@ -1411,42 +1685,187 @@ export default function ArchivePage() {
               </div>
             )}
 
-            {viewMode === "list" && (
-              <GraveList
-                graves={filteredGraves}
-                enriching={enriching}
-                deleteConfirm={deleteConfirm}
-                onDeleteRequest={setDeleteConfirm}
-                onDeleteConfirm={handleDelete}
-                onDeleteCancel={() => setDeleteConfirm(null)}
-                onEdit={setEditSheetGrave}
-                viewedIds={viewedIds}
-                onView={handleView}
-              />
+            {/* Duplicate Scans Merge Banner */}
+            {duplicateGroups.length > 0 && (
+              <div className="mx-5 my-3 p-3 rounded-xl bg-gold-500/10 border border-gold-500/20 flex items-center justify-between gap-3 shadow-[0_4px_12px_rgba(201,168,76,0.05)] animate-fade-in">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-lg">✨</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gold-400">Potential duplicates found</p>
+                    <p className="text-[0.68rem] text-stone-500 truncate mt-0.5">
+                      We identified {duplicateGroups.length} set{duplicateGroups.length > 1 ? "s" : ""} of potential duplicate scans of the same grave.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setMergeModalOpen(true)}
+                  className="shrink-0 text-[0.68rem] font-bold text-stone-900 bg-gold-400 px-3 py-1.5 rounded-lg active:bg-gold-500 transition-colors"
+                >
+                  Merge Scans
+                </button>
+              </div>
             )}
-            {viewMode === "tile" && (
-              <GraveTileGrid
-                graves={filteredGraves}
-                enriching={enriching}
-                deleteConfirm={deleteConfirm}
-                onDeleteRequest={setDeleteConfirm}
-                onDeleteConfirm={handleDelete}
-                onDeleteCancel={() => setDeleteConfirm(null)}
-                viewedIds={viewedIds}
-                onView={handleView}
-              />
-            )}
-            {viewMode === "cover" && (
-              <GraveCoverFlow
-                graves={filteredGraves}
-                enriching={enriching}
-                deleteConfirm={deleteConfirm}
-                onDeleteRequest={setDeleteConfirm}
-                onDeleteConfirm={handleDelete}
-                onDeleteCancel={() => setDeleteConfirm(null)}
-                viewedIds={viewedIds}
-                onView={handleView}
-              />
+
+            {groupingMode === "flat" ? (
+              <>
+                {viewMode === "list" && (
+                  <GraveList
+                    graves={filteredGraves}
+                    enriching={enriching}
+                    deleteConfirm={deleteConfirm}
+                    onDeleteRequest={setDeleteConfirm}
+                    onDeleteConfirm={handleDelete}
+                    onDeleteCancel={() => setDeleteConfirm(null)}
+                    onEdit={setEditSheetGrave}
+                    viewedIds={viewedIds}
+                    onView={handleView}
+                  />
+                )}
+                {viewMode === "tile" && (
+                  <GraveTileGrid
+                    graves={filteredGraves}
+                    enriching={enriching}
+                    deleteConfirm={deleteConfirm}
+                    onDeleteRequest={setDeleteConfirm}
+                    onDeleteConfirm={handleDelete}
+                    onDeleteCancel={() => setDeleteConfirm(null)}
+                    viewedIds={viewedIds}
+                    onView={handleView}
+                  />
+                )}
+                {viewMode === "cover" && (
+                  <GraveCoverFlow
+                    graves={filteredGraves}
+                    enriching={enriching}
+                    deleteConfirm={deleteConfirm}
+                    onDeleteRequest={setDeleteConfirm}
+                    onDeleteConfirm={handleDelete}
+                    onDeleteCancel={() => setDeleteConfirm(null)}
+                    viewedIds={viewedIds}
+                    onView={handleView}
+                  />
+                )}
+              </>
+            ) : groupingMode === "cemetery" ? (
+              <div className="space-y-4 mt-2">
+                {(groupedGraves as CemeteryGroup[]).map((group) => (
+                  <div key={group.cemeteryName} className="mt-4 first:mt-0">
+                    <div className="px-5 py-2.5 bg-stone-850/40 border-y border-stone-800/80 flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">🪦</span>
+                        <h4 className="text-xs font-bold text-stone-300 uppercase tracking-wide">{group.cemeteryName}</h4>
+                      </div>
+                      {group.locationDesc && (
+                        <span className="text-[0.65rem] text-stone-500 font-medium">{group.locationDesc}</span>
+                      )}
+                    </div>
+                    {viewMode === "list" && (
+                      <GraveList
+                        graves={group.graves}
+                        enriching={enriching}
+                        deleteConfirm={deleteConfirm}
+                        onDeleteRequest={setDeleteConfirm}
+                        onDeleteConfirm={handleDelete}
+                        onDeleteCancel={() => setDeleteConfirm(null)}
+                        onEdit={setEditSheetGrave}
+                        viewedIds={viewedIds}
+                        onView={handleView}
+                      />
+                    )}
+                    {viewMode === "tile" && (
+                      <GraveTileGrid
+                        graves={group.graves}
+                        enriching={enriching}
+                        deleteConfirm={deleteConfirm}
+                        onDeleteRequest={setDeleteConfirm}
+                        onDeleteConfirm={handleDelete}
+                        onDeleteCancel={() => setDeleteConfirm(null)}
+                        viewedIds={viewedIds}
+                        onView={handleView}
+                      />
+                    )}
+                    {viewMode === "cover" && (
+                      <GraveCoverFlow
+                        graves={group.graves}
+                        enriching={enriching}
+                        deleteConfirm={deleteConfirm}
+                        onDeleteRequest={setDeleteConfirm}
+                        onDeleteConfirm={handleDelete}
+                        onDeleteCancel={() => setDeleteConfirm(null)}
+                        viewedIds={viewedIds}
+                        onView={handleView}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-6 mt-2">
+                {(groupedGraves as CemeteryFamilyGroup[]).map((group) => (
+                  <div key={group.cemeteryName} className="mt-4 first:mt-0">
+                    <div className="px-5 py-2.5 bg-stone-850/40 border-y border-stone-800/80 flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">🪦</span>
+                        <h4 className="text-xs font-bold text-stone-300 uppercase tracking-wide">{group.cemeteryName}</h4>
+                      </div>
+                      {group.locationDesc && (
+                        <span className="text-[0.65rem] text-stone-500 font-medium">{group.locationDesc}</span>
+                      )}
+                    </div>
+                    <div className="space-y-4 mt-3">
+                      {group.families.map((fam) => (
+                        <div key={fam.surname} className="pl-3 border-l-2 border-gold-500/20 ml-5 mr-5">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[0.68rem] font-bold text-gold-400/90 uppercase tracking-wider">
+                              {fam.surname} Family
+                            </span>
+                            <span className="text-[0.6rem] text-stone-500 font-medium bg-stone-900 px-1.5 py-0.5 rounded-full border border-stone-800/80">
+                              {fam.graves.length} {fam.graves.length === 1 ? "marker" : "markers"}
+                            </span>
+                          </div>
+                          {viewMode === "list" && (
+                            <GraveList
+                              graves={fam.graves}
+                              enriching={enriching}
+                              deleteConfirm={deleteConfirm}
+                              onDeleteRequest={setDeleteConfirm}
+                              onDeleteConfirm={handleDelete}
+                              onDeleteCancel={() => setDeleteConfirm(null)}
+                              onEdit={setEditSheetGrave}
+                              viewedIds={viewedIds}
+                              onView={handleView}
+                            />
+                          )}
+                          {viewMode === "tile" && (
+                            <GraveTileGrid
+                              graves={fam.graves}
+                              enriching={enriching}
+                              deleteConfirm={deleteConfirm}
+                              onDeleteRequest={setDeleteConfirm}
+                              onDeleteConfirm={handleDelete}
+                              onDeleteCancel={() => setDeleteConfirm(null)}
+                              viewedIds={viewedIds}
+                              onView={handleView}
+                            />
+                          )}
+                          {viewMode === "cover" && (
+                            <GraveCoverFlow
+                              graves={fam.graves}
+                              enriching={enriching}
+                              deleteConfirm={deleteConfirm}
+                              onDeleteRequest={setDeleteConfirm}
+                              onDeleteConfirm={handleDelete}
+                              onDeleteCancel={() => setDeleteConfirm(null)}
+                              viewedIds={viewedIds}
+                              onView={handleView}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </>
         ) : null}
@@ -1501,6 +1920,7 @@ export default function ArchivePage() {
                           src={g.thumbnailDataUrl ?? g.photoDataUrl}
                           alt=""
                           className="w-14 h-14 rounded-xl object-cover shrink-0 opacity-90 mt-0.5"
+                          loading="lazy"
                         />
                         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
                           <p className="text-stone-200 text-sm font-semibold leading-snug flex items-center gap-1.5 flex-wrap">
@@ -1708,7 +2128,7 @@ function NearbyConfirmSheet({
               <div key={g.id} className="flex items-center gap-3 p-3 rounded-xl bg-stone-700/50">
                 <div className="w-10 h-10 rounded-lg overflow-hidden bg-stone-700 shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={g.thumbnailDataUrl ?? g.photoDataUrl} alt="" className="w-full h-full object-cover" />
+                  <img src={g.thumbnailDataUrl ?? g.photoDataUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-stone-200 text-sm font-medium truncate">
@@ -1798,6 +2218,7 @@ function GraveTileGrid({
                   src={grave.thumbnailDataUrl ?? grave.photoDataUrl}
                   alt={grave.extracted.name ?? ""}
                   className="w-full h-full object-cover"
+                  loading="lazy"
                 />
                 <div
                   className="absolute inset-0"
@@ -1957,6 +2378,7 @@ function GraveCoverFlow({
                   src={grave.thumbnailDataUrl ?? grave.photoDataUrl}
                   alt={grave.extracted.name ?? ""}
                   className="w-full h-full object-cover"
+                  loading="lazy"
                 />
                 {/* Gradient overlay */}
                 <div
@@ -2117,7 +2539,7 @@ function GraveList({
             <Link href={`/result/${grave.id}`} className="flex items-center gap-3 flex-1 min-w-0" onClick={() => onView(grave.id)}>
               <div className="w-14 h-14 rounded-xl overflow-hidden bg-stone-800 shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={grave.thumbnailDataUrl ?? grave.photoDataUrl} alt={grave.extracted.name} className="w-full h-full object-cover" />
+                <img src={grave.thumbnailDataUrl ?? grave.photoDataUrl} alt={grave.extracted.name} className="w-full h-full object-cover" loading="lazy" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
@@ -2506,6 +2928,96 @@ function CemeterySection({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── DuplicateMergeModal ───────────────────────────────────────────────────
+function DuplicateMergeModal({
+  groups,
+  onMerge,
+  onClose,
+}: {
+  groups: Array<{ primary: GraveRecord; duplicates: GraveRecord[] }>;
+  onMerge: (primaryId: string, duplicateIds: string[]) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [merging, setMerging] = useState<string | null>(null);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-955/80 backdrop-blur-md animate-fade-in">
+      <div
+        className="w-full max-w-2xl rounded-2xl border border-stone-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+        style={{ background: "#1c1b19" }}
+      >
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-stone-800 flex justify-between items-center bg-stone-900/40">
+          <div>
+            <h3 className="text-base font-bold text-stone-200">Merge Duplicate Scans</h3>
+            <p className="text-xs text-stone-500 mt-0.5">We found markers that appear to be duplicate scans of the same grave.</p>
+          </div>
+          <button onClick={onClose} className="text-stone-500 hover:text-stone-300 p-1.5 rounded-full hover:bg-white/5">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {groups.map((group) => {
+            const isMerging = merging === group.primary.id;
+            return (
+              <div key={group.primary.id} className="p-4 rounded-xl border border-stone-800 bg-stone-900/20 flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                  {/* Primary Scan */}
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <img src={group.primary.photoDataUrl} alt="Primary" className="w-14 h-14 rounded-lg object-cover border border-stone-850 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-[0.6rem] font-bold text-gold-500 uppercase tracking-wider bg-gold-500/10 px-1.5 py-0.5 rounded">Primary Scan</span>
+                      <h4 className="text-sm font-semibold text-stone-200 mt-1 truncate">{group.primary.extracted.name}</h4>
+                      <p className="text-xs text-stone-500 truncate">{group.primary.location?.cemetery || "Unknown Cemetery"}</p>
+                    </div>
+                  </div>
+
+                  <div className="text-stone-500 text-lg font-bold">＋</div>
+
+                  {/* Duplicate Scans */}
+                  <div className="flex flex-col gap-3 flex-1 min-w-0">
+                    {group.duplicates.map((dup) => (
+                      <div key={dup.id} className="flex items-center gap-3 min-w-0">
+                        <img src={dup.photoDataUrl} alt="Duplicate" className="w-14 h-14 rounded-lg object-cover border border-stone-850 shrink-0" />
+                        <div className="min-w-0">
+                          <span className="text-[0.6rem] font-bold text-stone-500 uppercase tracking-wider bg-stone-800 px-1.5 py-0.5 rounded">Duplicate Scan</span>
+                          <h4 className="text-sm font-semibold text-stone-300 mt-1 truncate">{dup.extracted.name}</h4>
+                          <p className="text-xs text-stone-500 truncate">{dup.location?.cemetery || "Unknown Cemetery"}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-end border-t border-stone-850 pt-3">
+                  <button
+                    disabled={isMerging}
+                    onClick={async () => {
+                      setMerging(group.primary.id);
+                      await onMerge(group.primary.id, group.duplicates.map(d => d.id));
+                      setMerging(null);
+                    }}
+                    className="text-xs font-semibold bg-gold-500 text-stone-950 px-4 py-2 rounded-lg hover:bg-gold-400 disabled:opacity-50 transition-colors flex items-center gap-2"
+                  >
+                    {isMerging ? (
+                      <>
+                        <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin border-stone-950" />
+                        Merging...
+                      </>
+                    ) : "Merge & Keep Photos"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

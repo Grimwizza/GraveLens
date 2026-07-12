@@ -150,11 +150,25 @@ export async function POST(req: NextRequest) {
     try {
       result = JSON.parse(rawJson);
     } catch (parseErr) {
-      console.error("[narrative] JSON parse failed on text:", content.text, parseErr);
-      return NextResponse.json(
-        { error: "Claude returned malformed JSON" },
-        { status: 502 }
-      );
+      const start = rawJson.indexOf("{");
+      const end = rawJson.lastIndexOf("}");
+      if (start !== -1 && end > start) {
+        try {
+          result = JSON.parse(rawJson.slice(start, end + 1));
+        } catch {
+          console.error("[narrative] JSON salvage failed on text:", content.text, parseErr);
+          return NextResponse.json(
+            { error: "Claude returned malformed JSON" },
+            { status: 502 }
+          );
+        }
+      } else {
+        console.error("[narrative] JSON parse failed on text:", content.text, parseErr);
+        return NextResponse.json(
+          { error: "Claude returned malformed JSON" },
+          { status: 502 }
+        );
+      }
     }
 
     return NextResponse.json(result);

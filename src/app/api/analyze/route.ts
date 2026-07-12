@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/apiAuth";
 import { toNameCase } from "@/lib/nameUtils";
 import { createClient } from "@/lib/supabase/server";
+import { validateExtraction, looksMultiPerson } from "@/lib/extractionValidation";
 
 // Two-tier model strategy:
 //   Haiku   — fast, cheap (~$0.003/scan). Used on every request.
@@ -48,6 +49,11 @@ Common cemetery abbreviations you must recognize:
 Family stone rules:
 - If multiple people share the same surname on one stone, apply that shared surname to every entry in people[] even when an individual panel shows only a given name (e.g. "FATHER" or "MARY").
 - The top-level fields (name, birthYear, etc.) must reflect the FIRST or PRIMARY person listed.
+
+Name rules:
+- Maiden names are genealogically critical — preserve them verbatim in "name": "née Schmidt", "nee Schmidt", or the parenthesized convention "Mary (Schmidt) Smith". lastName is the married/primary surname (Smith), never the maiden name.
+- Suffixes (Jr., Sr., II, III, IV) stay in "name" but must NOT appear in lastName.
+- Titles (Rev., Dr., Capt.) stay in "name" as inscribed but must NOT appear in firstName.
 
 Date inference:
 - If only deathYear and ageAtDeath are given, calculate birthYear = deathYear − ageAtDeath.
@@ -138,7 +144,18 @@ async function callClaude(
     .replace(/\s*```\s*$/i, "")
     .trim();
 
-  return JSON.parse(rawJson);
+  try {
+    return JSON.parse(rawJson);
+  } catch (err) {
+    // Model sometimes wraps JSON in prose despite instructions — salvage the
+    // outermost object before giving up.
+    const start = rawJson.indexOf("{");
+    const end = rawJson.lastIndexOf("}");
+    if (start !== -1 && end > start) {
+      return JSON.parse(rawJson.slice(start, end + 1));
+    }
+    throw err;
+  }
 }
 
 const LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour sliding window
@@ -226,12 +243,43 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Tier 2: Escalate to Sonnet ───────────────────────────────────────────
-    // Triggers on: parse failure, low confidence, missing name, or no dates at all.
+    // Triggers on: parse failure, low confidence, missing name, no dates at
+    // all, implausible data (swapped/impossible dates, OCR-confusable years),
+    // or an inscription that implies more people than people[] contains.
+    const haikuIssues = extracted ? validateExtraction(extracted) : [];
+    const haikuPeople = Array.isArray(extracted?.people) ? extracted.people.length : 0;
+    const missedPeople =
+      !!extracted &&
+      haikuPeople < 2 &&
+      typeof extracted.inscription === "string" &&
+      looksMultiPerson(extracted.inscription);
+
+    const YEAR_RANGE_PATTERN = /\b(1[4-9]\d\d|20\d\d)\s*[–—-]\s*(1[4-9]\d\d|20\d\d)\b/g;
+    const hasYearInInscription =
+      typeof extracted?.inscription === "string" &&
+      /\b(1[4-9]\d\d|20\d\d)\b/.test(extracted.inscription);
+    const missedDates =
+      !!extracted &&
+      hasYearInInscription &&
+      extracted.birthYear == null &&
+      extracted.deathYear == null;
+
+    const hasUnresolvedPeopleDates =
+      !!extracted &&
+      Array.isArray(extracted.people) &&
+      (extracted.people as { birthYear?: unknown; deathYear?: unknown }[]).some((p) => p.birthYear == null && p.deathYear == null) &&
+      typeof extracted.inscription === "string" &&
+      (extracted.inscription.match(YEAR_RANGE_PATTERN) ?? []).length >= extracted.people.length;
+
     const needsEscalation =
       !extracted ||
       extracted.confidence === "low" ||
       !extracted.name ||
-      (extracted.birthYear == null && extracted.deathYear == null);
+      (extracted.birthYear == null && extracted.deathYear == null) ||
+      haikuIssues.length > 0 ||
+      missedPeople ||
+      missedDates ||
+      hasUnresolvedPeopleDates;
 
     if (needsEscalation) {
       usedModel = MODEL_SONNET;
@@ -240,10 +288,22 @@ export async function POST(req: NextRequest) {
         !extracted ? "Haiku failed" :
         extracted.confidence === "low" ? "low confidence" :
         !extracted.name ? "name missing" :
-        "no dates"
+        missedDates ? "years present in inscription but extracted as null" :
+        hasUnresolvedPeopleDates ? "unresolved dates for co-buried individuals" :
+        (extracted.birthYear == null && extracted.deathYear == null) ? "no dates" :
+        haikuIssues.length > 0 ? `implausible data (${haikuIssues[0].problem})` :
+        "inscription implies more people than extracted"
       );
       extracted = await callClaude(client, MODEL_SONNET, imageBase64, finalMime, MAX_TOKENS_SONNET);
       console.log("[Analyze] Sonnet confidence:", extracted?.confidence, "name:", extracted?.name || "(empty)");
+    }
+
+    // Implausible data that survives Sonnet gets flagged for human review
+    // rather than presented as clean — confidently-wrong is worse than unsure.
+    const finalIssues = validateExtraction(extracted!);
+    if (finalIssues.length > 0 && extracted!.confidence !== "low") {
+      console.warn("[Analyze] Downgrading confidence — implausible extraction:", finalIssues);
+      extracted!.confidence = "low";
     }
 
     extracted!.source = "claude";

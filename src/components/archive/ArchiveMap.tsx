@@ -295,6 +295,7 @@ export default function ArchiveMap({
   const visitedCemeteries = useMemo(() => {
     const stores = new Map<string, { lat: number; lng: number; name: string; count: number }>();
     allGraves.forEach((g) => {
+      if (!g.location?.lat || !g.location?.lng) return;
       const cName = g.location.cemetery || "Unknown Location";
       const key = cName.toLowerCase().trim();
       const existing = stores.get(key);
@@ -339,13 +340,21 @@ export default function ArchiveMap({
       if (userPos) {
         center = userPos;
         zoom = 14;
-      } else if (validGraves.length > 0) {
+      } else if (validGraves.length === 1) {
+        center = [validGraves[0].location.lat, validGraves[0].location.lng];
+        zoom = 17; // Zoom close enough for the marker pin to render immediately
+      } else if (validGraves.length > 1) {
         center = [validGraves[0].location.lat, validGraves[0].location.lng];
         zoom = 14;
       }
 
       const map = L.map(mapRef.current!, { center, zoom, zoomControl: false });
       mapInstanceRef.current = map;
+
+      if (!userPos && validGraves.length > 1) {
+        const bounds = L.latLngBounds(validGraves.map((g) => [g.location.lat, g.location.lng] as [number, number]));
+        map.fitBounds(bounds, { padding: [40, 40] });
+      }
 
       L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
@@ -360,6 +369,8 @@ export default function ArchiveMap({
         setCurrentZoom(map.getZoom());
       });
 
+      // Sync React zoom state with map initialization zoom
+      setCurrentZoom(map.getZoom());
       setMapReady(true); // ← signals layer effects to run
     })();
 
@@ -514,7 +525,10 @@ export default function ArchiveMap({
           </div>`;
         L.marker([c.lat, c.lng], { icon: visitedIcon })
           .addTo(layer)
-          .bindPopup(popup, { autoPan: false });
+          .bindPopup(popup, { autoPan: false })
+          .on("click", () => {
+            map.setView([c.lat, c.lng], 16);
+          });
       });
     }
   }, [graves, visitedCemeteries, currentZoom, mapReady]);

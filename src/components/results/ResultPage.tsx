@@ -25,6 +25,7 @@ import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { toNameCase } from "@/lib/nameUtils";
 import { detectConflicts } from "@/lib/conflictDetector";
 import { shouldReview, TYPICAL_NAME_RE } from "@/lib/reviewUtils";
+import { validateExtraction } from "@/lib/extractionValidation";
 import type { ResearchLink } from "@/lib/researchLinks";
 import type {
   GraveRecord,
@@ -41,6 +42,7 @@ interface PendingResult {
   id: string;
   photoDataUrl: string;
   thumbnailDataUrl?: string;
+  additionalPhotos?: string[];
   extracted: ExtractedGraveData;
   location: GeoLocation | null;
   timestamp: number;
@@ -48,11 +50,41 @@ interface PendingResult {
   reviewedAt?: number;
 }
 
+function getPersonalizationDetails(
+  research: ResearchData | null
+) {
+  if (!research) return {};
+
+  const occupation = research.historicalCensus
+    ?.map((c) => c.occupation)
+    .filter(Boolean)[0] || undefined;
+
+  const im = research.immigration?.[0];
+  const immigration = im
+    ? `Arrived in ${im.arrivalYear ?? "the U.S."}${im.origin ? " from " + im.origin : ""}`
+    : undefined;
+
+  const m = research.militaryContext;
+  const militaryConfirmed = m?.inferredFrom === "inscription" || m?.inferredFrom === "symbols";
+  const military = (militaryConfirmed && m?.likelyConflict)
+    ? `${m.likelyConflict}${m.role ? " - " + m.role : ""}`
+    : undefined;
+
+  return { occupation, immigration, military };
+}
+
 export default function ResultPage({ id }: { id: string }) {
   const router = useRouter();
   const [pending, setPending] = useState<PendingResult | null>(null);
   const [research, setResearch] = useState<ResearchData | null>(null);
   const [researchLoading, setResearchLoading] = useState(false);
+  const [activePhotoUrl, setActivePhotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (pending?.photoDataUrl) {
+      setActivePhotoUrl(pending.photoDataUrl);
+    }
+  }, [pending?.photoDataUrl]);
   const [saved, setSaved] = useState(false);
   // True when this result was loaded from the archive (not a fresh scan).
   // Used to surface the "refresh for latest records" banner.
@@ -106,6 +138,7 @@ export default function ResultPage({ id }: { id: string }) {
         setPending({
           id: archived.id,
           photoDataUrl: archived.photoDataUrl,
+          additionalPhotos: archived.additionalPhotos,
           extracted: archived.extracted,
           location: archived.location,
           timestamp: archived.timestamp,
@@ -337,6 +370,20 @@ export default function ResultPage({ id }: { id: string }) {
     });
   }, [id, router]);
 
+  const syncGraveToCloud = useCallback(async (record: GraveRecord) => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const photoUrl = await uploadPhoto(supabase, user.id, record.id, record.photoDataUrl);
+      await upsertGrave(supabase, user.id, record, photoUrl);
+      const fresh = await getGrave(record.id);
+      await saveGrave({ ...(fresh ?? record), photoDataUrl: photoUrl, syncedAt: Date.now() });
+    } catch (err) {
+      console.warn("[CloudSync] Non-fatal sync error:", err);
+    }
+  }, []);
+
   // When already saved, persist tag changes immediately
   const handleTagsChange = useCallback(async (next: string[]) => {
     setTags(next);
@@ -346,12 +393,8 @@ export default function ResultPage({ id }: { id: string }) {
     const updated = { ...existing, tags: next };
     await saveGrave(updated);
     // Sync tag update to cloud
-    try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) await upsertGrave(supabase, user.id, updated, updated.photoDataUrl);
-    } catch { /* non-fatal */ }
-  }, [saved, pending]);
+    syncGraveToCloud(updated);
+  }, [saved, pending, syncGraveToCloud]);
 
   // Toggle community sharing for this grave
   const handleTogglePublic = useCallback(async (next: boolean) => {
@@ -400,18 +443,9 @@ export default function ResultPage({ id }: { id: string }) {
         needsReview: false,
       };
       await saveGrave(updatedRecord);
-
-      (async () => {
-        try {
-          const supabase = createClient();
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) return;
-          const photoUrl = await uploadPhoto(supabase, user.id, existing.id, existing.photoDataUrl);
-          await upsertGrave(supabase, user.id, updatedRecord, photoUrl);
-        } catch { /* offline or not logged in */ }
-      })();
+      syncGraveToCloud(updatedRecord);
     }
-  }, [pending]);
+  }, [pending, syncGraveToCloud]);
 
   const handleShare = useCallback(async () => {
     if (!pending) return;
@@ -431,6 +465,7 @@ export default function ResultPage({ id }: { id: string }) {
     }
   }, [pending, research]);
 
+
   const handleLoadCultural = useCallback(async () => {
     if (!pending || culturalLoading) return;
     setCulturalLoading(true);
@@ -448,6 +483,7 @@ export default function ResultPage({ id }: { id: string }) {
           ageAtDeath: personExtracted.ageAtDeath,
           city: location?.city,
           state: location?.state,
+          ...getPersonalizationDetails(research),
         }),
       });
       if (res.ok) {
@@ -456,8 +492,12 @@ export default function ResultPage({ id }: { id: string }) {
         setResearch((prev) => ({ ...(prev ?? {}), culturalContext: data }));
         // Persist cultural summary to IDB so it doesn't regenerate on next view
         if (selectedPersonIdx === 0) {
-          getGrave(pending.id).then((existing) => {
-            if (existing) saveGrave({ ...existing, research: { ...existing.research, culturalContext: data } });
+          getGrave(pending.id).then(async (existing) => {
+            if (existing) {
+              const updated = { ...existing, research: { ...existing.research, culturalContext: data } };
+              await saveGrave(updated);
+              syncGraveToCloud(updated);
+            }
           }).catch(() => {});
         }
       }
@@ -466,7 +506,7 @@ export default function ResultPage({ id }: { id: string }) {
     } finally {
       setCulturalLoading(false);
     }
-  }, [pending, culturalLoading, selectedPersonData, locationOverride, selectedPersonIdx]);
+  }, [pending, culturalLoading, selectedPersonData, locationOverride, selectedPersonIdx, syncGraveToCloud, research]);
 
   const autoExpandAllCategories = useCallback(async (
     ctx: CulturalContext,
@@ -495,6 +535,7 @@ export default function ResultPage({ id }: { id: string }) {
             ageAtDeath: extracted.ageAtDeath,
             city: location?.city,
             state: location?.state,
+            ...getPersonalizationDetails(research),
           }),
         }).then((r) => r.ok ? r.json() : null).catch(() => null)
       )
@@ -515,11 +556,15 @@ export default function ResultPage({ id }: { id: string }) {
     });
     // Persist expanded cultural context to IDB
     if (pending) {
-      getGrave(pending.id).then((existing) => {
-        if (existing) saveGrave({ ...existing, research: { ...existing.research, culturalContext: updatedCtx } });
+      getGrave(pending.id).then(async (existing) => {
+        if (existing) {
+          const updated = { ...existing, research: { ...existing.research, culturalContext: updatedCtx } };
+          await saveGrave(updated);
+          syncGraveToCloud(updated);
+        }
       }).catch(() => {});
     }
-  }, [pending]);
+  }, [pending, syncGraveToCloud, research]);
 
   const handleExpandCategory = useCallback(async (categoryId: string, categoryLabel: string) => {
     if (!pending || expandingCategory || !culturalContext) return;
@@ -540,6 +585,7 @@ export default function ResultPage({ id }: { id: string }) {
           ageAtDeath: personExtracted.ageAtDeath,
           city: location?.city,
           state: location?.state,
+          ...getPersonalizationDetails(research),
         }),
       });
       if (res.ok) {
@@ -552,15 +598,17 @@ export default function ResultPage({ id }: { id: string }) {
         setCulturalContext(updatedCtx);
         setResearch((r) => ({ ...(r ?? {}), culturalContext: updatedCtx }));
         if (selectedPersonIdx === 0) {
-          getGrave(pending.id).then((existing) => {
+          getGrave(pending.id).then(async (existing) => {
             if (existing) {
-              saveGrave({
+              const updated = {
                 ...existing,
                 research: {
                   ...existing.research,
                   culturalContext: updatedCtx,
                 },
-              });
+              };
+              await saveGrave(updated);
+              syncGraveToCloud(updated);
             }
           }).catch(() => {});
         }
@@ -570,7 +618,7 @@ export default function ResultPage({ id }: { id: string }) {
     } finally {
       setExpandingCategory(null);
     }
-  }, [pending, expandingCategory, culturalContext, selectedPersonData, locationOverride, selectedPersonIdx]);
+  }, [pending, expandingCategory, culturalContext, selectedPersonData, locationOverride, selectedPersonIdx, syncGraveToCloud, research]);
 
 
   // Auto-load cultural context once the main research fetch completes
@@ -633,6 +681,7 @@ export default function ResultPage({ id }: { id: string }) {
       tags,
     };
     await saveGrave(updated);
+    syncGraveToCloud(updated);
 
     if (newLocation.lat !== 0 && newLocation.lng !== 0) {
       try {
@@ -649,7 +698,7 @@ export default function ResultPage({ id }: { id: string }) {
         if (nearby.length > 0) setNearbyPrompt({ name, records: nearby });
       } catch { /* non-fatal */ }
     }
-  }, [pending, currentLocation, research, tags]);
+  }, [pending, currentLocation, research, tags, syncGraveToCloud]);
 
   const handleLocateCemetery = useCallback(async () => {
     if (!pending) return;
@@ -660,9 +709,13 @@ export default function ResultPage({ id }: { id: string }) {
       const newLoc: GeoLocation = { ...(currentLocation ?? { lat: 0, lng: 0 }), ...geo };
       setLocationOverride(newLoc);
       const existing = await getGrave(pending.id);
-      if (existing) await saveGrave({ ...existing, location: newLoc });
+      if (existing) {
+        const updated = { ...existing, location: newLoc };
+        await saveGrave(updated);
+        syncGraveToCloud(updated);
+      }
     } catch { /* non-fatal */ }
-  }, [pending, currentLocation]);
+  }, [pending, currentLocation, syncGraveToCloud]);
 
   const handleNearbyYes = useCallback(async () => {
     if (!nearbyPrompt) return;
@@ -753,7 +806,11 @@ export default function ResultPage({ id }: { id: string }) {
           freshExtracted = extracted as ExtractedGraveData;
           setPending((prev) => prev ? { ...prev, extracted: freshExtracted! } : prev);
           const existing = await getGrave(pending.id);
-          if (existing) await saveGrave({ ...existing, extracted: freshExtracted! });
+          if (existing) {
+            const updated = { ...existing, extracted: freshExtracted! };
+            await saveGrave(updated);
+            syncGraveToCloud(updated);
+          }
         }
       } catch { /* non-fatal — fall through with existing extracted */ }
     }
@@ -849,6 +906,9 @@ export default function ResultPage({ id }: { id: string }) {
           storyScript:    prev?.storyScript,
           epitaphSource:  prev?.epitaphSource,
           epitaphMeaning: prev?.epitaphMeaning,
+          storyScripts:   prev?.storyScripts,
+          epitaphSources: prev?.epitaphSources,
+          epitaphMeanings: prev?.epitaphMeanings,
           narrative:      prev?.narrative,
           narratives:     prev?.narratives,
           culturalContext: prev?.culturalContext,
@@ -867,6 +927,9 @@ export default function ResultPage({ id }: { id: string }) {
               storyScript:    existing.research?.storyScript,
               epitaphSource:  existing.research?.epitaphSource,
               epitaphMeaning: existing.research?.epitaphMeaning,
+              storyScripts:   existing.research?.storyScripts,
+              epitaphSources: existing.research?.epitaphSources,
+              epitaphMeanings: existing.research?.epitaphMeanings,
               narrative:      existing.research?.narrative,
               narratives:     existing.research?.narratives,
               culturalContext: existing.research?.culturalContext,
@@ -886,7 +949,7 @@ export default function ResultPage({ id }: { id: string }) {
         setRefreshing(false);
       }
     }
-  }, [pending, extractedOverride, currentLocation]);
+  }, [pending, extractedOverride, currentLocation, syncGraveToCloud]);
 
   // ── Per-section refresh handlers ────────────────────────────────────────────
   // Each calls a lightweight API route that wraps only that section's lookup.
@@ -997,8 +1060,9 @@ export default function ResultPage({ id }: { id: string }) {
   // Tracks the in-flight person-switch fetch so rapid taps can cancel the prior one.
   const personFetchAbortRef = useRef<AbortController | null>(null);
 
-  const handleSelectPerson = useCallback(async (idx: number) => {
-    if (idx === selectedPersonIdx || !pending) return;
+  const handleSelectPerson = useCallback(async (idx: number, force = false) => {
+    if (idx === selectedPersonIdx && !force) return;
+    if (!pending) return;
 
     // Cancel any still-in-flight fetch for a previous person switch
     personFetchAbortRef.current?.abort();
@@ -1020,7 +1084,7 @@ export default function ResultPage({ id }: { id: string }) {
     }
 
     const cached = personResearchCacheRef.current.get(idx);
-    if (cached) {
+    if (cached && !force) {
       setResearch(cached);
       setCulturalContext(cached.culturalContext ?? null);
       return;
@@ -1115,6 +1179,44 @@ export default function ResultPage({ id }: { id: string }) {
       enriched = { ...enriched, deathYear: m ? parseInt(m[1], 10) : null };
     }
 
+    if (selectedPersonIdx > 0) {
+      const currentExtracted = { ...pending.extracted, ...(extractedOverride ?? {}) };
+      const updatedPeople = [...(currentExtracted.people ?? [])];
+      const person = updatedPeople[selectedPersonIdx];
+      if (person) {
+        updatedPeople[selectedPersonIdx] = {
+          ...person,
+          ...enriched,
+        };
+        const next = {
+          ...currentExtracted,
+          people: updatedPeople,
+        };
+        setExtractedOverride(next);
+
+        setSelectedPersonData({
+          ...currentExtracted,
+          ...updatedPeople[selectedPersonIdx],
+          people: updatedPeople,
+        });
+
+        const existing = await getGrave(pending.id);
+        if (existing) {
+          const updated = {
+            ...existing,
+            extracted: next,
+            reviewedAt: Date.now(),
+          };
+          await saveGrave(updated);
+          syncGraveToCloud(updated);
+        }
+
+        personResearchCacheRef.current.delete(selectedPersonIdx);
+        handleSelectPerson(selectedPersonIdx, true);
+      }
+      return;
+    }
+
     // Substitute edited name/dates into the inscription text so it stays in sync.
     const currentExtracted = { ...pending.extracted, ...(extractedOverride ?? {}) };
     const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1168,27 +1270,14 @@ export default function ResultPage({ id }: { id: string }) {
       // Clear needsReview if a name is now present; a human edit that leaves
       // the record with a name counts as review (overrides low confidence).
       const reviewCleared = existing.needsReview && !!next.name;
-      await saveGrave({
+      const updated = {
         ...existing,
         extracted: next,
         ...(next.name ? { reviewedAt: Date.now() } : {}),
         ...(reviewCleared ? { needsReview: false } : {}),
-      });
-
-      // Push to cloud so the manual edit overwrites stale cloud data on other devices
-      (async () => {
-        try {
-          const supabase = createClient();
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) return;
-          const photoUrl = await uploadPhoto(supabase, user.id, existing.id, existing.photoDataUrl);
-          await upsertGrave(supabase, user.id, { ...existing, extracted: next }, photoUrl);
-          // Re-read from DB so this save doesn't clobber research data that
-          // handleRefreshData may have written while the upload was in flight.
-          const fresh = await getGrave(existing.id);
-          await saveGrave({ ...(fresh ?? existing), photoDataUrl: photoUrl, syncedAt: Date.now() });
-        } catch { /* offline or not logged in — local save stands */ }
-      })();
+      };
+      await saveGrave(updated);
+      syncGraveToCloud(updated);
     }
 
     // Re-run research when fields that affect the lookup change
@@ -1198,7 +1287,7 @@ export default function ResultPage({ id }: { id: string }) {
     if (RESEARCH_KEYS.some((k) => k in enriched)) {
       handleRefreshData(next);
     }
-  }, [pending, extractedOverride, handleRefreshData]);
+  }, [pending, extractedOverride, handleRefreshData, selectedPersonIdx, handleSelectPerson, syncGraveToCloud]);
 
   if (!pending) {
     return (
@@ -1221,6 +1310,7 @@ export default function ResultPage({ id }: { id: string }) {
     id: pending.id,
     timestamp: pending.timestamp,
     photoDataUrl,
+    additionalPhotos: pending.additionalPhotos,
     location: location ?? { lat: 0, lng: 0 },
     extracted,
     research: research ?? {},
@@ -1294,10 +1384,26 @@ export default function ResultPage({ id }: { id: string }) {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={photoDataUrl}
+              src={activePhotoUrl || photoDataUrl}
               alt="Grave marker"
               className="w-full h-full object-cover"
             />
+            {/* Additional photos thumbnails overlay */}
+            {graveRecord?.additionalPhotos && graveRecord.additionalPhotos.length > 0 && (
+              <div className="absolute bottom-3 left-3 flex gap-1.5 z-10 animate-fade-up" onClick={(e) => e.stopPropagation()}>
+                {[photoDataUrl, ...graveRecord.additionalPhotos].map((photo, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setActivePhotoUrl(photo)}
+                    className={`w-10 h-10 rounded-lg overflow-hidden border-2 transition-all ${
+                      (activePhotoUrl || photoDataUrl) === photo ? "border-gold-500 scale-105" : "border-stone-850 opacity-70"
+                    }`}
+                  >
+                    <img src={photo} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-stone-900 via-transparent to-transparent" />
             <div className="absolute bottom-3 right-3 w-7 h-7 rounded-full flex items-center justify-center bg-stone-900/60">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#b0aba6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1305,7 +1411,7 @@ export default function ResultPage({ id }: { id: string }) {
               </svg>
             </div>
             {extracted.confidence && (
-              <ConfidenceBadge confidence={extracted.confidence} offsetClass="top-3 right-3" />
+              <ConfidenceBadge confidence={extracted.confidence} extracted={extracted} offsetClass="top-3 right-3" />
             )}
           </div>
         </div>
@@ -1316,7 +1422,7 @@ export default function ResultPage({ id }: { id: string }) {
 
           <PrimaryCard
             extracted={activeExtracted}
-            onSave={selectedPersonIdx === 0 ? handleExtractedEdit : undefined}
+            onSave={handleExtractedEdit}
             people={activePeople.length > 1 ? activePeople : undefined}
             selectedPersonIdx={selectedPersonIdx}
             onSelectPerson={handleSelectPerson}
@@ -1326,8 +1432,16 @@ export default function ResultPage({ id }: { id: string }) {
           <InscriptionCard
             inscription={extracted.inscription}
             epitaph={extracted.epitaph}
-            epitaphSource={research?.epitaphSource}
-            epitaphMeaning={research?.epitaphMeaning}
+            epitaphSource={
+              selectedPersonIdx === 0
+                ? (research?.epitaphSource ?? research?.epitaphSources?.[0])
+                : research?.epitaphSources?.[selectedPersonIdx]
+            }
+            epitaphMeaning={
+              selectedPersonIdx === 0
+                ? (research?.epitaphMeaning ?? research?.epitaphMeanings?.[0])
+                : research?.epitaphMeanings?.[selectedPersonIdx]
+            }
             onSave={(inscription) => handleExtractedEdit({ inscription })}
           />
 
@@ -1383,17 +1497,62 @@ export default function ResultPage({ id }: { id: string }) {
             personIdx={selectedPersonIdx}
             researchReady={!researchLoading && !!culturalContext}
             onStoryGenerated={async (epitaphSource, epitaphMeaning, script) => {
-              // Only persist to archive for person 0 — secondary persons' scripts are ephemeral
-              if (selectedPersonIdx === 0) {
-                setResearch((prev) => ({ ...(prev ?? {}), epitaphSource, epitaphMeaning, storyScript: script }));
-                if (pending) {
-                  const existing = await getGrave(pending.id);
-                  if (existing) {
-                    await saveGrave({
-                      ...existing,
-                      research: { ...existing.research, epitaphSource, epitaphMeaning, storyScript: script },
-                    });
+              setResearch((prev) => {
+                const next = { ...(prev ?? {}) };
+                if (selectedPersonIdx === 0) {
+                  next.storyScript = script;
+                  next.epitaphSource = epitaphSource;
+                  next.epitaphMeaning = epitaphMeaning;
+                }
+                const storyScripts = [...(next.storyScripts ?? [])];
+                const epitaphSources = [...(next.epitaphSources ?? [])];
+                const epitaphMeanings = [...(next.epitaphMeanings ?? [])];
+
+                const peopleCount = activePeople.length || 1;
+                while (storyScripts.length < peopleCount) storyScripts.push("");
+                while (epitaphSources.length < peopleCount) epitaphSources.push("");
+                while (epitaphMeanings.length < peopleCount) epitaphMeanings.push("");
+
+                storyScripts[selectedPersonIdx] = script;
+                epitaphSources[selectedPersonIdx] = epitaphSource;
+                epitaphMeanings[selectedPersonIdx] = epitaphMeaning;
+
+                next.storyScripts = storyScripts;
+                next.epitaphSources = epitaphSources;
+                next.epitaphMeanings = epitaphMeanings;
+
+                return next;
+              });
+
+              if (pending) {
+                const existing = await getGrave(pending.id);
+                if (existing) {
+                  const r = { ...(existing.research ?? {}) };
+                  if (selectedPersonIdx === 0) {
+                    r.storyScript = script;
+                    r.epitaphSource = epitaphSource;
+                    r.epitaphMeaning = epitaphMeaning;
                   }
+                  const storyScripts = [...(r.storyScripts ?? [])];
+                  const epitaphSources = [...(r.epitaphSources ?? [])];
+                  const epitaphMeanings = [...(r.epitaphMeanings ?? [])];
+
+                  const peopleCount = activePeople.length || 1;
+                  while (storyScripts.length < peopleCount) storyScripts.push("");
+                  while (epitaphSources.length < peopleCount) epitaphSources.push("");
+                  while (epitaphMeanings.length < peopleCount) epitaphMeanings.push("");
+
+                  storyScripts[selectedPersonIdx] = script;
+                  epitaphSources[selectedPersonIdx] = epitaphSource;
+                  epitaphMeanings[selectedPersonIdx] = epitaphMeaning;
+
+                  r.storyScripts = storyScripts;
+                  r.epitaphSources = epitaphSources;
+                  r.epitaphMeanings = epitaphMeanings;
+
+                  const updated = { ...existing, research: r };
+                  await saveGrave(updated);
+                  syncGraveToCloud(updated);
                 }
               }
             }}
@@ -1718,14 +1877,30 @@ export default function ResultPage({ id }: { id: string }) {
       <aside className="hidden lg:block lg:basis-[40%] lg:shrink-0 relative overflow-hidden border-l border-stone-800">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={photoDataUrl}
+          src={activePhotoUrl || photoDataUrl}
           alt="Grave marker"
           className="w-full h-full object-cover object-center cursor-pointer"
           onClick={() => setPhotoFullscreen(true)}
         />
+        {/* Additional photos thumbnails overlay */}
+        {graveRecord?.additionalPhotos && graveRecord.additionalPhotos.length > 0 && (
+          <div className="absolute bottom-4 left-4 flex gap-1.5 z-10 animate-fade-up" onClick={(e) => e.stopPropagation()}>
+            {[photoDataUrl, ...graveRecord.additionalPhotos].map((photo, index) => (
+              <button
+                key={index}
+                onClick={() => setActivePhotoUrl(photo)}
+                className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${
+                  (activePhotoUrl || photoDataUrl) === photo ? "border-gold-500 scale-105" : "border-stone-850 opacity-70 hover:opacity-90"
+                }`}
+              >
+                <img src={photo} alt="" className="w-full h-full object-cover" />
+              </button>
+            ))}
+          </div>
+        )}
         {/* Confidence badge */}
         {extracted.confidence && (
-          <ConfidenceBadge confidence={extracted.confidence} offsetClass="top-4 right-4" />
+          <ConfidenceBadge confidence={extracted.confidence} extracted={extracted} offsetClass="top-4 right-4" />
         )}
         {/* Expand to fullscreen */}
         <button
@@ -2295,10 +2470,19 @@ function HistoricalCard({
     return (
       <div className="py-5 animate-fade-up" style={{ animationDelay: "0.1s" }}>
         <SectionHeader icon="📖" title="Historical Context" />
-        <div className="mt-3 space-y-2">
-          <div className="h-4 shimmer rounded w-3/4" />
-          <div className="h-4 shimmer rounded w-5/6" />
-          <div className="h-4 shimmer rounded w-1/2" />
+        <div className="mt-3 space-y-4">
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            {[1, 2].map((n) => (
+              <div key={n} className="w-24">
+                <div className="h-3 shimmer rounded w-2/3 mb-1.5" />
+                <div className="h-4 shimmer rounded w-5/6" />
+              </div>
+            ))}
+          </div>
+          <div className="p-3 rounded-xl bg-stone-800/40 border border-stone-700/50">
+            <div className="h-3 shimmer rounded w-16 mb-2" />
+            <div className="h-4 shimmer rounded w-5/6" />
+          </div>
         </div>
       </div>
     );
@@ -2603,8 +2787,13 @@ function RecordsCard({
       <div className="py-5 animate-fade-up">
         <SectionHeader icon={icon} title={title} onRefresh={onRefresh} refreshing={refreshing} />
         <div className="mt-3 space-y-2">
-          <div className="h-14 shimmer rounded-xl" />
-          <div className="h-14 shimmer rounded-xl" />
+          {[1, 2].map((n) => (
+            <div key={n} className="p-3 rounded-xl bg-stone-800/40 border border-stone-700/50">
+              <div className="h-4 shimmer rounded w-1/2 mb-1.5" />
+              <div className="h-3 shimmer rounded w-1/3 mb-1.5" />
+              <div className="h-3.5 shimmer rounded w-2/3" />
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -2680,8 +2869,15 @@ function FamilySearchCard({
       <div className="py-5 animate-fade-up">
         <SectionHeader icon="🌳" title="FamilySearch Records" onRefresh={onRefresh} refreshing={refreshing} />
         <div className="mt-3 space-y-2">
-          <div className="h-14 shimmer rounded-xl" />
-          <div className="h-14 shimmer rounded-xl" />
+          {[1, 2].map((n) => (
+            <div key={n} className="flex items-start gap-3 p-3 rounded-xl bg-stone-800/40 border border-stone-700/50">
+              <div className="shrink-0 w-12 h-5 rounded bg-stone-700/40 shimmer" />
+              <div className="flex-1 min-w-0">
+                <div className="h-4 shimmer rounded w-1/2 mb-2" />
+                <div className="h-3 shimmer rounded w-1/3" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -2761,11 +2957,17 @@ function SSDICard({
   if (loading && !records.length) {
     return (
       <div className="py-5 animate-fade-up">
-        <SectionHeader icon="📋" title="Social Security Death Index" />
+        <SectionHeader icon="📋" title="Social Security Death Index" onRefresh={onRefresh} refreshing={refreshing} />
         <div className="mt-3 space-y-2">
-          <div className="h-4 shimmer rounded w-3/4" />
-          <div className="h-4 shimmer rounded w-1/2" />
-          <div className="h-4 shimmer rounded w-2/3" />
+          {[1, 2].map((n) => (
+            <div key={n} className="flex items-start gap-3 p-3 rounded-xl bg-stone-800/40 border border-stone-700/50">
+              <div className="shrink-0 w-14 h-5 rounded bg-stone-700/40 shimmer" />
+              <div className="flex-1 min-w-0">
+                <div className="h-4 shimmer rounded w-1/3 mb-2" />
+                <div className="h-3 shimmer rounded w-1/2" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -2822,9 +3024,15 @@ function HistoricalCensusCard({ records, loading }: { records: import("@/types")
       <div className="py-5 animate-fade-up">
         <SectionHeader icon="📊" title="Historical Census Records" />
         <div className="mt-3 space-y-2">
-          <div className="h-4 shimmer rounded w-5/6" />
-          <div className="h-4 shimmer rounded w-3/4" />
-          <div className="h-4 shimmer rounded w-2/3" />
+          {[1, 2].map((n) => (
+            <div key={n} className="flex items-start gap-3 p-3 rounded-xl bg-stone-800/40 border border-stone-700/50">
+              <div className="shrink-0 w-10 h-5 rounded bg-stone-700/40 shimmer" />
+              <div className="flex-1 min-w-0">
+                <div className="h-4 shimmer rounded w-1/3 mb-2" />
+                <div className="h-3 shimmer rounded w-2/3" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -2885,9 +3093,15 @@ function ImmigrationCard({ records, loading }: { records: import("@/types").Immi
       <div className="py-5 animate-fade-up">
         <SectionHeader icon="⚓" title="Immigration & Passenger Records" />
         <div className="mt-3 space-y-2">
-          <div className="h-4 shimmer rounded w-2/3" />
-          <div className="h-4 shimmer rounded w-5/6" />
-          <div className="h-4 shimmer rounded w-1/2" />
+          {[1, 2].map((n) => (
+            <div key={n} className="flex items-start gap-3 p-3 rounded-xl bg-stone-800/40 border border-stone-700/50">
+              <div className="shrink-0 w-12 h-5 rounded bg-stone-700/40 shimmer" />
+              <div className="flex-1 min-w-0">
+                <div className="h-4 shimmer rounded w-1/3 mb-2" />
+                <div className="h-3 shimmer rounded w-2/3" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -3021,10 +3235,18 @@ function ResearchChecklistCard({
       <div className="py-5 animate-fade-up">
         <SectionHeader icon="🔍" title="What to Research Next" />
         <div className="mt-3 space-y-2">
-          <div className="h-4 shimmer rounded w-full" />
-          <div className="h-4 shimmer rounded w-5/6" />
-          <div className="h-4 shimmer rounded w-3/4" />
-          <div className="h-4 shimmer rounded w-full" />
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="flex items-start gap-3 p-3 rounded-xl bg-stone-800/40 border border-stone-700/50">
+              <div className="shrink-0 mt-0.5 w-5 h-5 rounded-full bg-stone-700/40 shimmer" />
+              <div className="flex-1 min-w-0">
+                <div className="h-4 shimmer rounded w-5/6 mb-2.5" />
+                <div className="flex gap-2 items-center">
+                  <div className="w-16 h-4 rounded bg-stone-700/40 shimmer" />
+                  <div className="w-12 h-3.5 rounded bg-stone-700/30 shimmer" />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -3098,10 +3320,15 @@ function MilitaryCard({
     return (
       <div className="py-5 animate-fade-up" style={{ animationDelay: "0.08s" }}>
         <SectionHeader icon="🎖" title="Military Service" />
-        <div className="mt-3 space-y-2">
-          <div className="h-4 shimmer rounded w-2/3" />
-          <div className="h-4 shimmer rounded w-5/6" />
-          <div className="h-4 shimmer rounded w-3/4" />
+        <div className="mt-3 space-y-4">
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="w-24">
+                <div className="h-3 shimmer rounded w-2/3 mb-1.5" />
+                <div className="h-4 shimmer rounded w-5/6" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -3348,10 +3575,16 @@ function LocalHistoryCard({
     return (
       <div className="py-5 animate-fade-up" style={{ animationDelay: "0.13s" }}>
         <SectionHeader icon="🗺" title="Local History" />
-        <div className="mt-3 space-y-2">
-          <div className="h-4 shimmer rounded w-4/5" />
-          <div className="h-4 shimmer rounded w-3/4" />
-          <div className="h-4 shimmer rounded w-5/6" />
+        <div className="mt-3 space-y-5">
+          <div>
+            <div className="h-3 shimmer rounded w-1/4 mb-2" />
+            <div className="space-y-1.5">
+              <div className="h-3.5 shimmer rounded w-full" />
+              <div className="h-3.5 shimmer rounded w-5/6" />
+              <div className="h-3.5 shimmer rounded w-4/5" />
+            </div>
+            <div className="h-3 shimmer rounded w-32 mt-2" />
+          </div>
         </div>
       </div>
     );
@@ -3649,8 +3882,9 @@ function StoryCard({
   const voice  = selectVoice(gender, extracted.ageAtDeath, origin);
   // Include person index in cache key so each person's audio is stored separately
   const cacheKey = personIdx === 0 ? `story_${voice}` : `story_${voice}_p${personIdx}`;
-  // Only pre-load the persisted script for person 0; secondary persons always regenerate
-  const initialScript = personIdx === 0 ? (research?.storyScript ?? null) : null;
+  const initialScript = personIdx === 0
+    ? (research?.storyScript ?? research?.storyScripts?.[0] ?? null)
+    : (research?.storyScripts?.[personIdx] ?? null);
 
   const [audioDataUrl, setAudioDataUrl]   = useState<string | null>(null);
   const [loadingPhase, setLoadingPhase]   = useState<null | "crafting" | "recording">(null);
@@ -3668,7 +3902,10 @@ function StoryCard({
 
   // Load cached audio on mount; reset script when person changes
   useEffect(() => {
-    setScriptText(personIdx === 0 ? (research?.storyScript ?? null) : null);
+    const script = personIdx === 0
+      ? (research?.storyScript ?? research?.storyScripts?.[0] ?? null)
+      : (research?.storyScripts?.[personIdx] ?? null);
+    setScriptText(script);
     setAudioDataUrl(null);
     getAudio(graveId, cacheKey).then((cached) => {
       if (cached) setAudioDataUrl(cached);
@@ -3725,10 +3962,11 @@ function StoryCard({
         let epitaphSource = "";
         let epitaphMeaning = "";
 
-        if (research?.storyScript) {
-          script = research.storyScript;
-          epitaphSource = research.epitaphSource ?? "";
-          epitaphMeaning = research.epitaphMeaning ?? "";
+        const savedScript = research?.storyScript ?? research?.storyScripts?.[0] ?? null;
+        if (savedScript) {
+          script = savedScript;
+          epitaphSource = research.epitaphSource ?? research.epitaphSources?.[0] ?? "";
+          epitaphMeaning = research.epitaphMeaning ?? research.epitaphMeanings?.[0] ?? "";
         } else {
           const storyRes = await fetch("/api/story", {
             method: "POST",
@@ -3823,6 +4061,7 @@ function StoryCard({
           ageAtDeath: extracted.ageAtDeath,
           city: location?.city,
           state: location?.state,
+          ...getPersonalizationDetails(research),
         }),
       }).then((r) => r.ok ? r.json() : null).catch(() => null);
 
@@ -3833,10 +4072,18 @@ function StoryCard({
       let epitaphSource = "";
       let epitaphMeaning = "";
 
-      if (research?.storyScript) {
-        script = research.storyScript;
-        epitaphSource = research.epitaphSource ?? "";
-        epitaphMeaning = research.epitaphMeaning ?? "";
+      const savedScript = personIdx === 0
+        ? (research?.storyScript ?? research?.storyScripts?.[0] ?? null)
+        : (research?.storyScripts?.[personIdx] ?? null);
+
+      if (savedScript) {
+        script = savedScript;
+        epitaphSource = (personIdx === 0
+          ? (research?.epitaphSource ?? research?.epitaphSources?.[0])
+          : research?.epitaphSources?.[personIdx]) ?? "";
+        epitaphMeaning = (personIdx === 0
+          ? (research?.epitaphMeaning ?? research?.epitaphMeanings?.[0])
+          : research?.epitaphMeanings?.[personIdx]) ?? "";
       } else {
         const storyRes = await fetch("/api/story", {
           method: "POST",
@@ -4746,7 +4993,15 @@ const CONFIDENCE_INFO: Record<string, { color: string; tip: string }> = {
   low:    { color: "#e88888",              tip: "The inscription was hard to read. Verify details manually and consider re-scanning." },
 };
 
-function ConfidenceBadge({ confidence, offsetClass = "top-3 right-3" }: { confidence: string; offsetClass?: string }) {
+function ConfidenceBadge({
+  confidence,
+  extracted,
+  offsetClass = "top-3 right-3"
+}: {
+  confidence: string;
+  extracted: ExtractedGraveData;
+  offsetClass?: string;
+}) {
   const [open, setOpen] = useState(false);
   const info = CONFIDENCE_INFO[confidence];
   if (!info) return null;
@@ -4755,6 +5010,32 @@ function ConfidenceBadge({ confidence, offsetClass = "top-3 right-3" }: { confid
     confidence === "high"   ? "High confidence" :
     confidence === "medium" ? "Medium confidence" :
     "Low confidence";
+
+  const reasons = (() => {
+    const list: string[] = [];
+    if (confidence === "high") return list;
+
+    if (!extracted.name) {
+      list.push("Name was not identified on the stone.");
+    } else if (!TYPICAL_NAME_RE.test(extracted.name)) {
+      list.push("Name contains unusual characters or OCR noise.");
+    }
+
+    if (extracted.birthYear == null && extracted.deathYear == null) {
+      list.push("No birth or death years were extracted.");
+    }
+
+    const issues = validateExtraction(extracted as unknown as Record<string, unknown>);
+    issues.forEach((issue) => {
+      list.push(issue.problem);
+    });
+
+    if (list.length === 0) {
+      list.push("Hard-to-read text or weathered stone surface.");
+    }
+
+    return list;
+  })();
 
   return (
     <div className={`absolute ${offsetClass}`}>
@@ -4782,13 +5063,24 @@ function ConfidenceBadge({ confidence, offsetClass = "top-3 right-3" }: { confid
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
-            className="absolute right-0 top-full mt-2 z-50 w-56 rounded-xl px-3.5 py-3 text-xs text-stone-300 leading-relaxed shadow-xl"
+            className="absolute right-0 top-full mt-2 z-50 w-56 rounded-xl px-3.5 py-3 text-xs text-stone-300 leading-relaxed shadow-xl animate-fade-up"
             style={{ background: "#1c1b19", border: "1px solid rgba(255,255,255,0.08)" }}
           >
             <p className="font-semibold mb-1" style={{ color: info.color }}>{label}</p>
-            <p>{info.tip}</p>
+            <p className="mb-1.5">{info.tip}</p>
+            {reasons.length > 0 && (
+              <div className="border-t border-white/5 pt-1.5 mt-1.5 flex flex-col gap-1 text-[0.68rem] text-stone-400">
+                <p className="font-semibold text-stone-500">Key reasons:</p>
+                {reasons.map((r, i) => (
+                  <p key={i} className="flex gap-1 items-start">
+                    <span className="text-red-400/70 select-none">•</span>
+                    <span>{r}</span>
+                  </p>
+                ))}
+              </div>
+            )}
             {confidence !== "high" && (
-              <p className="mt-1.5 text-stone-500">Tap the refresh icon to re-analyze after re-scanning.</p>
+              <p className="mt-2 text-stone-500 text-[0.68rem]">Tap the refresh icon to re-analyze after re-scanning.</p>
             )}
           </div>
         </>

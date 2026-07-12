@@ -36,6 +36,9 @@ function personContext(params: {
   ageAtDeath: number | null;
   city?: string;
   state?: string;
+  occupation?: string;
+  immigration?: string;
+  military?: string;
 }): string {
   const lines: string[] = [];
   lines.push(`Name: ${params.name || "Unknown"}`);
@@ -45,6 +48,9 @@ function personContext(params: {
   if (params.city || params.state) {
     lines.push(`Location: ${[params.city, params.state].filter(Boolean).join(", ")}`);
   }
+  if (params.occupation) lines.push(`Occupation: ${params.occupation}`);
+  if (params.immigration) lines.push(`Immigration: ${params.immigration}`);
+  if (params.military) lines.push(`Military: ${params.military}`);
   return lines.join("\n");
 }
 
@@ -55,6 +61,10 @@ For each of the 5 categories below, write exactly 2 vivid sentences capturing th
 striking aspect of this person's lifetime experience in that domain. Lead with the most
 surprising or tangible detail. Emphasise the arc of change — what they were born into
 versus what they witnessed before they died.
+
+If their occupation, immigration, or military service are provided above, weave those details
+naturally into the summaries where relevant (e.g. popculture or homelife of working as a coal miner,
+or news/transportation of their immigration journey).
 
 Categories:
 - "popculture":    Music, film, radio, theatre, and entertainment they would have experienced
@@ -87,8 +97,9 @@ Write 4 paragraphs walking through this person's lifetime experience with ${cate
 moving chronologically from their early years to the end of their life.
 
 Be richly specific — name actual songs, technologies, what things cost, real events, local
-places. Use their geography (${params.state ?? "their region"}) to ground it locally where
-you can. Show how dramatically things changed across a single lifetime.
+places. Use their geography (${params.state ?? "their region"}), and if available, their occupation,
+immigration, or military details, to ground it locally and personally where you can.
+Show how dramatically things changed across a single lifetime.
 
 The person reading this is standing at this grave. Make them feel what that life actually
 looked and sounded and smelled like. Make the past real and human.
@@ -146,7 +157,20 @@ export async function POST(req: NextRequest) {
       .replace(/\s*```\s*$/i, "")
       .trim();
 
-    return NextResponse.json(JSON.parse(raw));
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      const start = raw.indexOf("{");
+      const end = raw.lastIndexOf("}");
+      if (start !== -1 && end > start) {
+        parsed = JSON.parse(raw.slice(start, end + 1));
+      } else {
+        throw err;
+      }
+    }
+
+    return NextResponse.json(parsed);
   } catch (err) {
     console.error("[/api/cultural]", err);
     return NextResponse.json(

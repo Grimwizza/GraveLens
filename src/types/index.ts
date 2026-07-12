@@ -329,12 +329,19 @@ export interface ResearchData {
   /** Epitaph source/meaning from the story generation */
   epitaphSource?: string;
   epitaphMeaning?: string;
+  /** Cached first-person story scripts parallel to extracted.people[]. Multi-person entries only. */
+  storyScripts?: string[];
+  /** Epitaph sources parallel to extracted.people[]. Multi-person entries only. */
+  epitaphSources?: string[];
+  /** Epitaph meanings parallel to extracted.people[]. Multi-person entries only. */
+  epitaphMeanings?: string[];
 }
 
 export interface GraveRecord {
   id: string;
   timestamp: number;
   photoDataUrl: string;
+  additionalPhotos?: string[];
   /** Small preview image (300 px longest edge, ~65% JPEG). Used in archive lists to avoid re-parsing the full photo. */
   thumbnailDataUrl?: string;
   location: GeoLocation;
