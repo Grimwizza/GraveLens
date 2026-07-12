@@ -12,7 +12,7 @@ import { getDeviceLocation } from "@/lib/geo";
 import { checkAndUnlock, loadStats, type Achievement } from "@/lib/achievements";
 import { createClient } from "@/lib/supabase/browser";
 import { uploadPhoto, upsertGrave, pushExplorerPoints } from "@/lib/cloudSync";
-import { setGravePublic } from "@/lib/community";
+import { setGravePublic, fetchBurialIndexRelatives, computePersonIdentityKey, type BurialIndexRelative } from "@/lib/community";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import { interpretSymbols } from "@/lib/apis/symbols";
 import { getLandmarkEvents } from "@/lib/apis/wikipedia";
@@ -4692,60 +4692,142 @@ function FamilyConnectionHints({
   location: GeoLocation | null;
 }) {
   const [relatives, setRelatives] = useState<GraveRecord[]>([]);
+  // Cross-user matches from the pooled burial index, excluding anyone already
+  // shown from the local archive above.
+  const [communityRelatives, setCommunityRelatives] = useState<BurialIndexRelative[]>([]);
 
   useEffect(() => {
     const lastName = extracted.lastName ?? extracted.name?.split(" ").slice(-1)[0];
     const cemetery = location?.cemetery;
-    if (!lastName || !cemetery) return;
+    if (!lastName || (!cemetery && !location?.lat)) return;
+
+    // Identity keys of local same-plot records, to dedupe them out of the
+    // community section (name-string dedupe breaks on nicknames/middle names).
+    let localKeys = new Set<string>();
+
+    const lastNameLc = lastName.toLowerCase();
+    const cemeteryLc = cemetery?.toLowerCase();
+    const subjLat = location?.lat;
+    const subjLng = location?.lng;
 
     getAllGraves().then((all) => {
       const matches = all.filter((g) => {
         if (g.id === graveId) return false;
-        const gLastName = g.extracted.lastName ?? g.extracted.name?.split(" ").slice(-1)[0];
-        const gCemetery = g.location?.cemetery;
-        if (!gLastName || !gCemetery) return false;
-        return (
-          gLastName.toLowerCase() === lastName.toLowerCase() &&
-          gCemetery.toLowerCase() === cemetery.toLowerCase()
-        );
+        const gLastName = (g.extracted.lastName ?? g.extracted.name?.split(" ").slice(-1)[0] ?? "").toLowerCase();
+        if (!gLastName || gLastName !== lastNameLc) return false;
+        // Same cemetery by name, or by GPS proximity when a name is missing —
+        // mirrors the pooled-index matcher so own records aren't mislabelled.
+        const sameCemetery = !!cemeteryLc && g.location?.cemetery?.toLowerCase() === cemeteryLc;
+        const nearby =
+          typeof subjLat === "number" && typeof subjLng === "number" &&
+          typeof g.location?.lat === "number" && typeof g.location?.lng === "number" &&
+          Math.abs(g.location.lat - subjLat) < 0.01 && Math.abs(g.location.lng - subjLng) < 0.01;
+        return sameCemetery || nearby;
       });
       setRelatives(matches.slice(0, 5));
-    }).catch(() => {});
+      // Local records also live in the pooled index — dedupe by identity key.
+      localKeys = new Set(
+        matches
+          .map((g) => computePersonIdentityKey({
+            givenName: g.extracted.firstName,
+            surname: g.extracted.lastName ?? g.extracted.name?.split(" ").slice(-1)[0],
+            birthYear: g.extracted.birthYear, deathYear: g.extracted.deathYear,
+            state: g.location?.state,
+          }))
+          .filter((k): k is string => !!k)
+      );
+    }).catch(() => {}).finally(() => {
+      // Query the community index (own scans + everyone else's).
+      (async () => {
+        try {
+          const supabase = createClient();
+          const identityKey = computePersonIdentityKey({
+            givenName: extracted.firstName, surname: lastName,
+            birthYear: extracted.birthYear, deathYear: extracted.deathYear,
+            state: location?.state,
+          });
+          const pooled = await fetchBurialIndexRelatives(supabase, {
+            surname: lastName,
+            cemetery: cemetery ?? undefined,
+            lat: location?.lat, lng: location?.lng,
+            excludeIdentityKey: identityKey,
+          });
+          setCommunityRelatives(
+            pooled.filter((r) => r.identityKey !== identityKey && !localKeys.has(r.identityKey)).slice(0, 6)
+          );
+        } catch { /* non-fatal */ }
+      })();
+    });
   }, [graveId, extracted, location]);
 
-  if (relatives.length === 0) return null;
+  if (relatives.length === 0 && communityRelatives.length === 0) return null;
 
   return (
     <div className="py-5 animate-fade-up">
       <SectionHeader icon="👨‍👩‍👧" title="Possible Relatives Nearby" />
-      <p className="text-stone-500 text-xs mt-1 mb-3">
-        Same surname and cemetery in your archive — likely family members.
-      </p>
-      <ul className="space-y-1.5">
-        {relatives.map((g) => {
-          const name = g.extracted.name || "Unknown";
-          const dates = [g.extracted.birthDate, g.extracted.deathDate].filter(Boolean).join(" – ") ||
-            [g.extracted.birthYear, g.extracted.deathYear].filter(Boolean).map(String).join(" – ") || "";
-          return (
-            <li key={g.id}>
-              <a
-                href={`/result/${g.id}`}
-                className="flex items-center gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
-              >
-                {g.photoDataUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={g.photoDataUrl} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-stone-200 text-sm font-medium font-serif truncate">{name}</p>
-                  {dates && <p className="text-stone-500 text-xs mt-0.5">{dates}</p>}
-                </div>
-                <p className="text-xs shrink-0" style={{ color: "var(--t-gold-500)" }}>View →</p>
-              </a>
-            </li>
-          );
-        })}
-      </ul>
+
+      {relatives.length > 0 && (
+        <>
+          <p className="text-stone-500 text-xs mt-1 mb-3">
+            Same surname and cemetery in your archive — likely family members.
+          </p>
+          <ul className="space-y-1.5">
+            {relatives.map((g) => {
+              const name = g.extracted.name || "Unknown";
+              const dates = [g.extracted.birthDate, g.extracted.deathDate].filter(Boolean).join(" – ") ||
+                [g.extracted.birthYear, g.extracted.deathYear].filter(Boolean).map(String).join(" – ") || "";
+              return (
+                <li key={g.id}>
+                  <a
+                    href={`/result/${g.id}`}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
+                  >
+                    {g.photoDataUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={g.photoDataUrl} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-stone-200 text-sm font-medium font-serif truncate">{name}</p>
+                      {dates && <p className="text-stone-500 text-xs mt-0.5">{dates}</p>}
+                    </div>
+                    <p className="text-xs shrink-0" style={{ color: "var(--t-gold-500)" }}>View →</p>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+
+      {communityRelatives.length > 0 && (
+        <>
+          <p className="text-stone-500 text-xs mt-3 mb-2">
+            Same surname in {location?.cemetery || "this cemetery"}, recorded across GraveLens community scans.
+          </p>
+          <ul className="space-y-1.5">
+            {communityRelatives.map((r, i) => {
+              const dates = [r.birthYear, r.deathYear].filter(Boolean).map(String).join(" – ");
+              return (
+                <li
+                  key={i}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-stone-800/60 border border-stone-700/60"
+                >
+                  <span className="shrink-0 w-8 h-8 rounded-lg bg-stone-700/50 flex items-center justify-center text-stone-400 text-xs" aria-hidden>
+                    🪦
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-stone-300 text-sm font-medium font-serif truncate">{r.name}</p>
+                    {dates && <p className="text-stone-500 text-xs mt-0.5">{dates}</p>}
+                  </div>
+                  <span className="text-[0.6rem] shrink-0 px-1.5 py-0.5 rounded uppercase tracking-wide text-stone-500 bg-stone-700/40">
+                    Community
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

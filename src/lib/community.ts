@@ -486,3 +486,79 @@ export async function upsertBurialIndex(
   });
   if (error) console.error("[burial-index] upsert failed:", error.message);
 }
+
+export interface BurialIndexRelative {
+  /** Pooled identity key — stable dedup handle against local records */
+  identityKey: string;
+  name: string;
+  birthYear?: number;
+  deathYear?: number;
+  cemetery?: string;
+}
+
+/**
+ * Query the pooled burial index for other people with the same surname in the
+ * same cemetery — the cross-user "who else is in this family plot" view built
+ * from every GraveLens user's scans. Anonymous facts only (no user id/photos).
+ *
+ * Matches surname (case-insensitive) then narrows to the same cemetery, or to
+ * a ~1 km GPS radius when the cemetery name is missing. Excludes the subject
+ * via their identity key. Non-fatal — returns [] on any error.
+ */
+export async function fetchBurialIndexRelatives(
+  supabase: SupabaseClient,
+  opts: {
+    surname: string;
+    cemetery?: string;
+    lat?: number;
+    lng?: number;
+    excludeIdentityKey?: string | null;
+  }
+): Promise<BurialIndexRelative[]> {
+  const surname = opts.surname?.trim();
+  if (!surname || surname.length < 2) return [];
+
+  const { data, error } = await supabase
+    .from("burial_index")
+    .select("identity_key, given_name, surname, birth_year, death_year, cemetery, lat, lng")
+    .ilike("surname", surname)
+    .limit(50);
+
+  if (error || !data) return [];
+
+  const cemeteryLc = opts.cemetery?.trim().toLowerCase();
+  const hasGps = typeof opts.lat === "number" && typeof opts.lng === "number";
+
+  const seen = new Set<string>();
+  const out: BurialIndexRelative[] = [];
+
+  for (const row of data) {
+    if (opts.excludeIdentityKey && row.identity_key === opts.excludeIdentityKey) continue;
+
+    // Narrow to the same cemetery (preferred) or GPS proximity (~0.01° ≈ 1 km).
+    const sameCemetery = cemeteryLc && (row.cemetery ?? "").toLowerCase() === cemeteryLc;
+    const nearby =
+      hasGps &&
+      typeof row.lat === "number" &&
+      typeof row.lng === "number" &&
+      Math.abs(row.lat - opts.lat!) < 0.01 &&
+      Math.abs(row.lng - opts.lng!) < 0.01;
+    if (!sameCemetery && !nearby) continue;
+
+    const name = [row.given_name, row.surname].filter(Boolean).join(" ").trim() || row.surname;
+    if (seen.has(row.identity_key)) continue;
+    seen.add(row.identity_key);
+
+    out.push({
+      identityKey: row.identity_key,
+      name,
+      birthYear: row.birth_year ?? undefined,
+      deathYear: row.death_year ?? undefined,
+      cemetery: row.cemetery ?? undefined,
+    });
+  }
+
+  // Sort by death year (chronological family view), unknowns last.
+  out.sort((a, b) => (a.deathYear ?? 9999) - (b.deathYear ?? 9999));
+  return out.slice(0, 10);
+}
