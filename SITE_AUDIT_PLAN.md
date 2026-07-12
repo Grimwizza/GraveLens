@@ -138,6 +138,19 @@ Seeded from symptoms + June P-list (re-validated): capture quality tips + live b
 
 ---
 
+## Verification pass on remediations (2026-07-12, live walkthrough)
+
+Independently re-tested the remediated findings with fresh bundles (see SW note below):
+
+| Item | Verdict |
+|---|---|
+| F4 year fallback, F5 "+N person" badge, F7 "Keep in review" label, F3 sign-in card, CSV export button | ✅ Confirmed working live |
+| F1 review lifecycle | ⚠️ Was incomplete — `reviewedAt` existed but the blocking review-prompt modal still only offered "Enter Name" even when a name was present, so low-confidence records with names still had no exit. **Fixed:** modal now branches to a "Verify this scan" mode (Looks correct / Fix the name / Keep in review), the prompt effect skips `reviewedAt` records, and "Keep in review" clears `reviewedAt`. Verified live: low-confidence record graduated from Review → Markers via "Looks correct". |
+| F2 duplicate lookups | ⚠️ Was incomplete — ResultPage got abort controllers, but the real volume came from ArchivePage bulk re-enrichment: "capped at 5/session" was actually 5 per **mount** with no 401 bail (observed 40+ signed-out requests across visits). **Fixed:** sessionStorage session cap + break on 401. Verified live: 1 request per session signed out, 0 on repeat visits. |
+| **New finding (SW-DEV)** | The service worker registers in dev and serves stale bundles — caused hydration-mismatch errors on every archive load and made three verification rounds test *old* code. **Fixed:** `sw-register.tsx` now unregisters instead of registering when `NODE_ENV !== "production"`. Production behavior unchanged. |
+
+**Still open:** F6 (archive rows only expose cemetery-edit + delete; full edit sheet needed) · F10 (verify grave pins render on Discovery Map with real scan data) · Phase 2 area audits not yet run systematically (2A capture, 2B recognition prompts, 2C archive scale, 2E context relevance/caching).
+
 ## Regression & Walkthrough Checklist (Phase 5)
 
 This checklist defines manual and automated verification checks to run before releasing:

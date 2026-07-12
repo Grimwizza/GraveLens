@@ -32,6 +32,17 @@ export default function ServiceWorkerRegister() {
     // ── 1. Register service worker ──────────────────────────────────────────
     if (!("serviceWorker" in navigator)) return;
 
+    // Never register in local dev — the SW serves cached bundles that are
+    // stale the moment source changes, causing hydration mismatches and
+    // making every change unverifiable until a manual unregister.
+    if (process.env.NODE_ENV !== "production") {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((regs) => regs.forEach((r) => r.unregister()))
+        .catch(() => {});
+      return;
+    }
+
     navigator.serviceWorker
       .register("/sw.js")
       .catch((err) => console.error("SW registration failed:", err));

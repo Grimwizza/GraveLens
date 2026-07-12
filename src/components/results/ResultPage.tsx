@@ -380,7 +380,7 @@ export default function ResultPage({ id }: { id: string }) {
       extracted: pending.extracted,
       research: {},
       tags: [],
-    }), needsReview: true });
+    }), needsReview: true, reviewedAt: undefined });
   }, [pending]);
 
   const handleMarkReviewed = useCallback(async () => {
@@ -586,6 +586,8 @@ export default function ResultPage({ id }: { id: string }) {
   // records (pending populates but researchLoading never changes).
   useEffect(() => {
     if (!pending || researchLoading || reviewPromptShownRef.current) return;
+    // Already human-reviewed — don't re-prompt on low confidence
+    if (pending.reviewedAt != null) return;
     const current = { ...pending.extracted, ...(extractedOverride ?? {}) };
     if (!current.name || current.confidence === "low") {
       reviewPromptShownRef.current = true;
@@ -1747,6 +1749,11 @@ export default function ResultPage({ id }: { id: string }) {
             handleExtractedEdit({ name });
           }}
           onSaveLater={handleSaveForLater}
+          onConfirmCorrect={() => {
+            setReviewPrompt(false);
+            handleMarkReviewed();
+          }}
+          personName={(extractedOverride?.name ?? pending?.extracted.name ?? "").trim()}
           isArchived={isArchivedLoad.current}
         />
       )}
@@ -4831,14 +4838,21 @@ function SectionHeader({
 function ReviewPromptSheet({
   onEnterName,
   onSaveLater,
+  onConfirmCorrect,
+  personName = "",
   isArchived = false,
 }: {
   onEnterName: (name: string) => void;
   onSaveLater: () => void;
+  /** Shown when the scan has a name but was flagged (e.g. low confidence). */
+  onConfirmCorrect?: () => void;
+  personName?: string;
   isArchived?: boolean;
 }) {
-  const [nameValue, setNameValue] = useState("");
+  const [nameValue, setNameValue] = useState(personName);
   const [entering, setEntering] = useState(false);
+  // Two modes: no name yet → enter it; name present but flagged → verify it.
+  const verifying = !!personName && !!onConfirmCorrect;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end lg:items-center justify-center lg:p-6">
@@ -4856,14 +4870,27 @@ function ReviewPromptSheet({
         </div>
         <div className="px-5 pt-3 pb-4">
           <p className="text-stone-100 font-semibold text-base leading-snug">
-            Couldn&apos;t read the name
+            {verifying ? "Verify this scan" : "Couldn't read the name"}
           </p>
           <p className="text-stone-400 text-sm mt-1 leading-relaxed">
-            Enter the name now to start research, or save this scan to <span className="text-stone-300 font-medium">Working Scans</span> to complete later.
+            {verifying ? (
+              <>The scanner wasn&apos;t confident about this stone. Check <span className="text-stone-300 font-medium">{personName}</span> and the dates against the photo — if they match, approve the scan.</>
+            ) : (
+              <>Enter the name now to start research, or save this scan to <span className="text-stone-300 font-medium">Working Scans</span> to complete later.</>
+            )}
           </p>
         </div>
 
         <div className="flex flex-col gap-2 px-5">
+          {verifying && !entering && (
+            <button
+              onClick={onConfirmCorrect}
+              className="w-full py-3 rounded-2xl text-sm font-semibold text-[#1a1917]"
+              style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
+            >
+              Looks correct
+            </button>
+          )}
           {entering ? (
             <div className="flex gap-2">
               <input
@@ -4887,10 +4914,14 @@ function ReviewPromptSheet({
           ) : (
             <button
               onClick={() => setEntering(true)}
-              className="w-full py-3 rounded-2xl text-sm font-semibold text-[#1a1917]"
-              style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
+              className={
+                verifying
+                  ? "w-full py-3 rounded-2xl text-sm font-medium text-stone-300 border border-stone-600"
+                  : "w-full py-3 rounded-2xl text-sm font-semibold text-[#1a1917]"
+              }
+              style={verifying ? undefined : { background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
             >
-              Enter Name
+              {verifying ? "Fix the name" : "Enter Name"}
             </button>
           )}
           <button

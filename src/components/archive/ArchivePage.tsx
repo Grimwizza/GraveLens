@@ -339,6 +339,10 @@ export default function ArchivePage() {
   // unversioned records per session; each saves immediately to IDB.
   useEffect(() => {
     if (loading) return;
+    // Enforce the once-per-session cap across remounts — without this, every
+    // archive visit refires up to 5 lookups (and signed-out visits burned
+    // them all on 401s).
+    if (sessionStorage.getItem("gl_enrich_session_done")) return;
     let active = true;
 
     (async () => {
@@ -351,6 +355,7 @@ export default function ArchivePage() {
         .slice(0, 5);
       if (stale.length === 0) return;
 
+      sessionStorage.setItem("gl_enrich_session_done", "1");
       setBulkEnriching(true);
       for (const g of stale) {
         if (!active) break;
@@ -362,6 +367,10 @@ export default function ArchivePage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name: g.extracted.name, firstName, lastName, birthYear, deathYear, lat, lng, city, county, state, cemetery, inscription, symbols }),
           });
+          // Signed out — every remaining call will 401 too; stop the pass.
+          // The session flag stays set, so this costs one request per
+          // session; enrichment resumes in the next session after sign-in.
+          if (res.status === 401) break;
           if (!res.ok || !active) continue;
           const data = await res.json();
 
