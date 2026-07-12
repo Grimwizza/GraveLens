@@ -14,7 +14,7 @@ import {
   extractMilitaryTerms,
   getMilitaryContext,
 } from "@/lib/apis/military";
-import { searchFamilySearchHints } from "@/lib/apis/familysearch";
+import { searchFamilySearchHints, checkTreeCollision } from "@/lib/apis/familysearch";
 import { searchSSdI } from "@/lib/apis/ssdi";
 import { searchImmigrationRecords, isLikelyImmigrant } from "@/lib/apis/immigration";
 import { searchHistoricalCensus } from "@/lib/apis/historicalCensus";
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
     const [
       newspapers, naraRecords, landRecords, historical, cemeteryWikiUrl,
       familySearchHints, ssdiRecords, immigrationRecords, historicalCensusRecords,
-      wikitreeMatches,
+      wikitreeMatches, treeCollision,
     ] = await Promise.allSettled([
       searchNewspapers({
         name: bestFullName,
@@ -232,6 +232,10 @@ export async function POST(req: NextRequest) {
       (lastName && (birthYear || deathYear))
         ? searchWikiTree(pq)
         : Promise.resolve(EMPTY_SOURCE),
+      // F9: FamilySearch Tree Collision Detection
+      (firstName && lastName && (birthYear || deathYear))
+        ? checkTreeCollision(firstName, lastName, birthYear, deathYear)
+        : Promise.resolve({ hit: false, confidence: 0 }),
     ]);
 
     // ── Tier 2: Military context (local, instant) ───────────────────────────
@@ -260,6 +264,7 @@ export async function POST(req: NextRequest) {
     ]);
     const naraItemRecords = enlistmentResult.status === "fulfilled" ? enlistmentResult.value : [];
     const usGenWebRecords = usgenwebResult.status === "fulfilled" ? usgenwebResult.value : [];
+    const treeCollisionData = treeCollision.status === "fulfilled" ? treeCollision.value : { hit: false, confidence: 0 };
 
     if (usGenWebRecords.length > 0) {
       localHistory.usGenWebRecords = usGenWebRecords;
@@ -346,6 +351,7 @@ export async function POST(req: NextRequest) {
       surnameSoundex:     surnameSoundex || undefined,
       surnameVariants:    surnameVariants.length > 0 ? surnameVariants : undefined,
       researchLinks:      researchLinks.length  > 0 ? researchLinks  : undefined,
+      treeCollision:      treeCollisionData,
       researchVersion:    CURRENT_RESEARCH_VERSION,
     };
 

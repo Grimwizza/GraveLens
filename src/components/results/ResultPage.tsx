@@ -1806,6 +1806,32 @@ export default function ResultPage({ id }: { id: string }) {
             </div>
           )}
 
+          {/* FamilySearch Tree Collision Alert Badge */}
+          {research?.treeCollision?.hit && (
+            <div className="p-3.5 rounded-xl border bg-stone-900 border-amber-500/20 text-stone-300 text-xs flex items-start gap-3.5">
+              <span className="text-lg leading-none mt-0.5">🌳</span>
+              <div className="flex-1">
+                <p className="font-semibold text-stone-200">
+                  Person may already be documented
+                </p>
+                <p className="text-stone-400 mt-0.5 leading-relaxed">
+                  A matching profile exists in the public FamilySearch Family Tree.
+                </p>
+                {research.treeCollision.url && (
+                  <a
+                    href={research.treeCollision.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center text-xs font-semibold mt-2 hover:text-white"
+                    style={{ color: "var(--t-gold-500)" }}
+                  >
+                    View tree search results ↗
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Find A Grave submission helper */}
           {!researchLoading && activeExtracted.name && (activeExtracted.birthYear || activeExtracted.deathYear) && (
             <FindAGraveSubmitCard extracted={activeExtracted} location={location} />

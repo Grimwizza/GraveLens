@@ -296,6 +296,12 @@ export interface ResearchData {
    * never renders a broken integration as an empty result.
    */
   sourceStatus?: Record<string, ResearchSourceStatus>;
+  treeCollision?: {
+    hit: boolean;
+    pid?: string;
+    confidence: number;
+    url?: string;
+  };
   military?: MilitaryRecord[];
   militaryContext?: MilitaryContext;
   newspapers?: NewspaperArticle[];
