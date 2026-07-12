@@ -269,7 +269,21 @@ export interface ResearchChecklist {
   items: ResearchChecklistItem[];
 }
 
+export type ResearchSourceState = "ok" | "empty" | "failed" | "unavailable";
+
+export interface ResearchSourceStatus {
+  status: ResearchSourceState;
+  /** Working deep link the user can open when the inline source is failed/unavailable */
+  fallbackUrl?: string;
+}
+
 export interface ResearchData {
+  /**
+   * Per-source outcome of the last lookup. Distinguishes "the source is
+   * down/unavailable" from "the source answered with no records" so the UI
+   * never renders a broken integration as an empty result.
+   */
+  sourceStatus?: Record<string, ResearchSourceStatus>;
   military?: MilitaryRecord[];
   militaryContext?: MilitaryContext;
   newspapers?: NewspaperArticle[];
@@ -328,6 +342,13 @@ export interface GraveRecord {
   isPublic?: boolean;
   /** True when the scan returned an empty name or low confidence and the user deferred manual entry. */
   needsReview?: boolean;
+  /**
+   * Unix ms of the last human review (name entered/edited, or "mark reviewed").
+   * Overrides the heuristic review triggers in shouldReview() — a human
+   * confirmation outranks model confidence, so reviewed records leave the
+   * Review tab even when confidence is "low".
+   */
+  reviewedAt?: number;
   /** Optional note shown to community members on the map. */
   communityNote?: string;
 }

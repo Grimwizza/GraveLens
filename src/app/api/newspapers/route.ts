@@ -11,13 +11,17 @@ export async function POST(req: NextRequest) {
     if (!body || typeof body.name !== "string" || !body.name.trim()) {
       return NextResponse.json({ error: "Invalid or missing 'name' input" }, { status: 400 });
     }
-    const { name, deathYear, state } = body;
-    const newspapers = await searchNewspapers(
+    const { name, deathYear, deathDateIso, state } = body;
+    const result = await searchNewspapers({
       name,
-      typeof deathYear === "number" ? deathYear : null,
-      typeof state === "string" ? state : undefined
-    );
-    return NextResponse.json({ newspapers });
+      deathYear: typeof deathYear === "number" ? deathYear : null,
+      deathDateIso: typeof deathDateIso === "string" ? deathDateIso : undefined,
+      state: typeof state === "string" ? state : undefined,
+    });
+    return NextResponse.json({
+      newspapers: result.records,
+      sourceStatus: { newspapers: { status: result.status, fallbackUrl: result.fallbackUrl } },
+    });
   } catch (error) {
     console.error("[Newspapers route] Search failed:", error);
     return NextResponse.json({ newspapers: [], error: "Internal search error" }, { status: 500 });

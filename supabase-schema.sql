@@ -243,9 +243,13 @@ create policy "Authenticated users read military cache"
   to authenticated using (true);
 
 
--- ── Grave identity index (deduplication) ─────────────────────
--- Allows detecting when two users scan the same grave.
--- Hash key: SHA-1 of (normalized lastName + deathYear + cemetery_osm_id).
+-- ── Grave identity index (shared person research cache) ──────
+-- Caches completed research per person so repeat scans — by any
+-- user — return instantly with zero external API calls.
+-- Key: given|surname|birthYear|deathYear|state (normalized), computed
+-- by computePersonIdentityKey() in src/lib/community.ts.
+-- Snapshot shape: { researchVersion, response } — entries from older
+-- pipeline versions are treated as misses and regenerated.
 
 create table if not exists public.grave_identity_index (
   identity_hash       text        primary key,
@@ -286,13 +290,15 @@ end;
 $$;
 
 
--- ── RPC: upsert grave identity ───────────────────────────────
--- Called to register a new scan or increment contributor count securely.
+-- ── RPC: upsert grave identity (research cache write) ────────
+-- Registers a new research snapshot or refreshes an existing one
+-- (snapshot replaced, TTL extended, contributor count incremented).
 
 create or replace function public.upsert_grave_identity(hash text, snapshot jsonb)
 returns void
 language plpgsql
 security definer
+set search_path = public
 as $$
 begin
   -- Guard: reject unauthenticated callers.
@@ -303,7 +309,116 @@ begin
   insert into public.grave_identity_index (identity_hash, research_snapshot, contributor_count, confirmed_at, expires_at)
   values (hash, snapshot, 1, now(), now() + interval '365 days')
   on conflict (identity_hash) do update
-  set contributor_count = public.grave_identity_index.contributor_count + 1,
-      confirmed_at = now();
+  set research_snapshot = excluded.research_snapshot,
+      contributor_count = public.grave_identity_index.contributor_count + 1,
+      confirmed_at      = now(),
+      expires_at        = now() + interval '365 days';
 end;
 $$;
+
+revoke execute on function public.upsert_grave_identity(text, jsonb) from anon, public;
+grant  execute on function public.upsert_grave_identity(text, jsonb) to authenticated;
+
+revoke execute on function public.increment_grave_contributor(text) from anon, public;
+grant  execute on function public.increment_grave_contributor(text) to authenticated;
+alter function public.increment_grave_contributor(text) set search_path = public;
+
+
+-- ── Burial index: GraveLens' own person database ─────────────
+-- Every scan contributes the transcribed public facts from the stone
+-- (no photos, no user notes, no user_id — anonymous pooled facts).
+-- Writes go exclusively through upsert_burial_index().
+
+create table if not exists public.burial_index (
+  identity_key    text        primary key,   -- given|surname|birthYear|deathYear|state (normalized)
+  given_name      text,
+  surname         text        not null,
+  full_name       text,
+  surname_soundex text,
+  birth_year      integer,
+  death_year      integer,
+  birth_date      text,
+  death_date      text,
+  cemetery        text,
+  city            text,
+  county          text,
+  state           text,
+  lat             double precision,
+  lng             double precision,
+  scan_count      integer     not null default 1,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+create index if not exists burial_index_surname_death_idx on public.burial_index (surname, death_year);
+create index if not exists burial_index_state_death_idx   on public.burial_index (state, death_year);
+create index if not exists burial_index_soundex_idx       on public.burial_index (surname_soundex);
+
+alter table public.burial_index enable row level security;
+
+create policy "Authenticated users read burial index"
+  on public.burial_index for select
+  to authenticated using (true);
+
+create or replace function public.upsert_burial_index(
+  p_identity_key    text,
+  p_given_name      text,
+  p_surname         text,
+  p_full_name       text,
+  p_surname_soundex text,
+  p_birth_year      integer,
+  p_death_year      integer,
+  p_birth_date      text,
+  p_death_date      text,
+  p_cemetery        text,
+  p_city            text,
+  p_county          text,
+  p_state           text,
+  p_lat             double precision,
+  p_lng             double precision
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Guard: reject unauthenticated callers.
+  if auth.uid() is null then
+    raise exception 'Unauthorized' using errcode = 'insufficient_privilege';
+  end if;
+
+  if p_identity_key is null or p_surname is null then
+    raise exception 'identity_key and surname are required';
+  end if;
+
+  insert into public.burial_index (
+    identity_key, given_name, surname, full_name, surname_soundex,
+    birth_year, death_year, birth_date, death_date,
+    cemetery, city, county, state, lat, lng
+  ) values (
+    p_identity_key, p_given_name, p_surname, p_full_name, p_surname_soundex,
+    p_birth_year, p_death_year, p_birth_date, p_death_date,
+    p_cemetery, p_city, p_county, p_state, p_lat, p_lng
+  )
+  on conflict (identity_key) do update
+  set scan_count  = public.burial_index.scan_count + 1,
+      -- back-fill facts a later scan captured that earlier scans missed
+      given_name  = coalesce(public.burial_index.given_name,  excluded.given_name),
+      full_name   = coalesce(public.burial_index.full_name,   excluded.full_name),
+      birth_year  = coalesce(public.burial_index.birth_year,  excluded.birth_year),
+      death_year  = coalesce(public.burial_index.death_year,  excluded.death_year),
+      birth_date  = coalesce(public.burial_index.birth_date,  excluded.birth_date),
+      death_date  = coalesce(public.burial_index.death_date,  excluded.death_date),
+      cemetery    = coalesce(public.burial_index.cemetery,    excluded.cemetery),
+      city        = coalesce(public.burial_index.city,        excluded.city),
+      county      = coalesce(public.burial_index.county,      excluded.county),
+      state       = coalesce(public.burial_index.state,       excluded.state),
+      lat         = coalesce(public.burial_index.lat,         excluded.lat),
+      lng         = coalesce(public.burial_index.lng,         excluded.lng),
+      updated_at  = now();
+end;
+$$;
+
+revoke execute on function public.upsert_burial_index(text, text, text, text, text, integer, integer, text, text, text, text, text, text, double precision, double precision) from anon, public;
+grant  execute on function public.upsert_burial_index(text, text, text, text, text, integer, integer, text, text, text, text, text, text, double precision, double precision) to authenticated;

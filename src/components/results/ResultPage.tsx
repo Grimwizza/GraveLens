@@ -17,6 +17,7 @@ import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import { interpretSymbols } from "@/lib/apis/symbols";
 import { getLandmarkEvents } from "@/lib/apis/wikipedia";
 import PhotoEditorModal from "@/components/results/PhotoEditorModal";
+import SourceStatusCard from "@/components/results/SourceStatusCard";
 import { SHOW_COMMUNITY_FEATURES } from "@/lib/config";
 import ProfileBadge from "@/components/auth/ProfileBadge";
 import DesktopNav from "@/components/layout/DesktopNav";
@@ -229,6 +230,9 @@ export default function ResultPage({ id }: { id: string }) {
         lastName: data.extracted.lastName,
         birthYear: data.extracted.birthYear,
         deathYear: data.extracted.deathYear,
+        birthDate: data.extracted.birthDate,
+        deathDate: data.extracted.deathDate,
+        people: data.extracted.people,
         lat: data.location?.lat,
         lng: data.location?.lng,
         city: data.location?.city,
@@ -249,6 +253,7 @@ export default function ResultPage({ id }: { id: string }) {
         .then((r) => r.json())
         .then((d) => {
           const researchData: ResearchData = {
+            sourceStatus:      d.sourceStatus ?? undefined,
             newspapers:        d.newspapers ?? [],
             naraRecords:       d.naraRecords ?? [],
             landRecords:       d.landRecords ?? [],
@@ -707,6 +712,9 @@ export default function ResultPage({ id }: { id: string }) {
         lastName: current.lastName,
         birthYear: current.birthYear,
         deathYear: current.deathYear,
+        birthDate: current.birthDate,
+        deathDate: current.deathDate,
+        people: current.people,
         lat: effectiveLocation?.lat,
         lng: effectiveLocation?.lng,
         city: effectiveLocation?.city,
@@ -736,6 +744,7 @@ export default function ResultPage({ id }: { id: string }) {
         const s = phase2Res.ok ? await phase2Res.json() : {};
 
         const researchData: ResearchData = {
+          sourceStatus:      d.sourceStatus ?? undefined,
           newspapers:        d.newspapers ?? [],
           naraRecords:       d.naraRecords ?? [],
           landRecords:       d.landRecords ?? [],
@@ -816,8 +825,12 @@ export default function ResultPage({ id }: { id: string }) {
         body: JSON.stringify({ name: person.name, deathYear: person.deathYear, state: currentLocation?.state }),
       });
       if (res.ok) {
-        const { newspapers } = await res.json();
-        setResearch((prev) => ({ ...(prev ?? {}), newspapers }));
+        const { newspapers, sourceStatus } = await res.json();
+        setResearch((prev) => ({
+          ...(prev ?? {}),
+          newspapers,
+          sourceStatus: { ...(prev?.sourceStatus ?? {}), ...(sourceStatus ?? {}) },
+        }));
         const existing = await getGrave(pending.id);
         if (existing) await saveGrave({ ...existing, research: { ...existing.research, newspapers } });
       }
@@ -860,8 +873,12 @@ export default function ResultPage({ id }: { id: string }) {
         body: JSON.stringify({ firstName: person.firstName, lastName: person.lastName, birthYear: person.birthYear, deathYear: person.deathYear }),
       });
       if (res.ok) {
-        const { familySearchHints } = await res.json();
-        setResearch((prev) => ({ ...(prev ?? {}), familySearchHints }));
+        const { familySearchHints, sourceStatus } = await res.json();
+        setResearch((prev) => ({
+          ...(prev ?? {}),
+          familySearchHints,
+          sourceStatus: { ...(prev?.sourceStatus ?? {}), ...(sourceStatus ?? {}) },
+        }));
         const existing = await getGrave(pending.id);
         if (existing) await saveGrave({ ...existing, research: { ...existing.research, familySearchHints } });
       }
@@ -882,8 +899,12 @@ export default function ResultPage({ id }: { id: string }) {
         body: JSON.stringify({ firstName: person.firstName, lastName: person.lastName, birthYear: person.birthYear, deathYear: person.deathYear }),
       });
       if (res.ok) {
-        const { ssdi } = await res.json();
-        setResearch((prev) => ({ ...(prev ?? {}), ssdi }));
+        const { ssdi, sourceStatus } = await res.json();
+        setResearch((prev) => ({
+          ...(prev ?? {}),
+          ssdi,
+          sourceStatus: { ...(prev?.sourceStatus ?? {}), ...(sourceStatus ?? {}) },
+        }));
         const existing = await getGrave(pending.id);
         if (existing) await saveGrave({ ...existing, research: { ...existing.research, ssdi } });
       }
@@ -941,6 +962,9 @@ export default function ResultPage({ id }: { id: string }) {
           lastName: person.lastName,
           birthYear: person.birthYear,
           deathYear: person.deathYear,
+          birthDate: person.birthDate,
+          deathDate: person.deathDate,
+          people: pending.extracted.people,
           lat: currentLocation?.lat,
           lng: currentLocation?.lng,
           city: currentLocation?.city,
@@ -954,6 +978,7 @@ export default function ResultPage({ id }: { id: string }) {
       if (res.ok) {
         const d = await res.json();
         const researchData: ResearchData = {
+          sourceStatus:      d.sourceStatus ?? undefined,
           newspapers:        d.newspapers ?? [],
           naraRecords:       d.naraRecords ?? [],
           landRecords:       d.landRecords ?? [],
@@ -1059,9 +1084,15 @@ export default function ResultPage({ id }: { id: string }) {
     // Persist to DB — don't let a missing record block the research refresh
     const existing = await getGrave(pending.id);
     if (existing) {
-      // Clear needsReview if a name is now present
+      // Clear needsReview if a name is now present; a human edit that leaves
+      // the record with a name counts as review (overrides low confidence).
       const reviewCleared = existing.needsReview && !!next.name;
-      await saveGrave({ ...existing, extracted: next, ...(reviewCleared ? { needsReview: false } : {}) });
+      await saveGrave({
+        ...existing,
+        extracted: next,
+        ...(next.name ? { reviewedAt: Date.now() } : {}),
+        ...(reviewCleared ? { needsReview: false } : {}),
+      });
 
       // Push to cloud so the manual edit overwrites stale cloud data on other devices
       (async () => {
@@ -1359,6 +1390,11 @@ export default function ResultPage({ id }: { id: string }) {
           {/* Cross-source conflict warning — flag before user reads individual records */}
           {!researchLoading && research && (
             <ConflictWarningCard extracted={activeExtracted} research={research} />
+          )}
+
+          {/* Sources that couldn't be searched inline — offer direct deep links */}
+          {!researchLoading && (
+            <SourceStatusCard sourceStatus={research?.sourceStatus} />
           )}
 
           {/* SSDI — death confirmation */}

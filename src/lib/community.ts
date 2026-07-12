@@ -367,69 +367,122 @@ export async function getMilitaryContextCache(
   return data.context as MilitaryContext;
 }
 
-// ── Grave identity index (deduplication) ─────────────────────────────────────
+// ── Shared person research cache + burial index ──────────────────────────────
+// Every scan pools the transcribed public facts (burial_index) and every
+// completed research run is cached (grave_identity_index) so repeat scans of
+// the same person — by any user — cost zero external API calls.
 
 /**
- * Compute an identity hash for deduplication.
- * Uses: normalized lastName + deathYear + cemeteryOsmId (all lowercased, trimmed).
- * Returns null if insufficient data.
+ * Stable per-person key: given|surname|birthYear|deathYear|state (normalized).
+ * Returns null when the identity is too ambiguous to pool (no surname, or no
+ * date anchor at all).
  */
-export function computeGraveIdentityHash(
-  lastName: string,
-  deathYear: number | null,
-  cemeteryOsmId?: string
-): string | null {
-  if (!lastName?.trim() || !deathYear) return null;
-  const parts = [lastName.trim().toLowerCase(), String(deathYear), (cemeteryOsmId ?? "").toLowerCase()];
-  // Simple deterministic key — not cryptographic, just stable for deduplication
-  return parts.join("|");
+export function computePersonIdentityKey(p: {
+  givenName?: string;
+  surname?: string;
+  birthYear?: number | null;
+  deathYear?: number | null;
+  state?: string;
+}): string | null {
+  const surname = p.surname?.trim().toLowerCase();
+  if (!surname) return null;
+  if (!p.birthYear && !p.deathYear) return null;
+  return [
+    (p.givenName ?? "").trim().toLowerCase(),
+    surname,
+    p.birthYear ?? "",
+    p.deathYear ?? "",
+    (p.state ?? "").trim().toLowerCase(),
+  ].join("|");
 }
 
-export interface GraveIdentityMatch {
-  identityHash: string;
-  researchSnapshot: unknown;
-  contributorCount: number;
+interface ResearchCacheSnapshot {
+  researchVersion: number;
+  response: Record<string, unknown>;
 }
 
 /**
- * Check if this grave has already been scanned and enriched by another user.
- * Returns the cached research snapshot if found, or null if first scan.
+ * Check the shared research cache for this person. Returns the cached Phase 1
+ * lookup response, or null when missing, expired, or from an older pipeline.
  */
-export async function checkGraveIdentityIndex(
+export async function checkResearchCache(
   supabase: SupabaseClient,
-  identityHash: string
-): Promise<GraveIdentityMatch | null> {
+  identityKey: string,
+  currentVersion: number
+): Promise<Record<string, unknown> | null> {
   const { data, error } = await supabase
     .from("grave_identity_index")
-    .select("identity_hash, research_snapshot, contributor_count, expires_at")
-    .eq("identity_hash", identityHash)
+    .select("research_snapshot, expires_at")
+    .eq("identity_hash", identityKey)
     .maybeSingle();
 
   if (error || !data) return null;
   if (new Date(data.expires_at) < new Date()) return null;
 
-  return {
-    identityHash: data.identity_hash,
-    researchSnapshot: data.research_snapshot,
-    contributorCount: data.contributor_count,
-  };
+  const snap = data.research_snapshot as ResearchCacheSnapshot | null;
+  if (!snap || snap.researchVersion !== currentVersion || !snap.response) return null;
+  return snap.response;
 }
 
 /**
- * Register a newly scanned grave in the identity index, or increment the
- * contributor count if it was already there.
+ * Cache a completed research response for this person (365-day TTL,
+ * refreshed on re-generation). Non-fatal on failure.
  */
-export async function upsertGraveIdentityIndex(
+export async function saveResearchCache(
   supabase: SupabaseClient,
-  identityHash: string,
-  researchSnapshot: unknown
+  identityKey: string,
+  response: Record<string, unknown>,
+  currentVersion: number
 ): Promise<void> {
   const { error } = await supabase.rpc("upsert_grave_identity", {
-    hash: identityHash,
-    snapshot: researchSnapshot,
+    hash: identityKey,
+    snapshot: { researchVersion: currentVersion, response } satisfies ResearchCacheSnapshot,
   });
-  if (error) {
-    console.error("[Community] Failed to upsert grave identity:", error);
-    throw error;
-  }
+  if (error) console.error("[research-cache] save failed:", error.message);
+}
+
+export interface BurialIndexEntry {
+  identityKey: string;
+  givenName?: string;
+  surname: string;
+  fullName?: string;
+  surnameSoundex?: string;
+  birthYear?: number | null;
+  deathYear?: number | null;
+  birthDate?: string;
+  deathDate?: string;
+  cemetery?: string;
+  city?: string;
+  county?: string;
+  state?: string;
+  lat?: number;
+  lng?: number;
+}
+
+/**
+ * Harvest a scan into the pooled burial index. Repeat scans of the same
+ * person increment scan_count and back-fill missing facts. Non-fatal.
+ */
+export async function upsertBurialIndex(
+  supabase: SupabaseClient,
+  e: BurialIndexEntry
+): Promise<void> {
+  const { error } = await supabase.rpc("upsert_burial_index", {
+    p_identity_key:    e.identityKey,
+    p_given_name:      e.givenName ?? null,
+    p_surname:         e.surname,
+    p_full_name:       e.fullName ?? null,
+    p_surname_soundex: e.surnameSoundex ?? null,
+    p_birth_year:      e.birthYear ?? null,
+    p_death_year:      e.deathYear ?? null,
+    p_birth_date:      e.birthDate || null,
+    p_death_date:      e.deathDate || null,
+    p_cemetery:        e.cemetery || null,
+    p_city:            e.city || null,
+    p_county:          e.county || null,
+    p_state:           e.state || null,
+    p_lat:             e.lat ?? null,
+    p_lng:             e.lng ?? null,
+  });
+  if (error) console.error("[burial-index] upsert failed:", error.message);
 }

@@ -12,13 +12,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid or missing 'lastName' input" }, { status: 400 });
     }
     const { firstName, lastName, birthYear, deathYear } = body;
-    const ssdi = await searchSSdI(
+    const result = await searchSSdI(
       typeof firstName === "string" ? firstName : "",
       lastName,
       typeof birthYear === "number" ? birthYear : null,
       typeof deathYear === "number" ? deathYear : null
     );
-    return NextResponse.json({ ssdi });
+    return NextResponse.json({
+      ssdi: result.records,
+      sourceStatus: { ssdi: { status: result.status, fallbackUrl: result.fallbackUrl } },
+    });
   } catch (error) {
     console.error("[SSDI route] Search failed:", error);
     return NextResponse.json({ ssdi: [], error: "Internal search error" }, { status: 500 });

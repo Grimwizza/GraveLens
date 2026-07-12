@@ -1,19 +1,43 @@
+/**
+ * chronicling.ts — historic newspaper search via the loc.gov API.
+ *
+ * The legacy Chronicling America API (chroniclingamerica.loc.gov/search/…)
+ * was retired on 2025-08-04 and now 404s. This module uses the replacement:
+ *
+ *   https://www.loc.gov/collections/chronicling-america/?q=…&fo=json
+ *
+ * Verified working parameters (July 2026):
+ *   q=<terms>                       full-text search; quote for phrase
+ *   dates=YYYY-MM-DD/YYYY-MM-DD     inclusive range (day precision works)
+ *   fa=location_state:<state>       lowercase full state name
+ *   c=<n>                           result count
+ *   at=results,pagination           trims payload from ~1.8 MB to ~14 KB
+ *
+ * NOTE: the tutorial-documented `qs=`/`ops=`/`start_date=` params are
+ * silently IGNORED by this endpoint — only q/dates/fa filter correctly.
+ *
+ * Coverage: 1770–1963. OCR text arrives in `description[0]`; `url` deep-links
+ * to the scanned page with the search term highlighted.
+ */
+
 import type { NewspaperArticle } from "@/types";
+import { fetchSourceJson, okResult, failedResult, type SourceResult } from "./client";
 
-const BASE = "https://chroniclingamerica.loc.gov";
-
-// Chronicling America covers 1770–1963 only.
-// Searches outside this range will never return results.
+const BASE = "https://www.loc.gov/collections/chronicling-america/";
 const ARCHIVE_END_YEAR = 1963;
 
-/**
- * Build a URL-safe Chronicling America link.
- * The API returns item.url as a relative path ("/lccn/…") but occasionally
- * returns absolute URLs in some response variants — guard both cases.
- */
-function toChronUrl(url: string | undefined): string {
-  if (!url) return `${BASE}/search/pages/results/`;
-  return url.startsWith("http") ? url : `${BASE}${url}`;
+interface LocResult {
+  title?: string;
+  date?: string;
+  url?: string;
+  description?: string[];
+  partof_title?: string[];
+  location_city?: string[];
+  location_state?: string[];
+}
+
+interface LocResponse {
+  results?: LocResult[];
 }
 
 /**
@@ -33,80 +57,106 @@ function extractContextSnippet(ocr: string, query: string, windowChars = 250): s
   return (start > 0 ? "…" : "") + raw + (end < ocr.length ? "…" : "");
 }
 
-export async function searchNewspapers(
-  name: string,
-  deathYear: number | null,
-  state?: string
-): Promise<NewspaperArticle[]> {
-  if (!name || name.length < 3) return [];
-  // Skip the API call entirely for post-1963 deaths — archive ends there.
-  if (deathYear && deathYear > ARCHIVE_END_YEAR + 2) return [];
+/** "warren sheaf (warren, marshall county, minn.) 1880-current" → "Warren Sheaf" */
+function cleanNewspaperTitle(partof: string | undefined, fallback: string): string {
+  if (!partof) return fallback;
+  const base = partof.split("(")[0].trim();
+  return base
+    .split(" ")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ") || fallback;
+}
 
-  // Search by full name for precision; single-word names fall back to just the name.
-  const parts = name.trim().split(/\s+/);
-  const searchName = parts.length >= 2
-    ? `"${parts[0]}" "${parts[parts.length - 1]}"`
-    : `"${name}"`;
-
-  // Widen the window to ±2 years to catch delayed obituaries and memorial notices.
-  const yearFrom = deathYear ? deathYear - 1 : undefined;
-  const yearTo = deathYear ? Math.min(deathYear + 2, ARCHIVE_END_YEAR) : undefined;
-
+function buildParams(query: string, datesRange: string | undefined, state: string | undefined, rows: number): URLSearchParams {
   const params = new URLSearchParams({
-    proxtext: searchName,
-    format: "json",
-    rows: "5",
-    sort: "relevance",
+    q: query,
+    fo: "json",
+    c: String(rows),
+    at: "results,pagination",
   });
+  if (datesRange) params.set("dates", datesRange);
+  if (state) params.set("fa", `location_state:${state.toLowerCase()}`);
+  return params;
+}
 
-  if (yearFrom) params.set("date1", String(yearFrom));
-  if (yearTo) params.set("date2", String(yearTo));
-  // Chronicling America expects the full state name (e.g. "Wisconsin")
-  if (state) params.set("state", state);
+function mapResults(items: LocResult[], snippetQuery: string): NewspaperArticle[] {
+  return items.slice(0, 5).map((item) => ({
+    title: item.title ?? "Untitled",
+    date: item.date ?? "",
+    newspaper: cleanNewspaperTitle(item.partof_title?.[0], item.title ?? ""),
+    location: [item.location_city?.[0], item.location_state?.[0]]
+      .filter(Boolean)
+      .map((s) => (s ? s[0].toUpperCase() + s.slice(1) : s))
+      .join(", "),
+    url: item.url ?? BASE,
+    snippet: item.description?.[0]
+      ? extractContextSnippet(item.description[0], snippetQuery)
+      : "",
+  }));
+}
 
-  try {
-    const res = await fetch(`${BASE}/search/pages/results/?${params}`, {
-      headers: { "Accept": "application/json" },
-      signal: AbortSignal.timeout(8000),
+export interface NewspaperSearchOptions {
+  /** Best full name, e.g. "William Larson" */
+  name: string;
+  /** Alternate full names to widen with when the primary phrase finds nothing */
+  altNames?: string[];
+  deathYear: number | null;
+  /** ISO yyyy-mm-dd when the stone gives an exact death date */
+  deathDateIso?: string;
+  state?: string;
+}
+
+/**
+ * Search for the person by name — obituaries, death notices, mentions.
+ * Precise first (exact phrase, tight window from the death date), widened
+ * with one alternate name if the primary search comes back empty.
+ */
+export async function searchNewspapers(
+  opts: NewspaperSearchOptions
+): Promise<SourceResult<NewspaperArticle>> {
+  const { name, altNames = [], deathYear, deathDateIso, state } = opts;
+  if (!name || name.length < 3) return okResult([]);
+  // Archive ends in 1963 — skip post-1965 deaths entirely.
+  if (deathYear && deathYear > ARCHIVE_END_YEAR + 2) return okResult([]);
+
+  // Obituaries run from the death date to a few months after; when we only
+  // know the year, widen to catch delayed memorial notices.
+  let datesRange: string | undefined;
+  if (deathDateIso) {
+    const d = new Date(deathDateIso);
+    if (!isNaN(d.getTime())) {
+      const end = new Date(d);
+      end.setDate(end.getDate() + 120);
+      datesRange = `${deathDateIso}/${end.toISOString().slice(0, 10)}`;
+    }
+  }
+  if (!datesRange && deathYear) {
+    datesRange = `${deathYear - 1}/${Math.min(deathYear + 2, ARCHIVE_END_YEAR)}`;
+  }
+
+  const attempts = [name, ...altNames.filter((n) => n !== name)].slice(0, 2);
+  const htmlFallback = `${BASE}?${buildParams(`"${name}"`, datesRange, state, 5)}`.replace("fo=json&", "");
+
+  for (const attemptName of attempts) {
+    const params = buildParams(`"${attemptName}"`, datesRange, state, 5);
+    const outcome = await fetchSourceJson<LocResponse>(`${BASE}?${params}`, {
+      source: "loc-newspapers",
+      timeoutMs: 12000,
     });
-    if (!res.ok) return [];
 
-    const data = await res.json();
-    const items: Array<{
-      title_normal?: string;
-      date?: string;
-      title?: string;
-      url?: string;
-      ocr_eng?: string;
-      place_of_publication?: string;
-    }> = data.items ?? [];
+    if (!outcome.ok) return failedResult(htmlFallback);
 
-    return items.slice(0, 5).map((item) => ({
-      // title = newspaper name; title_normal is a lowercase-normalized form
-      title: item.title ?? item.title_normal ?? "Untitled",
-      date: item.date ? formatChronDate(item.date) : "",
-      newspaper: item.title ?? "",
-      location: item.place_of_publication ?? "",
-      url: toChronUrl(item.url),
-      snippet: item.ocr_eng ? extractContextSnippet(item.ocr_eng, searchName) : "",
-    }));
-  } catch {
-    return [];
+    const items = outcome.data.results ?? [];
+    if (items.length > 0) return okResult(mapResults(items, attemptName));
   }
+
+  return okResult([]);
 }
 
-/** Chronicling America returns dates as "YYYYMMDD" — format for display. */
-function formatChronDate(raw: string): string {
-  if (raw.length === 8) {
-    return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
-  }
-  return raw;
-}
-
-// ── Option C: Local area event search ────────────────────────────────────────
+// ── Local area event search ───────────────────────────────────────────────────
 // Search the archive for community events in the person's city/county during
 // their lifespan — not for the person's name, but for what was happening around
-// them. Yields coverage of local disasters, civic milestones, industry news, etc.
+// them. Context feature: failures degrade to an empty list.
 
 export async function searchLocalAreaNews(
   city: string | undefined,
@@ -115,54 +165,25 @@ export async function searchLocalAreaNews(
   birthYear: number | null,
   deathYear: number | null
 ): Promise<NewspaperArticle[]> {
-  // Only useful within the archive's coverage window.
-  // Clamp effectiveStart to ARCHIVE_END_YEAR so a post-1963 birthYear doesn't
-  // produce an invalid date range — local area history up to 1963 is still relevant.
   const effectiveEnd = Math.min(deathYear ?? ARCHIVE_END_YEAR, ARCHIVE_END_YEAR);
   const effectiveStart = birthYear ? Math.min(birthYear, ARCHIVE_END_YEAR) : 1770;
   if (effectiveStart > effectiveEnd) return [];
 
-  // Build a geographic search term — prefer specific city, fall back to county
   const geoTerm = city || county;
   if (!geoTerm || geoTerm.length < 3) return [];
 
-  const params = new URLSearchParams({
-    proxtext: `"${geoTerm}"`,
-    format: "json",
-    rows: "5",
-    sort: "relevance",
+  const params = buildParams(
+    `"${geoTerm}"`,
+    `${effectiveStart}/${effectiveEnd}`,
+    state,
+    5
+  );
+
+  const outcome = await fetchSourceJson<LocResponse>(`${BASE}?${params}`, {
+    source: "loc-local-news",
+    timeoutMs: 12000,
   });
 
-  params.set("date1", String(effectiveStart));
-  params.set("date2", String(effectiveEnd));
-  if (state) params.set("state", state);
-
-  try {
-    const res = await fetch(`${BASE}/search/pages/results/?${params}`, {
-      headers: { "Accept": "application/json" },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return [];
-
-    const data = await res.json();
-    const items: Array<{
-      title_normal?: string;
-      date?: string;
-      title?: string;
-      url?: string;
-      ocr_eng?: string;
-      place_of_publication?: string;
-    }> = data.items ?? [];
-
-    return items.slice(0, 5).map((item) => ({
-      title: item.title ?? item.title_normal ?? "Untitled",
-      date: item.date ? formatChronDate(item.date) : "",
-      newspaper: item.title ?? "",
-      location: item.place_of_publication ?? "",
-      url: toChronUrl(item.url),
-      snippet: item.ocr_eng ? extractContextSnippet(item.ocr_eng, geoTerm) : "",
-    }));
-  } catch {
-    return [];
-  }
+  if (!outcome.ok) return [];
+  return mapResults(outcome.data.results ?? [], geoTerm);
 }
