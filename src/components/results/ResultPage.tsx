@@ -12,13 +12,13 @@ import { getDeviceLocation } from "@/lib/geo";
 import { checkAndUnlock, loadStats, type Achievement } from "@/lib/achievements";
 import { createClient } from "@/lib/supabase/browser";
 import { uploadPhoto, upsertGrave, pushExplorerPoints } from "@/lib/cloudSync";
-import { setGravePublic, fetchBurialIndexRelatives, computePersonIdentityKey, type BurialIndexRelative } from "@/lib/community";
+import { fetchBurialIndexRelatives, computePersonIdentityKey, type BurialIndexRelative } from "@/lib/community";
 import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import { interpretSymbols } from "@/lib/apis/symbols";
 import { getLandmarkEvents } from "@/lib/apis/wikipedia";
 import PhotoEditorModal from "@/components/results/PhotoEditorModal";
 import SourceStatusCard from "@/components/results/SourceStatusCard";
-import { SHOW_COMMUNITY_FEATURES } from "@/lib/config";
+
 import ProfileBadge from "@/components/auth/ProfileBadge";
 import DesktopNav from "@/components/layout/DesktopNav";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
@@ -104,7 +104,6 @@ export default function ResultPage({ id }: { id: string }) {
   const refreshingRef = useRef(false);
   // Tracks which individual section is mid-refresh (null = none)
   const [sectionRefreshing, setSectionRefreshing] = useState<string | null>(null);
-  const [isPublic, setIsPublic] = useState(false);
   // Abort controller for the initial fresh-scan research fetch.
   // Cancelled the moment a user-triggered refresh starts so the old-name
   // response can never overwrite a corrected refresh that resolves first.
@@ -165,7 +164,7 @@ export default function ResultPage({ id }: { id: string }) {
         setResearch(archivedResearch);
         setCulturalContext(archivedResearch?.culturalContext ?? null);
         setTags(archived.tags ?? []);
-        setIsPublic(archived.isPublic ?? false);
+
         setSaved(true);
         return;
       }
@@ -396,20 +395,7 @@ export default function ResultPage({ id }: { id: string }) {
     syncGraveToCloud(updated);
   }, [saved, pending, syncGraveToCloud]);
 
-  // Toggle community sharing for this grave
-  const handleTogglePublic = useCallback(async (next: boolean) => {
-    setIsPublic(next);
-    if (!pending) return;
-    // Persist locally
-    const existing = await getGrave(pending.id);
-    if (existing) await saveGrave({ ...existing, isPublic: next });
-    // Sync to cloud
-    try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) await setGravePublic(supabase, pending.id, next);
-    } catch { /* non-fatal */ }
-  }, [pending]);
+
 
   const handleSaveForLater = useCallback(async () => {
     setReviewPrompt(false);
@@ -1777,34 +1763,7 @@ export default function ResultPage({ id }: { id: string }) {
           {/* Tags */}
           <TagsCard tags={tags} onChange={handleTagsChange} />
 
-          {/* Community sharing */}
-          {SHOW_COMMUNITY_FEATURES && (
-            <div
-              className="rounded-2xl px-4 py-3.5 flex items-center justify-between gap-3"
-              style={{ background: "rgba(var(--glass-bg-rgb), 0.7)", border: "1px solid var(--t-stone-700)" }}
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-stone-200 text-sm font-medium">Share with community</p>
-                <p className="text-stone-500 text-[0.8rem] mt-0.5 leading-relaxed">
-                  {isPublic
-                    ? "Visible on the community map as a coral marker"
-                    : "Private — only you can see this on the map"}
-                </p>
-              </div>
-              <button
-                onClick={() => handleTogglePublic(!isPublic)}
-                className="shrink-0 w-11 h-6 rounded-full relative overflow-hidden transition-colors duration-200"
-                style={{ background: isPublic ? "#c97c6b" : "#3a3733" }}
-                role="switch"
-                aria-checked={isPublic}
-              >
-                <span
-                  className="absolute left-0 top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
-                  style={{ transform: isPublic ? "translateX(1.375rem)" : "translateX(0.125rem)" }}
-                />
-              </button>
-            </div>
-          )}
+
 
           {/* FamilySearch Tree Collision Alert Badge */}
           {research?.treeCollision?.hit && (
