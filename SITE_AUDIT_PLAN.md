@@ -167,6 +167,7 @@ Independently re-tested the remediated findings with fresh bundles (see SW note 
 - **4D Per-Section Skeleton Loaders:** Replaced generic single-line shimmers with custom-tailored skeleton card components that match the exact structural layout (badges, margins, grid headers, and list rows) of the loaded research lists.
 - **4E Family/Cemetery Grouping:** Added a `groupingMode` state and segment selector to `ArchivePage.tsx` to group archive records by geographical cemetery hub and cluster co-buried families by surname.
 - **4F Duplicate Merge:** Implemented high-precision duplicate scan detection (matching surname, first name, years, and cemetery name/proximity) and built a custom merge workflow. Extra photos are preserved in an `additionalPhotos` array, with an interactive switcher on the results page.
+- **4G Live Blur/Glare Warning:** Integrated client-side canvas pixel analysis inside `CapturePage.tsx` to detect shaky blur or overexposed sun glare before calling the vision APIs, warning users to retake or proceed.
 
 **Still open:** None. All Phase 2 area audits are systematically complete.
 

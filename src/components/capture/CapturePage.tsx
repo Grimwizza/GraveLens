@@ -18,7 +18,7 @@ import { resizeForStorage, generateThumbnail, saveToDevice } from "@/lib/imageUt
 import OnboardingCarousel from "@/components/onboarding/OnboardingCarousel";
 import { loadSettings, SETTINGS_CHANGED_EVENT } from "@/lib/settings";
 
-type Phase = "idle" | "processing" | "queued" | "degraded_prompt";
+type Phase = "idle" | "processing" | "queued" | "degraded_prompt" | "warning";
 
 export default function CapturePage() {
   const router = useRouter();
@@ -28,6 +28,12 @@ export default function CapturePage() {
 
   const [settings, setSettings] = useState(() => loadSettings());
   const [phase, setPhase] = useState<Phase>("idle");
+  const [qualityWarning, setQualityWarning] = useState<{
+    isBlurry: boolean;
+    hasGlare: boolean;
+    dataUrl: string;
+    file: File;
+  } | null>(null);
 
   useEffect(() => {
     const onSettingsChanged = () => {
@@ -130,11 +136,38 @@ export default function CapturePage() {
 
     const raw = await fileToDataUrl(file);
     const dataUrl = await correctOrientation(file, raw);
-    setPreviewUrl(dataUrl);
-    setSelectedFile(file);
-    setPhase("processing");
-    setProgress(10);
-    setProgressLabel("Reading image…");
+
+    const checkQuality = (url: string): Promise<{ isBlurry: boolean; hasGlare: boolean; blurScore: number; glarePct: number }> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const result = analyzeImageQuality(img);
+          resolve(result);
+        };
+        img.onerror = () => {
+          resolve({ isBlurry: false, hasGlare: false, blurScore: 0, glarePct: 0 });
+        };
+        img.src = url;
+      });
+    };
+
+    const quality = await checkQuality(dataUrl);
+
+    if (quality.isBlurry || quality.hasGlare) {
+      setQualityWarning({
+        isBlurry: quality.isBlurry,
+        hasGlare: quality.hasGlare,
+        dataUrl,
+        file
+      });
+      setPhase("warning");
+    } else {
+      setPreviewUrl(dataUrl);
+      setSelectedFile(file);
+      setPhase("processing");
+      setProgress(10);
+      setProgressLabel("Reading image…");
+    }
   }, []);
 
   const handleAnalyze = useCallback(async () => {
@@ -293,6 +326,22 @@ export default function CapturePage() {
     setQueueReason(null);
   }, []);
 
+  const proceedWithWarning = useCallback(() => {
+    if (!qualityWarning) return;
+    const { dataUrl, file } = qualityWarning;
+    setPreviewUrl(dataUrl);
+    setSelectedFile(file);
+    setQualityWarning(null);
+    setPhase("processing");
+    setProgress(10);
+    setProgressLabel("Reading image…");
+  }, [qualityWarning]);
+
+  const discardWarning = useCallback(() => {
+    setQualityWarning(null);
+    handleReset();
+  }, [handleReset]);
+
 
   const handleQueueCapture = useCallback(async (reason?: "offline" | "rate_limited") => {
     if (!selectedFile || !previewUrl) return;
@@ -373,6 +422,54 @@ export default function CapturePage() {
             onDelete={handleReset}
           />
         )}
+        {phase === "warning" && qualityWarning && (
+          <div className="flex-1 flex flex-col items-center justify-center p-6 w-full max-w-md mx-auto">
+            <div className="w-full bg-stone-900/50 rounded-2xl border border-stone-850 p-6 flex flex-col gap-6 shadow-xl backdrop-blur-sm animate-fade-in">
+              <div className="flex flex-col items-center text-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-amber-500 text-xl font-bold">
+                  ⚠️
+                </div>
+                <h3 className="text-base font-bold text-stone-200">
+                  {qualityWarning.isBlurry && qualityWarning.hasGlare
+                    ? "Blur & Glare Detected"
+                    : qualityWarning.isBlurry
+                    ? "Blurry Photo Detected"
+                    : "Heavy Glare Detected"}
+                </h3>
+                <p className="text-xs text-stone-400 leading-relaxed">
+                  The image appears {qualityWarning.isBlurry ? "out of focus or shaky" : ""}{qualityWarning.isBlurry && qualityWarning.hasGlare ? " and " : ""}{qualityWarning.hasGlare ? "to have strong sun glare" : ""}.
+                  This might prevent the AI from accurately transcribing the marker text and waste your API tokens.
+                </p>
+              </div>
+
+              {/* Photo preview container */}
+              <div className="relative aspect-[4/3] rounded-xl overflow-hidden border border-stone-805 bg-stone-950">
+                <img
+                  src={qualityWarning.dataUrl}
+                  alt="Captured marker"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={discardWarning}
+                  className="w-full text-xs font-semibold bg-stone-200 text-stone-950 py-3 rounded-xl hover:bg-white transition-colors"
+                >
+                  Discard & Retake
+                </button>
+                <button
+                  onClick={proceedWithWarning}
+                  className="w-full text-xs font-semibold text-stone-400 hover:text-stone-300 py-2.5 rounded-xl border border-stone-800 hover:bg-white/5 transition-all"
+                >
+                  Analyze Anyway
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {phase === "processing" && previewUrl && (
           <div className="flex-1 flex flex-col items-center justify-center w-full">
             <ProcessingState
@@ -864,4 +961,54 @@ function buildFromOcr(text: string): ExtractedGraveData {
     confidence: "low",
     source: "tesseract",
   };
+}
+
+function analyzeImageQuality(imgElement: HTMLImageElement): { isBlurry: boolean; hasGlare: boolean; blurScore: number; glarePct: number } {
+  const canvas = document.createElement("canvas");
+  const size = 200;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return { isBlurry: false, hasGlare: false, blurScore: 0, glarePct: 0 };
+  }
+
+  ctx.drawImage(imgElement, 0, 0, size, size);
+  const imageData = ctx.getImageData(0, 0, size, size);
+  const data = imageData.data;
+
+  let brightPixels = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (lum > 245) {
+      brightPixels++;
+    }
+  }
+  const glarePct = brightPixels / (size * size);
+  const hasGlare = glarePct > 0.08;
+
+  let totalDiff = 0;
+  let samples = 0;
+  for (let y = 1; y < size - 1; y += 2) {
+    for (let x = 1; x < size - 1; x += 2) {
+      const idx = (y * size + x) * 4;
+      const val = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+
+      const rIdx = (y * size + (x + 1)) * 4;
+      const rVal = 0.299 * data[rIdx] + 0.587 * data[rIdx + 1] + 0.114 * data[rIdx + 2];
+
+      const dIdx = ((y + 1) * size + x) * 4;
+      const dVal = 0.299 * data[dIdx] + 0.587 * data[dIdx + 1] + 0.114 * data[dIdx + 2];
+
+      totalDiff += Math.abs(val - rVal) + Math.abs(val - dVal);
+      samples += 2;
+    }
+  }
+  const blurScore = totalDiff / samples;
+  const isBlurry = blurScore < 8.0;
+
+  return { isBlurry, hasGlare, blurScore, glarePct };
 }
