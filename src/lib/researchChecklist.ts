@@ -21,10 +21,6 @@ import type {
 
 // ── Helper predicates ─────────────────────────────────────────────────────────
 
-function hasCoords(loc: GeoLocation | null | undefined): boolean {
-  return !!loc && (loc.lat !== 0 || loc.lng !== 0);
-}
-
 function isLikelyImmigrant(
   extracted: ExtractedGraveData,
   research: ResearchData,
@@ -57,7 +53,6 @@ export function buildResearchChecklist(
   const { birthYear, deathYear, name, firstName, lastName } = extracted;
   const state = location?.state;
   const county = location?.county;
-  const city = location?.city;
   const isMilitary = !!(research.militaryContext);
   const hasNara = (research.naraRecords?.length ?? 0) > 0;
   const hasLand = (research.landRecords?.length ?? 0) > 0;

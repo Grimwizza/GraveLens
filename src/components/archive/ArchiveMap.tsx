@@ -849,7 +849,7 @@ export default function ArchiveMap({
 
       await Promise.all(tasks);
       onSearchStateChange(false, true);
-    } catch (e) {
+    } catch {
       onSearchStateChange(false, false);
     } finally {
       setIsSearching(false);

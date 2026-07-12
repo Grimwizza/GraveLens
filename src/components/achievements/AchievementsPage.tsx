@@ -35,7 +35,7 @@ const CATEGORY_ICONS: Record<AchievementCategory, string> = {
   "Discovery": "✨",
 };
 
-function RankBadge({ level, title: _title }: { level: number; title: string }) {
+function RankBadge({ level }: { level: number }) {
   const isMax = level === 10;
   return (
     <div
@@ -384,7 +384,6 @@ export default function AchievementsPage() {
   // Determine initial category: first incomplete one, or First Steps if all done
   useEffect(() => {
     if (loaded && !selectedCategory) {
-      const statsForLogic = loadStats();
       const firstIncomplete = ACHIEVEMENT_CATEGORIES.find((cat) => {
         const items = ACHIEVEMENTS.filter((a) => a.category === cat);
         const unlockedCount = items.filter((a) => isUnlocked(a.id, unlocks)).length;
@@ -559,7 +558,7 @@ export default function AchievementsPage() {
           }}
         >
           <div className="flex items-center gap-4">
-            <RankBadge level={rank.level} title={rank.title} />
+            <RankBadge level={rank.level} />
             <div className="flex-1 min-w-0">
               <p className="text-[0.8rem] uppercase tracking-widest text-stone-500 font-medium">
                 Current Rank

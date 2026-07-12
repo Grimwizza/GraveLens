@@ -32,7 +32,6 @@ import type {
   ResearchData,
   ExtractedGraveData,
   GeoLocation,
-  LifeNarrative,
   CulturalContext,
   PersonData,
 } from "@/types";
@@ -1344,6 +1343,7 @@ export default function ResultPage({ id }: { id: string }) {
                       (activePhotoUrl || photoDataUrl) === photo ? "border-gold-500 scale-105" : "border-stone-850 opacity-70"
                     }`}
                   >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={photo} alt="" className="w-full h-full object-cover" />
                   </button>
                 ))}
@@ -1843,6 +1843,7 @@ export default function ResultPage({ id }: { id: string }) {
                   (activePhotoUrl || photoDataUrl) === photo ? "border-gold-500 scale-105" : "border-stone-850 opacity-70 hover:opacity-90"
                 }`}
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={photo} alt="" className="w-full h-full object-cover" />
               </button>
             ))}
@@ -3841,6 +3842,7 @@ function LocalHistoryCard({
           <div className="bg-stone-900 border border-stone-800 rounded-xl overflow-hidden shadow-md flex flex-col sm:flex-row">
             {localHistory.sanbornMap.thumbnailUrl && (
               <div className="sm:w-1/3 shrink-0 relative bg-stone-950 flex items-center justify-center border-b sm:border-b-0 sm:border-r border-stone-800">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={localHistory.sanbornMap.thumbnailUrl}
                   alt="Historical Sanborn Map thumbnail"
@@ -4215,7 +4217,6 @@ function StoryCard({
 
   return (
     <div className="py-5 animate-fade-up" style={{ animationDelay: "0.04s" }}>
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio ref={audioRef} preload="none" />
 
       {/* Idle: flagship CTA button */}

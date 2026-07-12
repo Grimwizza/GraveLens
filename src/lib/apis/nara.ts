@@ -17,7 +17,7 @@ import type { NaraRecord, NaraItemRecord } from "@/types";
 //   RG 407 – Adjutant General's Office (WWII)
 
 const BASE = "https://catalog.archives.gov/api/v2";
-const API_KEY = "DEMO_KEY";
+const API_KEY = process.env.NARA_API_KEY || "DEMO_KEY";
 
 interface NaraHit {
   _id?: string;

@@ -26,7 +26,6 @@ export function RankInsignia({ level, size = 24 }: { level: number; size?: numbe
     "rgba(230, 168, 124, 0.5)";
 
   const gradId = `${tier}-grad`;
-  const textGradId = `${tier}-text-grad`;
 
   // Render the unique shape for the specific level (1-10)
   const renderShape = () => {

@@ -62,113 +62,115 @@ export default function CapturePage() {
     typeof navigator !== "undefined" ? !navigator.onLine : false
   );
 
-  // Reset scroll on mount + track connectivity + auto-open camera if flagged
-  useEffect(() => {
-    window.scrollTo(0, 0);
-    const onOnline  = () => setIsOffline(false);
-    const onOffline = () => setIsOffline(true);
-    window.addEventListener("online",  onOnline);
-    window.addEventListener("offline", onOffline);
-
-    // BottomNav camera FAB chose a file from another page — process it immediately
-    const pending = takePendingCaptureFile();
-    if (pending) {
-      handleFileChosen(pending);
-    }
-
-    return () => {
-      window.removeEventListener("online",  onOnline);
-      window.removeEventListener("offline", onOffline);
-    };
+  const handleReset = useCallback(() => {
+    setPhase("idle");
+    setPreviewUrl(null);
+    setSelectedFile(null);
+    setProgress(0);
+    setQueueReason(null);
   }, []);
 
-  // BottomNav camera FAB tapped while already on this page
-  useEffect(() => {
-    const handler = () => {
-      if (phase === "idle") {
-        cameraInputRef.current?.click();
-      }
-    };
-    window.addEventListener("gravelens:open-camera", handler);
-    return () => window.removeEventListener("gravelens:open-camera", handler);
-  }, [phase]);
+  const discardWarning = useCallback(() => {
+    setQualityWarning(null);
+    handleReset();
+  }, [handleReset]);
 
-  // Keep the screen awake while the user is on this page
-  useEffect(() => {
-    if (!("wakeLock" in navigator)) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const wl = (navigator as any).wakeLock;
-    let mounted = true;
-    let lock: WakeLockSentinel | null = null;
+  const proceedWithWarning = useCallback(() => {
+    if (!qualityWarning) return;
+    const { dataUrl, file } = qualityWarning;
+    setPreviewUrl(dataUrl);
+    setSelectedFile(file);
+    setQualityWarning(null);
+    setPhase("processing");
+    setProgress(10);
+    setProgressLabel("Reading image…");
+  }, [qualityWarning]);
 
-    const acquire = async () => {
-      if (!mounted || document.visibilityState !== "visible") return;
-      try {
-        lock = await wl.request("screen");
-        // Re-acquire if the browser releases the lock unexpectedly (battery saver, etc.)
-        lock!.addEventListener("release", () => {
-          if (mounted && document.visibilityState === "visible") acquire();
-        });
-      } catch {
-        // Device denied (low battery, permissions, etc.) — silently skip
-      }
-    };
-
-    // Browsers release the lock when the page is hidden; re-acquire on return
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") acquire();
-    };
-
-    acquire();
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      mounted = false;
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      lock?.release().catch(() => {});
-    };
-  }, []);
-
-  const handleFileChosen = useCallback(async (file: File) => {
-    // Invalidate any in-flight analysis for the previous photo
-    analysisNonceRef.current += 1;
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-
-    const raw = await fileToDataUrl(file);
-    const dataUrl = await correctOrientation(file, raw);
-
-    const checkQuality = (url: string): Promise<{ isBlurry: boolean; hasGlare: boolean; blurScore: number; glarePct: number }> => {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          const result = analyzeImageQuality(img);
-          resolve(result);
-        };
-        img.onerror = () => {
-          resolve({ isBlurry: false, hasGlare: false, blurScore: 0, glarePct: 0 });
-        };
-        img.src = url;
-      });
-    };
-
-    const quality = await checkQuality(dataUrl);
-
-    if (quality.isBlurry || quality.hasGlare) {
-      setQualityWarning({
-        isBlurry: quality.isBlurry,
-        hasGlare: quality.hasGlare,
-        dataUrl,
-        file
-      });
-      setPhase("warning");
-    } else {
-      setPreviewUrl(dataUrl);
-      setSelectedFile(file);
+  const saveCurrentAnalysis = useCallback(async (
+    dataOrRef: ExtractedGraveData | null, 
+    locOrRef: GeoLocation | null,
+    pUrl: string | null = previewUrl,
+    sFile: File | null = selectedFile
+  ) => {
+    if (!sFile || !pUrl) return;
+    try {
       setPhase("processing");
-      setProgress(10);
-      setProgressLabel("Reading image…");
+      setProgress(90);
+      setProgressLabel("Saving…");
+
+      const storageDataUrl = await resizeForStorage(pUrl);
+      const [thumbnailDataUrl] = await Promise.all([
+        generateThumbnail(storageDataUrl),
+        settings.photoSaveTarget === "app-and-device"
+          ? saveToDevice(storageDataUrl, `gravelens-${Date.now()}.jpg`)
+          : Promise.resolve(),
+      ]);
+      const id = generateId();
+      await savePendingResult(id, {
+        id,
+        photoDataUrl: storageDataUrl,
+        thumbnailDataUrl,
+        extracted: dataOrRef,
+        location: locOrRef,
+        timestamp: Date.now(),
+      });
+      setProgress(100);
+      router.push(`/result/${id}`);
+    } catch (err) {
+      console.error("CapturePage: Save failed:", err);
+      setPhase("idle");
     }
-  }, []);
+  }, [previewUrl, selectedFile, router, settings.photoSaveTarget]);
+
+  const handleQueueCapture = useCallback(async (reason?: "offline" | "rate_limited") => {
+    if (!selectedFile || !previewUrl) return;
+
+    setQueueReason(reason ?? "offline");
+    setPhase("processing");
+    setProgress(20);
+    setProgressLabel(reason === "rate_limited" ? "Busy — adding to queue…" : "Saving to queue…");
+
+    try {
+      const exifLoc = await extractExifLocation(selectedFile);
+      // EXIF GPS is stripped by most mobile browsers — fall back to device location
+      const gpsLoc = exifLoc ?? await getDeviceLocation();
+      let location: GeoLocation | undefined;
+
+      if (gpsLoc) {
+        setProgress(40);
+        const geocoded = await reverseGeocode(gpsLoc.lat, gpsLoc.lng).catch(() => null);
+        location = (geocoded ?? gpsLoc) as GeoLocation;
+      }
+
+      setProgress(70);
+      const storageDataUrl = await resizeForStorage(previewUrl);
+      const [thumbnailDataUrl] = await Promise.all([
+        generateThumbnail(storageDataUrl),
+        settings.photoSaveTarget === "app-and-device"
+          ? saveToDevice(storageDataUrl, `gravelens-${Date.now()}.jpg`)
+          : Promise.resolve(),
+      ]);
+
+      const id = generateId();
+      await addToQueue({
+        id,
+        timestamp: Date.now(),
+        photoDataUrl: storageDataUrl,
+        thumbnailDataUrl,
+        location,
+        status: "pending",
+        retries: 0,
+      });
+
+      window.dispatchEvent(new Event(QUEUE_CHANGED_EVENT));
+      setProgress(100);
+      setPhase("queued");
+      setTimeout(() => handleReset(), 1400);
+    } catch (err) {
+      console.error("CapturePage: Queue capture failed:", err instanceof Error ? err.message : err);
+      setPhase("idle");
+    }
+  }, [selectedFile, previewUrl, handleReset, settings.photoSaveTarget]);
 
   const handleAnalyze = useCallback(async () => {
     if (!selectedFile || !previewUrl) return;
@@ -268,43 +270,115 @@ export default function CapturePage() {
       console.error("CapturePage: Analysis failed:", err instanceof Error ? err.message : err);
       setPhase("idle");
     }
-  }, [selectedFile, previewUrl, router]);
+  }, [selectedFile, previewUrl, handleQueueCapture, saveCurrentAnalysis]);
 
-  const saveCurrentAnalysis = useCallback(async (
-    dataOrRef: ExtractedGraveData | null, 
-    locOrRef: GeoLocation | null,
-    pUrl: string | null = previewUrl,
-    sFile: File | null = selectedFile
-  ) => {
-    if (!sFile || !pUrl) return;
-    try {
-      setPhase("processing");
-      setProgress(90);
-      setProgressLabel("Saving…");
+  const handleFileChosen = useCallback(async (file: File) => {
+    // Invalidate any in-flight analysis for the previous photo
+    analysisNonceRef.current += 1;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
 
-      const storageDataUrl = await resizeForStorage(pUrl);
-      const [thumbnailDataUrl] = await Promise.all([
-        generateThumbnail(storageDataUrl),
-        settings.photoSaveTarget === "app-and-device"
-          ? saveToDevice(storageDataUrl, `gravelens-${Date.now()}.jpg`)
-          : Promise.resolve(),
-      ]);
-      const id = generateId();
-      await savePendingResult(id, {
-        id,
-        photoDataUrl: storageDataUrl,
-        thumbnailDataUrl,
-        extracted: dataOrRef,
-        location: locOrRef,
-        timestamp: Date.now(),
+    const raw = await fileToDataUrl(file);
+    const dataUrl = await correctOrientation(file, raw);
+
+    const checkQuality = (url: string): Promise<{ isBlurry: boolean; hasGlare: boolean; blurScore: number; glarePct: number }> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const result = analyzeImageQuality(img);
+          resolve(result);
+        };
+        img.onerror = () => {
+          resolve({ isBlurry: false, hasGlare: false, blurScore: 0, glarePct: 0 });
+        };
+        img.src = url;
       });
-      setProgress(100);
-      router.push(`/result/${id}`);
-    } catch (err) {
-      console.error("CapturePage: Save failed:", err);
-      setPhase("idle");
+    };
+
+    const quality = await checkQuality(dataUrl);
+
+    if (quality.isBlurry || quality.hasGlare) {
+      setQualityWarning({
+        isBlurry: quality.isBlurry,
+        hasGlare: quality.hasGlare,
+        dataUrl,
+        file
+      });
+      setPhase("warning");
+    } else {
+      setPreviewUrl(dataUrl);
+      setSelectedFile(file);
+      setPhase("processing");
+      setProgress(10);
+      setProgressLabel("Reading image…");
     }
-  }, [previewUrl, selectedFile, router]);
+  }, []);
+
+  // Reset scroll on mount + track connectivity + auto-open camera if flagged
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    const onOnline  = () => setIsOffline(false);
+    const onOffline = () => setIsOffline(true);
+    window.addEventListener("online",  onOnline);
+    window.addEventListener("offline", onOffline);
+
+    // BottomNav camera FAB chose a file from another page — process it immediately
+    const pending = takePendingCaptureFile();
+    if (pending) {
+      handleFileChosen(pending);
+    }
+
+    return () => {
+      window.removeEventListener("online",  onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, [handleFileChosen]);
+
+  // BottomNav camera FAB tapped while already on this page
+  useEffect(() => {
+    const handler = () => {
+      if (phase === "idle") {
+        cameraInputRef.current?.click();
+      }
+    };
+    window.addEventListener("gravelens:open-camera", handler);
+    return () => window.removeEventListener("gravelens:open-camera", handler);
+  }, [phase]);
+
+  // Keep the screen awake while the user is on this page
+  useEffect(() => {
+    if (!("wakeLock" in navigator)) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wl = (navigator as any).wakeLock;
+    let mounted = true;
+    let lock: WakeLockSentinel | null = null;
+
+    const acquire = async () => {
+      if (!mounted || document.visibilityState !== "visible") return;
+      try {
+        lock = await wl.request("screen");
+        // Re-acquire if the browser releases the lock unexpectedly (battery saver, etc.)
+        lock!.addEventListener("release", () => {
+          if (mounted && document.visibilityState === "visible") acquire();
+        });
+      } catch {
+        // Device denied (low battery, permissions, etc.) — silently skip
+      }
+    };
+
+    // Browsers release the lock when the page is hidden; re-acquire on return
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") acquire();
+    };
+
+    acquire();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      mounted = false;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      lock?.release().catch(() => {});
+    };
+  }, []);
 
   // Auto-analyze as soon as a file is chosen
   useEffect(() => {
@@ -315,83 +389,7 @@ export default function CapturePage() {
         handleAnalyze();
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, selectedFile, previewUrl]);
-
-  const handleReset = useCallback(() => {
-    setPhase("idle");
-    setPreviewUrl(null);
-    setSelectedFile(null);
-    setProgress(0);
-    setQueueReason(null);
-  }, []);
-
-  const proceedWithWarning = useCallback(() => {
-    if (!qualityWarning) return;
-    const { dataUrl, file } = qualityWarning;
-    setPreviewUrl(dataUrl);
-    setSelectedFile(file);
-    setQualityWarning(null);
-    setPhase("processing");
-    setProgress(10);
-    setProgressLabel("Reading image…");
-  }, [qualityWarning]);
-
-  const discardWarning = useCallback(() => {
-    setQualityWarning(null);
-    handleReset();
-  }, [handleReset]);
-
-
-  const handleQueueCapture = useCallback(async (reason?: "offline" | "rate_limited") => {
-    if (!selectedFile || !previewUrl) return;
-
-    setQueueReason(reason ?? "offline");
-    setPhase("processing");
-    setProgress(20);
-    setProgressLabel(reason === "rate_limited" ? "Busy — adding to queue…" : "Saving to queue…");
-
-    try {
-      const exifLoc = await extractExifLocation(selectedFile);
-      // EXIF GPS is stripped by most mobile browsers — fall back to device location
-      const gpsLoc = exifLoc ?? await getDeviceLocation();
-      let location: GeoLocation | undefined;
-
-      if (gpsLoc) {
-        setProgress(40);
-        const geocoded = await reverseGeocode(gpsLoc.lat, gpsLoc.lng).catch(() => null);
-        location = (geocoded ?? gpsLoc) as GeoLocation;
-      }
-
-      setProgress(70);
-      const storageDataUrl = await resizeForStorage(previewUrl);
-      const [thumbnailDataUrl] = await Promise.all([
-        generateThumbnail(storageDataUrl),
-        settings.photoSaveTarget === "app-and-device"
-          ? saveToDevice(storageDataUrl, `gravelens-${Date.now()}.jpg`)
-          : Promise.resolve(),
-      ]);
-
-      const id = generateId();
-      await addToQueue({
-        id,
-        timestamp: Date.now(),
-        photoDataUrl: storageDataUrl,
-        thumbnailDataUrl,
-        location,
-        status: "pending",
-        retries: 0,
-      });
-
-      window.dispatchEvent(new Event(QUEUE_CHANGED_EVENT));
-      setProgress(100);
-      setPhase("queued");
-      setTimeout(() => handleReset(), 1400);
-    } catch (err) {
-      console.error("CapturePage: Queue capture failed:", err instanceof Error ? err.message : err);
-      setPhase("idle");
-    }
-  }, [selectedFile, previewUrl, handleReset]);
+  }, [phase, selectedFile, previewUrl, handleQueueCapture, handleAnalyze, isOffline]);
 
   return (
     <PageShell showLogo={true} customMainClasses="items-center px-5 pb-28" backgroundClass="bg-transparent">
@@ -444,6 +442,7 @@ export default function CapturePage() {
 
               {/* Photo preview container */}
               <div className="relative aspect-[4/3] rounded-xl overflow-hidden border border-stone-805 bg-stone-950">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={qualityWarning.dataUrl}
                   alt="Captured marker"

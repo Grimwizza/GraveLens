@@ -280,9 +280,11 @@ export async function enrichCemetery(
   name: string,
   lat: number,
   lng: number,
-  city?: string,
-  state?: string,
+  _city?: string,
+  _state?: string,
 ): Promise<Omit<CemeteryRecord, "visitCount" | "firstVisited" | "lastVisited">> {
+  void _city;
+  void _state;
   // Fetch OSM data — location-verified via 800 m radius query, name-matched
   const osmData = await fetchOsmCemeteryDetails(lat, lng, name).catch((): OsmCemeteryDetail => ({}));
 

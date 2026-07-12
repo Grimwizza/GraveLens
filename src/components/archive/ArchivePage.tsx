@@ -352,7 +352,6 @@ export default function ArchivePage() {
         } catch { /* non-fatal — will retry next visit */ }
       }
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Zero-cost backfill: researchLinks for pre-v2 records (runs once) ────
@@ -392,7 +391,6 @@ export default function ArchivePage() {
         localStorage.setItem("gl_backfill_v2_done", "1");
       }
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Bulk research re-enrichment (runs on load, capped at 5/session) ──────
@@ -462,7 +460,6 @@ export default function ArchivePage() {
     })();
 
     return () => { active = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
   // ── Load graves ──────────────────────────────────────────────────────────
@@ -2970,6 +2967,7 @@ function DuplicateMergeModal({
                 <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
                   {/* Primary Scan */}
                   <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={group.primary.photoDataUrl} alt="Primary" className="w-14 h-14 rounded-lg object-cover border border-stone-850 shrink-0" />
                     <div className="min-w-0">
                       <span className="text-[0.6rem] font-bold text-gold-500 uppercase tracking-wider bg-gold-500/10 px-1.5 py-0.5 rounded">Primary Scan</span>
@@ -2984,6 +2982,7 @@ function DuplicateMergeModal({
                   <div className="flex flex-col gap-3 flex-1 min-w-0">
                     {group.duplicates.map((dup) => (
                       <div key={dup.id} className="flex items-center gap-3 min-w-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={dup.photoDataUrl} alt="Duplicate" className="w-14 h-14 rounded-lg object-cover border border-stone-850 shrink-0" />
                         <div className="min-w-0">
                           <span className="text-[0.6rem] font-bold text-stone-500 uppercase tracking-wider bg-stone-800 px-1.5 py-0.5 rounded">Duplicate Scan</span>

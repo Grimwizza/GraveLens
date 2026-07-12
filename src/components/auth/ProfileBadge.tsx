@@ -42,7 +42,7 @@ export default function ProfileBadge() {
     fetchOwnProfile(supabase, user.id)
       .then((p) => { if (p?.username) setProfileUsername(p.username); })
       .catch(() => {});
-  }, [user?.id]);
+  }, [user]);
 
   // Close sheet when pressing Escape (keyboard / accessibility)
   useEffect(() => {

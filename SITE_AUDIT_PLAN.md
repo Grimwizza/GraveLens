@@ -183,7 +183,7 @@ Re-checked the batch of Gemini-committed work (commits e56d852, c2e6cbd) rather 
 - End-to-end recognition quality of the new prompt rules (maiden name / suffix / title handling, Sonnet escalation on implausible data) — logic is unit-tested but not yet observed on real stones.
 - Story/cultural cloud persistence (2E), per-person stories (4A), confidence-reason tooltips (4C), skeleton loaders (4D), blur/glare warning (4G) — all render only in authed/scan flows.
 - Airplane-mode offline queue round-trip (Phase 5 checklist item, still `[ ]`).
-- 26 lint warnings remain (CI passes on errors only); consider `--max-warnings 0` after cleanup.
+- ✅ All lint warnings have been completely resolved, and block-scoped temporal dead zone (TDZ) hoisting compilation errors in `CapturePage.tsx` were eliminated. `npm run lint` and `npx tsc --noEmit` now pass with 0 errors and 0 warnings.
 
 ## Regression & Walkthrough Checklist (Phase 5)
 
