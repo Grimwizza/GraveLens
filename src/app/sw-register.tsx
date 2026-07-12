@@ -65,7 +65,7 @@ export default function ServiceWorkerRegister() {
     let lastPoll = 0;
 
     const checkVersion = async () => {
-      if (CLIENT_BUILD_TIME === "dev") return; // skip in local dev
+      if (process.env.NODE_ENV !== "production" || CLIENT_BUILD_TIME === "dev") return; // skip in local dev
       const now = Date.now();
       if (now - lastPoll < POLL_THROTTLE_MS) return;
       lastPoll = now;
