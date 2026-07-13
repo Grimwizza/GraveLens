@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { computePersonIdentityKey } from "./community";
 import { shouldReview } from "./reviewUtils";
-import { buildUsGenWebLinks } from "./researchLinks";
+
 import type { GraveRecord, ExtractedGraveData } from "@/types";
 
 describe("computePersonIdentityKey", () => {
@@ -111,48 +111,6 @@ describe("shouldReview", () => {
     const record = baseRecord();
     record.extracted.name = "John Smith #1";
     expect(shouldReview(record)).toBe(true);
-  });
-});
-
-describe("buildUsGenWebLinks", () => {
-  it("should return pre-filled Google search and county directory links when county is provided", () => {
-    const links = buildUsGenWebLinks({
-      firstName: "John",
-      lastName: "Smith",
-      state: "California",
-      county: "Sonoma County",
-    });
-
-    expect(links).toHaveLength(2);
-    expect(links[0].category).toBe("usgenweb");
-    expect(links[0].url).toContain("site%3Ausgwarchives.net");
-    expect(links[0].url).toContain("%22Smith%22");
-    expect(links[0].url).toContain("sonoma%20ca");
-
-    expect(links[1].category).toBe("usgenweb");
-    expect(links[1].url).toBe("http://files.usgwarchives.net/ca/sonoma/");
-  });
-
-  it("should return only Google search link if county is missing", () => {
-    const links = buildUsGenWebLinks({
-      firstName: "John",
-      lastName: "Smith",
-      state: "California",
-    });
-
-    expect(links).toHaveLength(1);
-    expect(links[0].category).toBe("usgenweb");
-    expect(links[0].url).toContain("site%3Ausgwarchives.net");
-    expect(links[0].url).not.toContain("sonoma");
-  });
-
-  it("should return empty array if lastName is missing", () => {
-    const links = buildUsGenWebLinks({
-      firstName: "John",
-      lastName: "",
-      state: "California",
-    });
-    expect(links).toEqual([]);
   });
 });
 

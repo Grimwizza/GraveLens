@@ -366,57 +366,7 @@ export function buildFraternalLinks(params: {
   return results;
 }
 
-function cleanCountyName(county: string): string {
-  return county
-    .toLowerCase()
-    .replace(/\bcounty\b/g, "")
-    .replace(/[^a-z0-9]/g, "")
-    .trim();
-}
 
-export function buildUsGenWebLinks(params: {
-  firstName: string;
-  lastName: string;
-  state: string;
-  county?: string | null;
-}): ResearchLink[] {
-  const { firstName, lastName, state, county } = params;
-  if (!lastName) return [];
-
-  const stateCode = toStateCode(state).toLowerCase();
-  if (!stateCode) return [];
-
-  const links: ResearchLink[] = [];
-  const fn = encodeURIComponent(firstName);
-  const ln = encodeURIComponent(lastName);
-
-  const cleanCounty = county ? cleanCountyName(county) : "";
-  const locationTerms = cleanCounty ? `${cleanCounty} ${stateCode}` : stateCode;
-  const searchUrl = `https://www.google.com/search?q=site%3Ausgwarchives.net+%22${ln}%22+${fn ? `%22${fn}%22+` : ""}${encodeURIComponent(locationTerms)}+(probate+OR+will+OR+deed+OR+land)`;
-
-  links.push({
-    label: "USGenWeb Archives Search",
-    sub: `Search volunteer transcription files in ${county || state} for wills, deeds, and probate records`,
-    url: searchUrl,
-    icon: "🗄️",
-    category: "usgenweb",
-  });
-
-  if (county) {
-    const cleanCo = cleanCountyName(county);
-    if (cleanCo) {
-      links.push({
-        label: `${county} Archives Directory`,
-        sub: `Browse raw text directories of transcribed local records for ${county}, ${toStateCode(state)}`,
-        url: `http://files.usgwarchives.net/${stateCode}/${cleanCo}/`,
-        icon: "📁",
-        category: "usgenweb",
-      });
-    }
-  }
-
-  return links;
-}
 
 // ── Main builder — composes all five ──────────────────────────────────────────
 
@@ -436,6 +386,5 @@ export function buildAllResearchLinks(params: {
     ...buildStateDeathLinks(params),
     ...buildModernObituaryLinks(params),
     ...buildFraternalLinks(params),
-    ...buildUsGenWebLinks(params),
   ];
 }

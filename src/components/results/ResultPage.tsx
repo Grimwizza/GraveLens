@@ -2905,6 +2905,25 @@ function WikiTreeCard({
     );
   }
   if (!records.length) return null;
+
+  // Deduplicate by wikitreeId — API can return the same profile via different
+  // name variants (e.g. formal expansion queries).
+  const seen = new Set<string>();
+  const unique = records.filter((r) => {
+    if (seen.has(r.wikitreeId)) return false;
+    seen.add(r.wikitreeId);
+    return true;
+  });
+
+  // When all remaining cards carry identical positive reasons (no date context
+  // to distinguish them), showing 3 looks like a bug — cap at 2.
+  const positiveReasons = (r: typeof unique[0]) =>
+    r.reasons.filter((x) => !/differs|different/.test(x)).slice(0, 3).join(",");
+  const allSameReasons =
+    unique.length === 3 &&
+    unique.every((r) => positiveReasons(r) === positiveReasons(unique[0]));
+  const display = allSameReasons ? unique.slice(0, 2) : unique;
+
   return (
     <div className="py-5 animate-fade-up">
       <SectionHeader icon="🌳" title="WikiTree Profiles" />
@@ -2912,10 +2931,11 @@ function WikiTreeCard({
         Collaborative family-tree profiles matched to this marker. Confidence reflects how well the dates and place line up.
       </p>
       <ul className="space-y-2">
-        {records.map((r, i) => {
+        {display.map((r) => {
           const conf = CONFIDENCE_STYLE[r.confidence] ?? CONFIDENCE_STYLE.low;
+          const positive = r.reasons.filter((x) => !/differs|different/.test(x)).slice(0, 3);
           return (
-            <li key={i}>
+            <li key={r.wikitreeId}>
               <a
                 href={r.url}
                 target="_blank"
@@ -2933,13 +2953,13 @@ function WikiTreeCard({
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
                     {r.birthDate && <span className="text-stone-400 text-xs">b. {r.birthDate}</span>}
                     {r.deathDate && <span className="text-stone-400 text-xs">d. {r.deathDate}</span>}
-                    {(r.deathPlace || r.birthPlace) && (
+                    {!(r.birthDate || r.deathDate) && (r.deathPlace || r.birthPlace) && (
                       <span className="text-stone-400 text-xs truncate">{r.deathPlace || r.birthPlace}</span>
                     )}
                   </div>
-                  {r.reasons.length > 0 && (
+                  {positive.length > 0 && (
                     <p className="text-stone-500 text-[0.7rem] mt-1 leading-snug">
-                      Matched on: {r.reasons.filter((x) => !/differs|different/.test(x)).slice(0, 3).join(", ")}
+                      Matched on: {positive.join(", ")}
                     </p>
                   )}
                   <p className="text-xs mt-1.5" style={{ color: "var(--t-gold-500)" }}>View WikiTree profile →</p>
@@ -3820,36 +3840,6 @@ function LocalHistoryCard({
                 </li>
               ))}
             </ul>
-          </div>
-        )}
-
-        {/* USGenWeb Probate & Land Records */}
-        {localHistory.usGenWebRecords && localHistory.usGenWebRecords.length > 0 && (
-          <div>
-            <p className="text-xs text-stone-500 uppercase tracking-widest mb-2.5">
-              USGenWeb Wills & Deeds Indexes
-            </p>
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              {localHistory.usGenWebRecords.map((rec, i) => (
-                <a
-                  key={i}
-                  href={rec.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex flex-col justify-between p-3 rounded-xl bg-stone-900/60 border border-stone-800 hover:border-stone-700/80 active:bg-stone-850 transition-all min-w-0"
-                >
-                  <div>
-                    <span className="text-[0.6rem] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide bg-gold-500/10 text-gold-500 border border-gold-500/20">
-                      {rec.category}
-                    </span>
-                    <h5 className="text-stone-200 text-sm font-serif mt-2 mb-1.5 leading-snug line-clamp-2">
-                      {rec.title}
-                    </h5>
-                  </div>
-                  <p className="text-gold-500 text-xs mt-1.5 font-medium">View index file ↗</p>
-                </a>
-              ))}
-            </div>
           </div>
         )}
 
@@ -4868,10 +4858,6 @@ const CATEGORY_META: Record<string, { title: string; description: string }> = {
     title: "Fraternal Organization Records",
     description: "Lodge membership rolls, benefit files, and meeting minutes.",
   },
-  usgenweb: {
-    title: "USGenWeb Probate & Land Indexes",
-    description: "Volunteer-transcribed county wills, deeds, and land patent abstracts.",
-  },
 };
 
 function ResearchLinksCard({ links }: { links: ResearchLink[] }) {
@@ -4884,7 +4870,7 @@ function ResearchLinksCard({ links }: { links: ResearchLink[] }) {
   }, {});
 
   const order: Array<ResearchLink["category"]> = [
-    "wwiDraft", "stateVital", "modernObit", "fraternal", "usgenweb",
+    "wwiDraft", "stateVital", "modernObit", "fraternal",
   ];
 
   return (

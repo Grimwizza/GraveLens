@@ -23,13 +23,13 @@ import { searchWikiTree } from "@/lib/apis/wikitree";
 
 import { getSoundex, variantsFor } from "@/lib/phonetic";
 import { buildPersonQuery } from "@/lib/research/personQuery";
-import { searchUsGenWeb } from "@/lib/apis/usgenweb";
+
 import type { SourceResult } from "@/lib/apis/client";
 import { buildResearchChecklist } from "@/lib/researchChecklist";
 import { buildAllResearchLinks } from "@/lib/researchLinks";
 import type {
   ResearchData, GeoLocation, NaraItemRecord, LocalHistoryContext,
-  ResearchSourceStatus, UsGenWebRecord,
+  ResearchSourceStatus,
 } from "@/types";
 
 /** Unwraps a settled SourceResult; a rejected promise counts as a failed source. */
@@ -251,36 +251,13 @@ export async function POST(req: NextRequest) {
     const localHistory: LocalHistoryContext = cachedHistory ? (cachedHistory.localHistory || {}) : {};
 
     // ── Tier 3: Conditional lookups requiring Tier 1/2 results ─────────────
-    const landRecordsValue = landRecords.status === "fulfilled" ? landRecords.value : [];
-    const hasLandPatents = landRecordsValue.length > 0;
-
-    const [enlistmentResult, usgenwebResult] = await Promise.allSettled([
+    const [enlistmentResult] = await Promise.allSettled([
       militaryContext?.likelyConflict
         ? searchEnlistmentRecords(firstName, lastName, birthYear, militaryContext.likelyConflict)
         : Promise.resolve([] as NaraItemRecord[]),
-      (hasLandPatents && state && county)
-        ? searchUsGenWeb(state, county)
-        : Promise.resolve([] as UsGenWebRecord[]),
     ]);
     const naraItemRecords = enlistmentResult.status === "fulfilled" ? enlistmentResult.value : [];
-    const usGenWebRecords = usgenwebResult.status === "fulfilled" ? usgenwebResult.value : [];
     const treeCollisionData = treeCollision.status === "fulfilled" ? treeCollision.value : { hit: false, confidence: 0 };
-
-    if (usGenWebRecords.length > 0) {
-      localHistory.usGenWebRecords = usGenWebRecords;
-      if (hasCoords) {
-        const existing = cachedHistory || await checkLocalHistoryCache(supabase, lat, lng).catch(() => null);
-        const mergedLocalHistory = {
-          ...(existing?.localHistory || {}),
-          ...localHistory,
-        };
-        await saveLocalHistoryCache(supabase, lat, lng, {
-          localHistory: mergedLocalHistory,
-          wikidataEvents: existing?.wikidataEvents || undefined,
-          nrhpSites: existing?.nrhpSites || undefined,
-        }).catch((err) => console.warn("[local-history-cache-save] USGenWeb failed:", err));
-      }
-    }
 
     // ── Unwrap person-source results + build the per-source status map ─────
     const newspapersR  = unwrap(newspapers);
