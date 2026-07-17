@@ -19,7 +19,7 @@ interface GoalRow {
   title: string;
   description: string;
   category: string;
-  token_reward: number;
+  token_amount: number;
   frequency: string;
   redemption: string;
   requirement_type: string;
@@ -103,10 +103,10 @@ async function callClaimGoal(
   userId: string,
   goal: GoalRow
 ): Promise<number | null> {
-  const { data, error } = await supabase.rpc("claim_goal", {
+  const { data, error } = await supabase.rpc("claim_reward", {
     p_user_id: userId,
-    p_goal_id: goal.id,
-    p_tokens: goal.token_reward,
+    p_reward_id: goal.id,
+    p_tokens: goal.token_amount,
     p_frequency: goal.frequency,
     p_description: goal.title,
   });
@@ -124,9 +124,9 @@ export async function fetchGraveLensGoals(
   userId: string
 ): Promise<GraveLensGoal[]> {
   const { data: goalRows, error: goalsError } = await supabase
-    .from("goals")
+    .from("rewards")
     .select(
-      "id, slug, title, description, category, token_reward, frequency, redemption, requirement_type, requirement_params, sort_order"
+      "id, slug, title, description, category, token_amount, frequency, redemption, requirement_type, requirement_params, sort_order"
     )
     .contains("visible_in_apps", ["gravelens"])
     .order("sort_order", { ascending: true });
@@ -146,16 +146,16 @@ export async function fetchGraveLensGoals(
   if (goals.length === 0) return [];
 
   const { data: completionRows, error: completionsError } = await supabase
-    .from("user_goal_completions")
-    .select("goal_id, claimed_at")
+    .from("reward_claims")
+    .select("reward_id, claimed_at")
     .eq("user_id", userId);
   if (completionsError) {
     console.warn("[goals] completions query failed", completionsError.message);
   }
   const claimedAt = new Map<string, string>();
-  for (const c of (completionRows as { goal_id: string; claimed_at: string }[] | null) ?? []) {
+  for (const c of (completionRows as { reward_id: string; claimed_at: string }[] | null) ?? []) {
     // one_time goals have at most one row; keep it.
-    if (!claimedAt.has(c.goal_id)) claimedAt.set(c.goal_id, c.claimed_at);
+    if (!claimedAt.has(c.reward_id)) claimedAt.set(c.reward_id, c.claimed_at);
   }
 
   const ctx = await loadContext(supabase, userId);
@@ -191,7 +191,7 @@ export async function fetchGraveLensGoals(
       title: goal.title,
       description: goal.description,
       category: goal.category,
-      tokenReward: Number(goal.token_reward),
+      tokenReward: Number(goal.token_amount),
       frequency: goal.frequency,
       redemption: goal.redemption,
       requirementType: goal.requirement_type,
@@ -218,9 +218,9 @@ export async function claimGraveLensGoal(
   slug: string
 ): Promise<ClaimResult> {
   const { data: goalRow } = await supabase
-    .from("goals")
+    .from("rewards")
     .select(
-      "id, slug, title, description, category, token_reward, frequency, redemption, requirement_type, requirement_params, sort_order"
+      "id, slug, title, description, category, token_amount, frequency, redemption, requirement_type, requirement_params, sort_order"
     )
     .eq("slug", slug)
     .contains("visible_in_apps", ["gravelens"])
@@ -235,10 +235,10 @@ export async function claimGraveLensGoal(
   const ctx = await loadContext(supabase, userId);
   if (!isEligible(goal, ctx)) return { ok: false, error: "You have not met this goal yet." };
 
-  const { data, error } = await supabase.rpc("claim_goal", {
+  const { data, error } = await supabase.rpc("claim_reward", {
     p_user_id: userId,
-    p_goal_id: goal.id,
-    p_tokens: goal.token_reward,
+    p_reward_id: goal.id,
+    p_tokens: goal.token_amount,
     p_frequency: goal.frequency,
     p_description: goal.title,
   });
@@ -255,7 +255,7 @@ export async function claimGraveLensGoal(
     newAvailableTokens: Number(row?.new_available_tokens ?? 0),
     claimed: {
       slug: goal.slug,
-      tokenReward: Number(goal.token_reward),
+      tokenReward: Number(goal.token_amount),
       claimedAt: new Date().toISOString(),
     },
   };

@@ -47,7 +47,7 @@ export function xpToNextRank(xp: number): { needed: number; progress: number } {
 // on the Balance & Rewards page. Rank 1 is the starting rank (no bonus). These
 // amounts are the canonical reference for the per-rank reward. Each level maps to
 // a goal row `gravelens_rank_<level>` in the shared `goals` table whose
-// token_reward MUST match the value here; the shared `claim_goal` RPC does the
+// token_amount MUST match the value here; the shared `claim_goal` RPC does the
 // atomic, idempotent credit. Keep in sync with
 // GraveLens/db/migrations/gravelens_rewards_goals.sql when tuning.
 export const RANK_TOKEN_BONUS: Record<number, number> = {

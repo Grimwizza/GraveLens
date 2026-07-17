@@ -142,10 +142,11 @@ export async function upsertGrave(
   record: GraveRecord,
   photoUrl: string
 ): Promise<void> {
-  const { error } = await supabase.from("gravelens_graves").upsert({
+  const { error } = await supabase.from("gravelens_scans").upsert({
     id: record.id,
     user_id: userId,
-    timestamp: record.timestamp,
+    // captured_at is a timestamptz; the local record holds a Unix-ms number.
+    captured_at: new Date(record.timestamp).toISOString(),
     photo_url: photoUrl,
     location: record.location ?? {},
     extracted: record.extracted ?? {},
@@ -171,7 +172,7 @@ export async function deleteFromCloud(
   userId: string,
   graveId: string
 ): Promise<void> {
-  await supabase.from("gravelens_graves").delete().eq("id", graveId);
+  await supabase.from("gravelens_scans").delete().eq("id", graveId);
   await supabase.storage.from(BUCKET).remove([`${userId}/${graveId}.jpg`]);
 }
 
@@ -186,16 +187,17 @@ export async function fetchAllFromCloud(
   userId: string
 ): Promise<GraveRecord[]> {
   const { data, error } = await supabase
-    .from("gravelens_graves")
+    .from("gravelens_scans")
     .select("*")
     .eq("user_id", userId)
-    .order("timestamp", { ascending: false });
+    .order("captured_at", { ascending: false });
 
   if (error) throw error;
 
   return (data ?? []).map((row) => ({
     id: row.id,
-    timestamp: row.timestamp,
+    // captured_at is an ISO timestamptz string; the local record holds Unix ms.
+    timestamp: new Date(row.captured_at).getTime(),
     // Render via the authenticated proxy, not the raw (now private) storage path.
     photoDataUrl: photoProxyUrl(row.id),
     location: row.location ?? {},
@@ -223,7 +225,7 @@ export async function syncLocalToCloud(
 
   // Get IDs already in the cloud so we don't re-upload
   const { data: existing } = await supabase
-    .from("gravelens_graves")
+    .from("gravelens_scans")
     .select("id")
     .in(
       "id",

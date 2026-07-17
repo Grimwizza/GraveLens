@@ -68,8 +68,8 @@ export async function upsertUserProfile(
   if (patch.shareAllByDefault !== undefined) row.share_all_by_default  = patch.shareAllByDefault;
   if (patch.explorerXp !== undefined)        row.explorer_xp           = patch.explorerXp;
   if (patch.explorerRank !== undefined)      row.explorer_rank         = patch.explorerRank;
-  if (patch.graveCount !== undefined)        row.grave_count           = patch.graveCount;
-  if (patch.publicGraveCount !== undefined)  row.public_grave_count    = patch.publicGraveCount;
+  if (patch.graveCount !== undefined)        row.scan_count           = patch.graveCount;
+  if (patch.publicGraveCount !== undefined)  row.public_scan_count    = patch.publicGraveCount;
 
   const { error } = await supabase.from("gravelens_user_profiles").upsert(row);
   if (error) throw error;
@@ -98,8 +98,8 @@ export async function fetchOwnProfile(
     shareAllByDefault: data.share_all_by_default ?? false,
     explorerXp: data.explorer_xp ?? 0,
     explorerRank: data.explorer_rank ?? 1,
-    graveCount: data.grave_count ?? 0,
-    publicGraveCount: data.public_grave_count ?? 0,
+    graveCount: data.scan_count ?? 0,
+    publicGraveCount: data.public_scan_count ?? 0,
     joinedAt: data.joined_at,
   };
 }
@@ -139,7 +139,7 @@ export async function fetchCommunityGravesInBounds(
   // 2. Fetch public graves in bounds (exclude own graves)
   //    Filter by location jsonb lat/lng — cast to float for comparison
   const { data: graveRows, error } = await supabase
-    .from("gravelens_graves")
+    .from("gravelens_scans")
     .select(`
       id,
       user_id,
@@ -208,7 +208,7 @@ export async function bulkSetGravesPublic(
   isPublic: boolean
 ): Promise<void> {
   const { error } = await supabase
-    .from("gravelens_graves")
+    .from("gravelens_scans")
     .update({ is_public: isPublic })
     .eq("user_id", userId);
 
@@ -224,7 +224,7 @@ export async function setGravePublic(
   isPublic: boolean
 ): Promise<void> {
   const { error } = await supabase
-    .from("gravelens_graves")
+    .from("gravelens_scans")
     .update({ is_public: isPublic })
     .eq("id", graveId);
 
@@ -426,7 +426,7 @@ export async function checkGraveIdentityIndex(
   identityHash: string
 ): Promise<GraveIdentityMatch | null> {
   const { data, error } = await supabase
-    .from("gravelens_grave_identity_index")
+    .from("gravelens_scan_identity_index")
     .select("identity_hash, research_snapshot, contributor_count, expires_at")
     .eq("identity_hash", identityHash)
     .maybeSingle();
@@ -450,7 +450,7 @@ export async function upsertGraveIdentityIndex(
   identityHash: string,
   researchSnapshot: unknown
 ): Promise<void> {
-  const { error } = await supabase.rpc("gravelens_upsert_grave_identity", {
+  const { error } = await supabase.rpc("gravelens_upsert_scan_identity", {
     hash: identityHash,
     snapshot: researchSnapshot,
   });

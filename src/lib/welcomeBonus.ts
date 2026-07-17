@@ -18,7 +18,7 @@ import type { WelcomeResult } from "@/lib/lowhighClient";
 interface GoalRow {
   id: string;
   slug: string;
-  token_reward: number;
+  token_amount: number;
   frequency: string | null;
   requirement_type: string;
   requirement_params: Record<string, unknown> | null;
@@ -64,21 +64,21 @@ export async function recordOpenAndClaimWelcome(
   // The GraveLens welcome goal is is_active=false (hidden from LowHigh's
   // catalog), so don't filter on is_active here — look it up by slug only.
   const { data: goalRow } = await supabase
-    .from("goals")
-    .select("id, slug, token_reward, frequency, requirement_type, requirement_params")
+    .from("rewards")
+    .select("id, slug, token_amount, frequency, requirement_type, requirement_params")
     .eq("slug", `${appSlug}_welcome`)
     .maybeSingle();
 
   const goal = goalRow as GoalRow | null;
   if (!goal) return welcome;
 
-  welcome.tokenReward = Number(goal.token_reward);
+  welcome.tokenReward = Number(goal.token_amount);
   if (!(await isEligible(supabase, userId, goal))) return welcome;
 
-  const { data, error } = await supabase.rpc("claim_goal", {
+  const { data, error } = await supabase.rpc("claim_reward", {
     p_user_id: userId,
-    p_goal_id: goal.id,
-    p_tokens: goal.token_reward,
+    p_reward_id: goal.id,
+    p_tokens: goal.token_amount,
     p_frequency: goal.frequency,
     p_description: `goal:${goal.slug}`,
   });

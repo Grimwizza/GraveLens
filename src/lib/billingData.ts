@@ -632,7 +632,7 @@ export async function fetchPlanRecommendation(userId: string): Promise<PlanRecom
 type LoyaltyGoal = {
   id?: string;
   title?: string;
-  token_reward?: number;
+  token_amount?: number;
   category?: string;
   requirement_params?: { min_tier_level?: number; min_paid_months?: number } | null;
 };
@@ -672,11 +672,11 @@ export async function fetchPlanChangeImpact(
         .eq("user_id", userId)
         .maybeSingle(),
       supabase
-        .from("user_goal_completions")
-        .select("goal_id, goals(id, slug, title, token_reward, category, requirement_type, requirement_params)")
+        .from("reward_claims")
+        .select("reward_id, rewards(id, slug, title, token_amount, category, requirement_type, requirement_params)")
         .eq("user_id", userId),
       supabase
-        .from("goals")
+        .from("rewards")
         .select("id, slug, title, requirement_type, requirement_params")
         .eq("category", "loyalty")
         .eq("is_active", true),
@@ -685,8 +685,8 @@ export async function fetchPlanChangeImpact(
     const subRow = subResult.data as { subscription_plans?: PlanRow } | null;
     const targetPlan = targetResult.data as PlanRow | null;
     const balanceRow = balanceResult.data as { rollover_tokens?: number } | null;
-    const claimedGoals = ((loyaltyResult.data ?? []) as { goals?: LoyaltyGoal }[])
-      .map((r) => r.goals)
+    const claimedGoals = ((loyaltyResult.data ?? []) as { rewards?: LoyaltyGoal }[])
+      .map((r) => r.rewards)
       .filter((g): g is LoyaltyGoal => Boolean(g));
     const allLoyaltyGoals = (allGoalsResult.data ?? []) as LoyaltyGoal[];
 
@@ -702,7 +702,7 @@ export async function fetchPlanChangeImpact(
     const loyaltyGrantsLostMonthly = claimedGoals.reduce((sum, g) => {
       if (g.category !== "loyalty") return sum;
       const required = Number(g.requirement_params?.min_tier_level ?? 1);
-      return required > targetTier ? sum + Number(g.token_reward || 0) : sum;
+      return required > targetTier ? sum + Number(g.token_amount || 0) : sum;
     }, 0);
 
     const rolloverTokens = Number(balanceRow?.rollover_tokens ?? 0);

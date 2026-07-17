@@ -479,7 +479,7 @@ export default function AchievementsPage() {
         );
         const { data: profiles } = await supabase
           .from("gravelens_user_profiles")
-          .select("user_id, display_name, show_username, explorer_xp, explorer_rank, public_grave_count")
+          .select("user_id, display_name, show_username, explorer_xp, explorer_rank, public_scan_count")
           .in("user_id", friendIds);
         setFriends(
           (profiles ?? []).map((p: {
@@ -488,7 +488,7 @@ export default function AchievementsPage() {
             show_username: boolean | null;
             explorer_xp: number | null;
             explorer_rank: number | null;
-            public_grave_count: number | null;
+            public_scan_count: number | null;
           }) => ({
             userId: p.user_id,
             displayName: p.display_name ?? undefined,
@@ -497,7 +497,7 @@ export default function AchievementsPage() {
             explorerXp: p.explorer_xp ?? 0,
             explorerRank: p.explorer_rank ?? 1,
             graveCount: 0,
-            publicGraveCount: p.public_grave_count ?? 0,
+            publicGraveCount: p.public_scan_count ?? 0,
             joinedAt: "",
           }))
         );
@@ -517,7 +517,7 @@ export default function AchievementsPage() {
       // discoverable. Same-named people are disambiguated by rank + graves shared.
       const { data } = await supabase
         .from("gravelens_user_profiles")
-        .select("user_id, display_name, show_username, explorer_xp, explorer_rank, public_grave_count")
+        .select("user_id, display_name, show_username, explorer_xp, explorer_rank, public_scan_count")
         .eq("show_username", true)
         .ilike("display_name", `%${query}%`)
         .limit(10);
@@ -527,7 +527,7 @@ export default function AchievementsPage() {
         show_username: boolean | null;
         explorer_xp: number | null;
         explorer_rank: number | null;
-        public_grave_count: number | null;
+        public_scan_count: number | null;
       };
       const rows = ((data ?? []) as SearchRow[]).filter((d) => d.user_id !== user?.id);
       if (rows.length === 0) { setFriendSearchResult("notfound"); return; }
@@ -540,7 +540,7 @@ export default function AchievementsPage() {
           explorerXp: d.explorer_xp ?? 0,
           explorerRank: d.explorer_rank ?? 1,
           graveCount: 0,
-          publicGraveCount: d.public_grave_count ?? 0,
+          publicGraveCount: d.public_scan_count ?? 0,
           joinedAt: "",
         }))
       );

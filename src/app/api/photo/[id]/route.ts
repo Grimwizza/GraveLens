@@ -25,7 +25,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   // Look up the grave to determine ownership / visibility.
   const { data: grave } = await supabase
-    .from("gravelens_graves")
+    .from("gravelens_scans")
     .select("user_id, is_public")
     .eq("id", graveId)
     .maybeSingle();
