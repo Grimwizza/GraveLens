@@ -379,6 +379,8 @@ export interface GraveRecord {
   reviewedAt?: number;
   /** Optional note shown to community members on the map. */
   communityNote?: string;
+  /** Created from the /research page (no photo scanned) — renders a placeholder + "Research" badge. */
+  researchOnly?: boolean;
 }
 
 // ── Community / social types ──────────────────────────────────────────────────

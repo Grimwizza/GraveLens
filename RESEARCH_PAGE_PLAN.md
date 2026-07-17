@@ -42,7 +42,7 @@ ResultPage.tsx (~5000 lines) defines the section cards inline. Extract into `src
 - Auth: page requires session for lookup — reuse the `authRequired`/sign-in card pattern from ResultPage on 401.
 **Gate:** manual search for a known name returns real data signed-in. Commit.
 
-### Step 3 — Add to Archive ⬜
+### Step 3 — Add to Archive ✅
 - Button on results (manual mode only): builds a `GraveRecord`:
   - `id: "research-" + Date.now() + rand`, `photoDataUrl`: inline SVG data-URL placeholder (stone-800 tile, 🔎 book/stone glyph, gold border — generate once as a constant), same for `thumbnailDataUrl`.
   - `extracted`: from form (name/first/last/years; `source: "claude"`? No — add nothing misleading: keep `source` union; safest is `source: "tesseract"`?? Neither is true. **Add `"manual"` to the `ExtractedGraveData.source` union** and handle anywhere source is displayed), `confidence: "high"` (human-entered), `reviewedAt: Date.now()`.
@@ -60,14 +60,14 @@ ResultPage.tsx (~5000 lines) defines the section cards inline. Extract into `src
 - Records with attached research show it in the summary card counts.
 **Gate:** record page dramatically shorter; research reachable in one tap; attach round-trips. Commit.
 
-### Step 5 — Entry points + prefill buttons ⬜
+### Step 5 — Entry points + prefill buttons ✅
 - Home page: "Research a name" secondary card near the dropzone → /research. (Home = `src/app/page.tsx` → CapturePage component; add alongside upload UI, match gold/stone styling.)
 - Archive header: search-adjacent "🔎 Research" button → /research.
 - FamilyConnectionHints: local + community entries get a small "Research →" action → `/research?firstName=&lastName=&birthYear=&deathYear=&state=` (community entries parse identity key or carry fields — `BurialIndexRelative` already has name/years; split name on last space).
 - Multi-person pills (optional, if time): same prefill link per person.
 **Gate:** all entry points navigate with correct prefill. Commit.
 
-### Step 6 — Verify + docs ⬜
+### Step 6 — Verify + docs ⬜ (ONLY REMAINING STEP)
 - Signed-in live pass: manual search (cache miss → sources fire → cache write confirmed by immediate re-search returning `cachedResearch: true`), add-to-archive, record-mode attach, relative-card prefill.
 - Update this checklist, RESEARCH_V2_ARCHITECTURE.md (research page = the Tier 2 unified panel realized), handoff.md.
 
@@ -85,3 +85,6 @@ ResultPage.tsx (~5000 lines) defines the section cards inline. Extract into `src
 - 2026-07-17: Step 4 done — ResearchSummaryCard (cards.tsx) replaces ALL 12+ inline research sections on the record page (SourceStatus, WikiTree, SSDI, census, household, immigration ×2, NARA items, 3× RecordsCard, FamilySearch hints, checklist, ExternalLinks, ResearchLinks). Kept on record: Military/Conflict cards, story, cultural, local history, FamilyConnectionHints, tags/share/FindAGrave. Dead per-section refresh handlers removed (~100 lines; /api/newspapers|ssdi|familysearch|nara routes still exist for future use). Record mode on /research: "Researching from your archive: <name>" banner + full prefill VERIFIED live; "Attach findings to record" merges lookup response into grave.research preserving story/narrative/cultural fields, saves to IDB. VERIFIED live: slim record page shows "🌳 1 WikiTree · 📰 1 newspapers · 🔗 1 search links · 1 high-confidence match · Open →".
 - NOTE (environment, not app): preview browser started 7/17 with a fresh profile → local IDB empty + signed out. Cloud is intact (259 graves, 4 users; burial_index at 22 rows and growing). Only data-wipe path in code is the explicit Settings "Clear data" button.
 - REMAINING: Step 3 (add-to-archive from manual search — SVG placeholder constant, researchOnly flag, archive "Research" chip), Step 5 (Home card + Archive header button + "Research →" prefill links on FamilyConnectionHints entries), Step 6 (signed-in end-to-end verify: attach round-trip, add-to-archive, cache-hit re-search).
+
+- 2026-07-17: Steps 3+5 done. Add-to-Archive: photo-less GraveRecord (researchOnly flag, RESEARCH_PLACEHOLDER_IMAGE SVG in src/lib/researchPlaceholder.ts, source:"manual", reviewedAt set); cloudSync.uploadPhoto passes SVG data-URLs through as-is. Entry points live: Home "Research a name" link, Archive header magnifier button, community-relative rows now link to /research prefilled from their identity keys. Archive list shows gold RESEARCH chip + placeholder (VERIFIED live via seeded record; renders correctly beside scanned records).
+- REMAINING (Step 6, needs a signed-in session): (1) full manual search → real results → tap "Add to Archive" → record appears (the record shape it creates is identical to the verified seed); (2) record-mode "Attach findings" round-trip; (3) immediate re-search returning cachedResearch:true; (4) tile/cover archive views could also get the RESEARCH chip (list view done); (5) consider salvaging SSDI/census cards on /research when those sources return records again.

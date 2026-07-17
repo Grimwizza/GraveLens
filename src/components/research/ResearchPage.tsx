@@ -31,7 +31,8 @@ import { createClient } from "@/lib/supabase/browser";
 import { searchBurialIndexPeople, type BurialIndexPerson } from "@/lib/community";
 import { getGrave, saveGrave } from "@/lib/storage";
 import { STATE_ABBREV } from "@/lib/stateUtils";
-import type { ExtractedGraveData, GeoLocation, ResearchData } from "@/types";
+import { RESEARCH_PLACEHOLDER_IMAGE } from "@/lib/researchPlaceholder";
+import type { ExtractedGraveData, GeoLocation, GraveRecord, ResearchData } from "@/types";
 
 // ── Recent searches (local only) ─────────────────────────────────────────────
 
@@ -90,6 +91,7 @@ export default function ResearchPage() {
   const [research, setResearch] = useState<ResearchData | null>(null);
   const [searched, setSearched] = useState(false);
   const [attachState, setAttachState] = useState<"idle" | "saving" | "done">("idle");
+  const [addedId, setAddedId] = useState<string | null>(null);
 
   useEffect(() => { setRecent(loadRecent()); }, []);
 
@@ -125,6 +127,7 @@ export default function ResearchPage() {
     setResearch(null);
     setIndexHits([]);
     setAttachState("idle");
+    setAddedId(null);
 
     const byNum = /^\d{4}$/.test(by) ? parseInt(by, 10) : null;
     const dyNum = /^\d{4}$/.test(dy) ? parseInt(dy, 10) : null;
@@ -194,6 +197,26 @@ export default function ResearchPage() {
       setAttachState("idle");
     }
   }, [graveId, research, attachState]);
+
+  // Manual mode: save this person + findings as a photo-less archive record.
+  const addToArchive = useCallback(async () => {
+    if (!research || addedId) return;
+    const record: GraveRecord = {
+      id: `research-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      timestamp: Date.now(),
+      photoDataUrl: RESEARCH_PLACEHOLDER_IMAGE,
+      thumbnailDataUrl: RESEARCH_PLACEHOLDER_IMAGE,
+      location: { lat: 0, lng: 0, state: stateName || undefined, city: city.trim() || undefined },
+      extracted: { ...pseudoExtracted },
+      research,
+      tags: [],
+      reviewedAt: Date.now(), // human-entered — skip the Review tab
+      researchOnly: true,
+    };
+    await saveGrave(record);
+    setAddedId(record.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [research, addedId, stateName, city, firstName, lastName, birthYear, deathYear]);
 
   // Pseudo-record for the deep-link card builders (no photo, no GPS)
   const pseudoExtracted: ExtractedGraveData = {
@@ -345,6 +368,27 @@ export default function ResearchPage() {
           <>
             {fromCache && (
               <p className="mt-2 text-[0.7rem] text-stone-500">⚡ Served instantly from the shared research cache — no external calls.</p>
+            )}
+
+            {/* Manual mode: archive this person + findings as a photo-less record */}
+            {!graveId && research && !searching && pseudoExtracted.name && (
+              addedId ? (
+                <Link
+                  href={`/result/${addedId}`}
+                  className="mt-4 w-full h-11 rounded-xl text-sm font-semibold flex items-center justify-center"
+                  style={{ background: "rgba(122,184,122,0.15)", color: "#7ab87a", border: "1px solid rgba(122,184,122,0.35)" }}
+                >
+                  ✓ Added to Archive — view record →
+                </Link>
+              ) : (
+                <button
+                  onClick={addToArchive}
+                  className="mt-4 w-full h-11 rounded-xl text-sm font-semibold text-[#1a1917] transition-all active:scale-[0.98]"
+                  style={{ background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))" }}
+                >
+                  Add {pseudoExtracted.name} to Archive
+                </button>
+              )
             )}
 
             {/* Record mode: save these findings back onto the archive record */}

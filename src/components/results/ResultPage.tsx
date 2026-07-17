@@ -3860,21 +3860,34 @@ function FamilyConnectionHints({
           <ul className="space-y-1.5">
             {communityRelatives.map((r, i) => {
               const dates = [r.birthYear, r.deathYear].filter(Boolean).map(String).join(" – ");
+              // identityKey format: given|surname|birthYear|deathYear|state —
+              // exact fields for a pre-filled /research launch.
+              const [kGiven, kSurname, kBirth, kDeath, kState] = r.identityKey.split("|");
+              const researchUrl = `/research?${new URLSearchParams({
+                ...(kGiven ? { firstName: kGiven } : {}),
+                lastName: kSurname ?? "",
+                ...(kBirth ? { birthYear: kBirth } : {}),
+                ...(kDeath ? { deathYear: kDeath } : {}),
+                ...(kState ? { state: kState.replace(/\b\w/g, (c) => c.toUpperCase()) } : {}),
+              })}`;
               return (
-                <li
-                  key={i}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-stone-800/60 border border-stone-700/60"
-                >
-                  <span className="shrink-0 w-8 h-8 rounded-lg bg-stone-700/50 flex items-center justify-center text-stone-400 text-xs" aria-hidden>
-                    🪦
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-stone-300 text-sm font-medium font-serif truncate">{r.name}</p>
-                    {dates && <p className="text-stone-500 text-xs mt-0.5">{dates}</p>}
-                  </div>
-                  <span className="text-[0.6rem] shrink-0 px-1.5 py-0.5 rounded uppercase tracking-wide text-stone-500 bg-stone-700/40">
-                    Community
-                  </span>
+                <li key={i}>
+                  <Link
+                    href={researchUrl}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-stone-800/60 border border-stone-700/60 active:bg-stone-750 transition-colors"
+                  >
+                    <span className="shrink-0 w-8 h-8 rounded-lg bg-stone-700/50 flex items-center justify-center text-stone-400 text-xs" aria-hidden>
+                      🪦
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-stone-300 text-sm font-medium font-serif truncate">{r.name}</p>
+                      {dates && <p className="text-stone-500 text-xs mt-0.5">{dates}</p>}
+                    </div>
+                    <span className="text-[0.6rem] shrink-0 px-1.5 py-0.5 rounded uppercase tracking-wide text-stone-500 bg-stone-700/40">
+                      Community
+                    </span>
+                    <span className="text-xs shrink-0" style={{ color: "var(--t-gold-500)" }}>Research →</span>
+                  </Link>
                 </li>
               );
             })}

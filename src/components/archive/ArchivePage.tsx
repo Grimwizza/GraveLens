@@ -1305,6 +1305,17 @@ export default function ArchivePage() {
                 <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-gold-400 rounded-full shadow-[0_0_4px_rgba(201,168,76,0.8)]" />
               )}
             </button>
+            <Link
+              href="/research"
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5 transition-all text-stone-500 hover:text-stone-300"
+              aria-label="Research a name"
+              title="Research a name"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                <line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" />
+              </svg>
+            </Link>
             <button
               onClick={handleExportCsv}
               className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5 transition-all text-stone-500 hover:text-stone-300"
@@ -2594,6 +2605,11 @@ function GraveList({
                     {grave.extracted.people && grave.extracted.people.length > 1 && (
                       <span className="shrink-0 px-1.5 py-0.5 rounded text-[0.62rem] font-semibold bg-stone-700/80 text-stone-300 font-sans">
                         +{grave.extracted.people.length - 1} person
+                      </span>
+                    )}
+                    {grave.researchOnly && (
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[0.62rem] font-semibold font-sans uppercase tracking-wide" style={{ background: "rgba(201,168,76,0.14)", color: "var(--t-gold-500)" }}>
+                        Research
                       </span>
                     )}
                   </p>

@@ -39,6 +39,10 @@ export async function uploadPhoto(
 ): Promise<string> {
   if (dataUrl.startsWith("https://")) return dataUrl;
 
+  // Research-only records use a tiny inline SVG placeholder — store it as-is
+  // (a few hundred bytes) rather than uploading a storage object.
+  if (dataUrl.startsWith("data:image/svg+xml")) return dataUrl;
+
   // Strip the "data:image/jpeg;base64," prefix
   const base64 = dataUrl.split(",")[1];
   if (!base64) throw new Error("Invalid data URL");

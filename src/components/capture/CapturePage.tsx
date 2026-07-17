@@ -666,6 +666,16 @@ function IdleState({
           Upload from Library
         </button>
 
+        <Link
+          href="/research"
+          className="flex items-center justify-center gap-3 w-full h-12 rounded-2xl border border-stone-700 text-stone-400 font-medium text-base transition-all active:scale-[0.97]"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          Research a name — no photo needed
+        </Link>
+
         <QueueLink />
       </div>
     </div>
