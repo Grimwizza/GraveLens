@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "web-performance-optimization",
+  "owner": "secondsky",
+  "repo": "claude-skills",
+  "path": "plugins/web-performance-optimization/skills/web-performance-optimization",
+  "branch": "main",
+  "sha": "253f2e2673291704661031340e0e5ad1005246b5",
+  "source": "manual"
+}
