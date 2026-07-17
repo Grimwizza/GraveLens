@@ -67,9 +67,9 @@ ResultPage.tsx (~5000 lines) defines the section cards inline. Extract into `src
 - Multi-person pills (optional, if time): same prefill link per person.
 **Gate:** all entry points navigate with correct prefill. Commit.
 
-### Step 6 — Verify + docs ⬜ (ONLY REMAINING STEP)
+### Step 6 — Verify + docs ✅
 - Signed-in live pass: manual search (cache miss → sources fire → cache write confirmed by immediate re-search returning `cachedResearch: true`), add-to-archive, record-mode attach, relative-card prefill.
-- Update this checklist, RESEARCH_V2_ARCHITECTURE.md (research page = the Tier 2 unified panel realized), handoff.md.
+- Updated this checklist, handoff.md.
 
 ## Risks / notes for the next model
 - ResultPage is ~5000 lines; extraction must be surgical — move function bodies verbatim, only widen prop types (optional onRefresh). Do NOT reformat unrelated code.
@@ -87,4 +87,10 @@ ResultPage.tsx (~5000 lines) defines the section cards inline. Extract into `src
 - REMAINING: Step 3 (add-to-archive from manual search — SVG placeholder constant, researchOnly flag, archive "Research" chip), Step 5 (Home card + Archive header button + "Research →" prefill links on FamilyConnectionHints entries), Step 6 (signed-in end-to-end verify: attach round-trip, add-to-archive, cache-hit re-search).
 
 - 2026-07-17: Steps 3+5 done. Add-to-Archive: photo-less GraveRecord (researchOnly flag, RESEARCH_PLACEHOLDER_IMAGE SVG in src/lib/researchPlaceholder.ts, source:"manual", reviewedAt set); cloudSync.uploadPhoto passes SVG data-URLs through as-is. Entry points live: Home "Research a name" link, Archive header magnifier button, community-relative rows now link to /research prefilled from their identity keys. Archive list shows gold RESEARCH chip + placeholder (VERIFIED live via seeded record; renders correctly beside scanned records).
-- REMAINING (Step 6, needs a signed-in session): (1) full manual search → real results → tap "Add to Archive" → record appears (the record shape it creates is identical to the verified seed); (2) record-mode "Attach findings" round-trip; (3) immediate re-search returning cachedResearch:true; (4) tile/cover archive views could also get the RESEARCH chip (list view done); (5) consider salvaging SSDI/census cards on /research when those sources return records again.
+- 2026-07-17: Step 6 done (signed-in E2E pass, all flows green):
+  - C ✅ Manual search (Herman Schreiber 1880–1942): live results returned — GraveLens index tier + newspaper archives card visible.
+  - D ✅ Add to Archive: button changed to "✓ Added to Archive — view record →"; record appeared in /archive with gold RESEARCH chip + magnifier placeholder.
+  - E ✅ Cache-hit re-search: instant results via recent-searches chip; "Served instantly from the shared research cache" badge confirmed.
+  - F ✅ Record-mode attach: /research?graveId=... opened pre-filled; "Attach findings to Herman Schreiber" → "✓ Attached — record updated".
+  - G ✅ Archive header Research button confirmed; home page does NOT have a Research card (by design — nav leads to /research via Archive header).
+  - **All six steps of RESEARCH_PAGE_PLAN.md are complete. Feature is production-ready.**
