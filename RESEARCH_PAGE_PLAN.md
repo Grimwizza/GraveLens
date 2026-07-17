@@ -23,7 +23,7 @@ Written *before* implementation so any model can resume at any checkpoint. Updat
 
 ## Build order (each step = green build + commit, resumable)
 
-### Step 1 — Extract shared research cards ⬜
+### Step 1 — Extract shared research cards ✅ (commit: refactor: extract research-section cards)
 ResultPage.tsx (~5000 lines) defines the section cards inline. Extract into `src/components/research/cards.tsx` (single file, named exports), re-import in ResultPage (delete local copies):
 - `SectionHeader`, `CONFIDENCE_STYLE`
 - `WikiTreeCard`, `SSDICard`, `HistoricalCensusCard`, `ImmigrationCard` (+ `ImmigrationJourneyCard` if trivially portable), newspapers card, `NaraItemCard`, `ResearchLinksCard` (P3 deep-link card near bottom of ResultPage)
@@ -31,7 +31,7 @@ ResultPage.tsx (~5000 lines) defines the section cards inline. Extract into `src
 `SourceStatusCard` is already its own file. `FamilyConnectionHints` stays in ResultPage for now (IDB-coupled) but gets "Research this person" links (Step 5).
 **Gate:** tsc/build/tests green, ResultPage renders unchanged. Commit.
 
-### Step 2 — /research page core ⬜
+### Step 2 — /research page core ✅
 - `src/app/research/page.tsx` (thin) + `src/components/research/ResearchPage.tsx` ("use client").
 - Form: First name, Last name, Birth year, Death year, State (optional select — reuse the state list from stateUtils/researchLinks), City (optional text).
 - URL params: `?graveId=` (record mode — load via `getGrave`, prefill + attach bar) OR `?firstName=&lastName=&birthYear=&deathYear=&state=` (prefill mode from relative cards).
@@ -79,4 +79,7 @@ ResultPage.tsx (~5000 lines) defines the section cards inline. Extract into `src
 - Keys still unset in .env.local: `NARA_API_KEY`, `FAMILYSEARCH_APP_KEY` — both features degrade gracefully without them.
 
 ## Status log
-- 2026-07-17: Plan written. Steps 1–6 pending.
+- 2026-07-17: Plan written.
+- 2026-07-17: Step 1 done — cards.tsx extracted (967 lines), ResultPage 5404→4450, renders unchanged, gates green.
+- 2026-07-17: Step 2 done — /research live: form, URL prefill (verified: ?firstName=Nancy&lastName=Rebar&deathYear=1956&state=Minnesota populates), recent-searches chips, burial-index instant tier (searchBurialIndexPeople in community.ts), /api/lookup wiring with cachedResearch badge, signed-out 401 → in-page sign-in card (verified live). `source` union widened with "manual". REMAINING VERIFICATION: signed-in data render through this page (session expired mid-test; underlying route verified with real data separately).
+- NEXT: Step 4 (ResultPage slim-down + attach — Ben's headline request), then Step 3 (add-to-archive), Step 5 (entry points/prefill buttons), Step 6 (verify+docs).

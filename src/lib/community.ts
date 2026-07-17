@@ -487,6 +487,69 @@ export async function upsertBurialIndex(
   if (error) console.error("[burial-index] upsert failed:", error.message);
 }
 
+export interface BurialIndexPerson {
+  identityKey: string;
+  name: string;
+  birthYear?: number;
+  deathYear?: number;
+  birthDate?: string;
+  deathDate?: string;
+  cemetery?: string;
+  city?: string;
+  state?: string;
+  /** How many community scans contributed this person */
+  scanCount: number;
+}
+
+/**
+ * Person search over the pooled burial index — the "instant tier" of the
+ * /research page. Matches surname (+ optional given-name prefix), narrows by
+ * year windows and state when provided. Runs before any external call: a hit
+ * means someone already scanned/researched this person and the shared
+ * research cache will answer the full lookup for free.
+ */
+export async function searchBurialIndexPeople(
+  supabase: SupabaseClient,
+  opts: {
+    lastName: string;
+    firstName?: string;
+    birthYear?: number | null;
+    deathYear?: number | null;
+    state?: string;
+  }
+): Promise<BurialIndexPerson[]> {
+  const lastName = opts.lastName?.trim();
+  if (!lastName || lastName.length < 2) return [];
+
+  let query = supabase
+    .from("burial_index")
+    .select("identity_key, given_name, surname, birth_year, death_year, birth_date, death_date, cemetery, city, state, scan_count")
+    .ilike("surname", lastName)
+    .limit(20);
+
+  if (opts.firstName?.trim()) query = query.ilike("given_name", `${opts.firstName.trim()}%`);
+  // Year windows exclude null-year rows by design — precision over recall here.
+  if (opts.birthYear) query = query.gte("birth_year", opts.birthYear - 2).lte("birth_year", opts.birthYear + 2);
+  if (opts.deathYear) query = query.gte("death_year", opts.deathYear - 2).lte("death_year", opts.deathYear + 2);
+  if (opts.state?.trim()) query = query.ilike("state", opts.state.trim());
+
+  const { data, error } = await query;
+  if (error || !data) return [];
+
+  return data.map((row) => ({
+    identityKey: row.identity_key,
+    name: [row.given_name, row.surname].filter(Boolean).join(" ").trim() || row.surname,
+    birthYear: row.birth_year ?? undefined,
+    deathYear: row.death_year ?? undefined,
+    birthDate: row.birth_date ?? undefined,
+    deathDate: row.death_date ?? undefined,
+    cemetery: row.cemetery ?? undefined,
+    city: row.city ?? undefined,
+    state: row.state ?? undefined,
+    scanCount: row.scan_count ?? 1,
+  })).sort((a, b) => (a.deathYear ?? 9999) - (b.deathYear ?? 9999));
+}
+
 export interface BurialIndexRelative {
   /** Pooled identity key — stable dedup handle against local records */
   identityKey: string;

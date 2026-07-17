@@ -25,7 +25,8 @@ export interface ExtractedGraveData {
   material: string;
   condition: string;
   confidence: "high" | "medium" | "low";
-  source: "claude" | "tesseract";
+  /** "manual" = created from the /research page, no photo scanned */
+  source: "claude" | "tesseract" | "manual";
   analysisModel?: string;
   /** Populated when the marker commemorates more than one person. */
   people?: PersonData[];
