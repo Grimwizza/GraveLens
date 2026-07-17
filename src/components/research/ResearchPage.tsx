@@ -29,7 +29,7 @@ import {
 } from "@/components/research/cards";
 import { createClient } from "@/lib/supabase/browser";
 import { searchBurialIndexPeople, type BurialIndexPerson } from "@/lib/community";
-import { getGrave } from "@/lib/storage";
+import { getGrave, saveGrave } from "@/lib/storage";
 import { STATE_ABBREV } from "@/lib/stateUtils";
 import type { ExtractedGraveData, GeoLocation, ResearchData } from "@/types";
 
@@ -89,6 +89,7 @@ export default function ResearchPage() {
   const [indexHits, setIndexHits] = useState<BurialIndexPerson[]>([]);
   const [research, setResearch] = useState<ResearchData | null>(null);
   const [searched, setSearched] = useState(false);
+  const [attachState, setAttachState] = useState<"idle" | "saving" | "done">("idle");
 
   useEffect(() => { setRecent(loadRecent()); }, []);
 
@@ -123,6 +124,7 @@ export default function ResearchPage() {
     setFromCache(false);
     setResearch(null);
     setIndexHits([]);
+    setAttachState("idle");
 
     const byNum = /^\d{4}$/.test(by) ? parseInt(by, 10) : null;
     const dyNum = /^\d{4}$/.test(dy) ? parseInt(dy, 10) : null;
@@ -161,6 +163,37 @@ export default function ResearchPage() {
       setSearching(false);
     }
   }, [firstName, lastName, birthYear, deathYear, stateName, city]);
+
+  // Record mode: merge fresh findings into the originating archive record,
+  // preserving user-facing content the lookup response doesn't carry.
+  const attachToRecord = useCallback(async () => {
+    if (!graveId || !research || attachState === "saving") return;
+    setAttachState("saving");
+    try {
+      const existing = await getGrave(graveId);
+      if (!existing) return;
+      const merged = {
+        ...existing,
+        research: {
+          ...existing.research,
+          ...research,
+          storyScript:     existing.research?.storyScript,
+          storyScripts:    existing.research?.storyScripts,
+          narrative:       existing.research?.narrative,
+          narratives:      existing.research?.narratives,
+          epitaphSource:   existing.research?.epitaphSource,
+          epitaphSources:  existing.research?.epitaphSources,
+          epitaphMeaning:  existing.research?.epitaphMeaning,
+          epitaphMeanings: existing.research?.epitaphMeanings,
+          culturalContext: existing.research?.culturalContext,
+        },
+      };
+      await saveGrave(merged);
+      setAttachState("done");
+    } catch {
+      setAttachState("idle");
+    }
+  }, [graveId, research, attachState]);
 
   // Pseudo-record for the deep-link card builders (no photo, no GPS)
   const pseudoExtracted: ExtractedGraveData = {
@@ -312,6 +345,24 @@ export default function ResearchPage() {
           <>
             {fromCache && (
               <p className="mt-2 text-[0.7rem] text-stone-500">⚡ Served instantly from the shared research cache — no external calls.</p>
+            )}
+
+            {/* Record mode: save these findings back onto the archive record */}
+            {graveId && research && !searching && (
+              <button
+                onClick={attachToRecord}
+                disabled={attachState !== "idle"}
+                className="mt-4 w-full h-11 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-70"
+                style={
+                  attachState === "done"
+                    ? { background: "rgba(122,184,122,0.15)", color: "#7ab87a", border: "1px solid rgba(122,184,122,0.35)" }
+                    : { background: "linear-gradient(135deg, var(--t-gold-500), var(--t-gold-400))", color: "#1a1917" }
+                }
+              >
+                {attachState === "done" ? "✓ Attached — record updated"
+                  : attachState === "saving" ? "Attaching…"
+                  : `Attach findings to ${sourceRecordName ?? "record"}`}
+              </button>
             )}
 
             {!searching && <SourceStatusCard sourceStatus={research?.sourceStatus} />}

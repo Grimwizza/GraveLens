@@ -8,8 +8,84 @@
  * props, optional onRefresh handlers. See RESEARCH_PAGE_PLAN.md Step 1.
  */
 
+import Link from "next/link";
 import type { ResearchLink } from "@/lib/researchLinks";
 import type { ExtractedGraveData, GeoLocation, ResearchData } from "@/types";
+
+// ── Research summary (record page) ───────────────────────────────────────────
+// The record page's single entry into research: per-source hit counts from
+// the saved research, one tap to the full /research view for this person.
+// Replaces the dozen inline research sections (RESEARCH_PAGE_PLAN.md Step 4).
+
+export function ResearchSummaryCard({
+  research,
+  graveId,
+  loading,
+}: {
+  research: ResearchData | null | undefined;
+  graveId: string;
+  loading?: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="py-5 animate-fade-up">
+        <SectionHeader icon="🔎" title="Research" />
+        <div className="mt-3 p-4 rounded-xl bg-stone-800/40 border border-stone-700/50">
+          <div className="h-4 shimmer rounded w-2/3 mb-2" />
+          <div className="h-3 shimmer rounded w-1/2" />
+        </div>
+      </div>
+    );
+  }
+
+  const highWikiTree = research?.wikitree?.filter((w) => w.confidence === "high").length ?? 0;
+  const counts = [
+    { icon: "🌳", label: "WikiTree", n: research?.wikitree?.length ?? 0 },
+    { icon: "📰", label: "newspapers", n: research?.newspapers?.length ?? 0 },
+    { icon: "🏛", label: "archives", n: (research?.naraRecords?.length ?? 0) + (research?.naraItemRecords?.length ?? 0) },
+    { icon: "📜", label: "land patents", n: research?.landRecords?.length ?? 0 },
+    { icon: "🗂", label: "collections", n: research?.familySearchHints?.length ?? 0 },
+    { icon: "🔗", label: "search links", n: research?.researchLinks?.length ?? 0 },
+  ].filter((c) => c.n > 0);
+
+  return (
+    <div className="py-5 animate-fade-up">
+      <SectionHeader icon="🔎" title="Research" />
+      <Link
+        href={`/research?graveId=${encodeURIComponent(graveId)}`}
+        className="mt-3 flex items-center gap-3 p-4 rounded-xl bg-stone-800 border border-stone-700 active:bg-stone-750 transition-colors"
+      >
+        <div className="flex-1 min-w-0">
+          {counts.length > 0 ? (
+            <>
+              <p className="text-stone-200 text-sm font-medium leading-snug">
+                {counts.map((c) => `${c.icon} ${c.n} ${c.label}`).join(" · ")}
+              </p>
+              {highWikiTree > 0 && (
+                <p className="text-xs mt-1" style={{ color: "#7ab87a" }}>
+                  {highWikiTree} high-confidence profile match{highWikiTree > 1 ? "es" : ""}
+                </p>
+              )}
+              <p className="text-stone-500 text-xs mt-1">
+                Records, sources, and pre-filled database searches for this person.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-stone-200 text-sm font-medium">Research this person</p>
+              <p className="text-stone-500 text-xs mt-1">
+                Search WikiTree, historic newspapers, national archives, and more — free sources, no photo needed.
+              </p>
+            </>
+          )}
+        </div>
+        <span className="shrink-0 text-sm font-semibold" style={{ color: "var(--t-gold-500)" }}>
+          {counts.length > 0 ? "Open →" : "Run →"}
+        </span>
+      </Link>
+    </div>
+  );
+}
 
 export function RecordsCard({
   title,

@@ -17,14 +17,7 @@ import { shareGrave, buildEmailShareUrl, buildSmsShareUrl } from "@/lib/share";
 import { interpretSymbols } from "@/lib/apis/symbols";
 import { getLandmarkEvents } from "@/lib/apis/wikipedia";
 import PhotoEditorModal from "@/components/results/PhotoEditorModal";
-import SourceStatusCard from "@/components/results/SourceStatusCard";
-import {
-  SectionHeader,
-  RecordsCard, FamilySearchCard, WikiTreeCard, SSDICard,
-  HistoricalCensusCard, ImmigrationCard, NaraItemCard, ResearchChecklistCard,
-  HouseholdCard, ImmigrationJourneyCard, ResearchLinksCard, ExternalLinksCard,
-  CONFIDENCE_INFO,
-} from "@/components/research/cards";
+import { SectionHeader, ResearchSummaryCard, CONFIDENCE_INFO } from "@/components/research/cards";
 
 import ProfileBadge from "@/components/auth/ProfileBadge";
 import DesktopNav from "@/components/layout/DesktopNav";
@@ -109,7 +102,6 @@ export default function ResultPage({ id }: { id: string }) {
   const [refreshing, setRefreshing] = useState(false);
   const refreshingRef = useRef(false);
   // Tracks which individual section is mid-refresh (null = none)
-  const [sectionRefreshing, setSectionRefreshing] = useState<string | null>(null);
   // Abort controller for the initial fresh-scan research fetch.
   // Cancelled the moment a user-triggered refresh starts so the old-name
   // response can never overwrite a corrected refresh that resolves first.
@@ -886,109 +878,6 @@ export default function ResultPage({ id }: { id: string }) {
     }
   }, [pending, extractedOverride, currentLocation, syncGraveToCloud]);
 
-  // ── Per-section refresh handlers ────────────────────────────────────────────
-  // Each calls a lightweight API route that wraps only that section's lookup.
-  // Uses sectionRefreshing key to prevent concurrent section refreshes.
-
-  const handleRefreshNewspapers = useCallback(async () => {
-    if (!pending || sectionRefreshing) return;
-    const eff = { ...pending.extracted, ...(extractedOverride ?? {}) };
-    const people = eff.people ?? [];
-    const person = selectedPersonIdx > 0 && people[selectedPersonIdx]
-      ? { ...eff, ...people[selectedPersonIdx] } : eff;
-    setSectionRefreshing("newspapers");
-    try {
-      const res = await fetch("/api/newspapers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: person.name, deathYear: person.deathYear, state: currentLocation?.state }),
-      });
-      if (res.ok) {
-        const { newspapers, sourceStatus } = await res.json();
-        setResearch((prev) => ({
-          ...(prev ?? {}),
-          newspapers,
-          sourceStatus: { ...(prev?.sourceStatus ?? {}), ...(sourceStatus ?? {}) },
-        }));
-        const existing = await getGrave(pending.id);
-        if (existing) await saveGrave({ ...existing, research: { ...existing.research, newspapers } });
-      }
-    } catch { /* non-fatal */ } finally { setSectionRefreshing(null); }
-  }, [pending, sectionRefreshing, extractedOverride, selectedPersonIdx, currentLocation]);
-
-  const handleRefreshNara = useCallback(async () => {
-    if (!pending || sectionRefreshing) return;
-    const eff = { ...pending.extracted, ...(extractedOverride ?? {}) };
-    const people = eff.people ?? [];
-    const person = selectedPersonIdx > 0 && people[selectedPersonIdx]
-      ? { ...eff, ...people[selectedPersonIdx] } : eff;
-    setSectionRefreshing("nara");
-    try {
-      const res = await fetch("/api/nara", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: person.name, birthYear: person.birthYear, deathYear: person.deathYear }),
-      });
-      if (res.ok) {
-        const { naraRecords } = await res.json();
-        setResearch((prev) => ({ ...(prev ?? {}), naraRecords }));
-        const existing = await getGrave(pending.id);
-        if (existing) await saveGrave({ ...existing, research: { ...existing.research, naraRecords } });
-      }
-    } catch { /* non-fatal */ } finally { setSectionRefreshing(null); }
-  }, [pending, sectionRefreshing, extractedOverride, selectedPersonIdx]);
-
-  const handleRefreshFamilySearch = useCallback(async () => {
-    if (!pending || sectionRefreshing) return;
-    const eff = { ...pending.extracted, ...(extractedOverride ?? {}) };
-    const people = eff.people ?? [];
-    const person = selectedPersonIdx > 0 && people[selectedPersonIdx]
-      ? { ...eff, ...people[selectedPersonIdx] } : eff;
-    setSectionRefreshing("familysearch");
-    try {
-      const res = await fetch("/api/familysearch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firstName: person.firstName, lastName: person.lastName, birthYear: person.birthYear, deathYear: person.deathYear }),
-      });
-      if (res.ok) {
-        const { familySearchHints, sourceStatus } = await res.json();
-        setResearch((prev) => ({
-          ...(prev ?? {}),
-          familySearchHints,
-          sourceStatus: { ...(prev?.sourceStatus ?? {}), ...(sourceStatus ?? {}) },
-        }));
-        const existing = await getGrave(pending.id);
-        if (existing) await saveGrave({ ...existing, research: { ...existing.research, familySearchHints } });
-      }
-    } catch { /* non-fatal */ } finally { setSectionRefreshing(null); }
-  }, [pending, sectionRefreshing, extractedOverride, selectedPersonIdx]);
-
-  const handleRefreshSsdi = useCallback(async () => {
-    if (!pending || sectionRefreshing) return;
-    const eff = { ...pending.extracted, ...(extractedOverride ?? {}) };
-    const people = eff.people ?? [];
-    const person = selectedPersonIdx > 0 && people[selectedPersonIdx]
-      ? { ...eff, ...people[selectedPersonIdx] } : eff;
-    setSectionRefreshing("ssdi");
-    try {
-      const res = await fetch("/api/ssdi", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firstName: person.firstName, lastName: person.lastName, birthYear: person.birthYear, deathYear: person.deathYear }),
-      });
-      if (res.ok) {
-        const { ssdi, sourceStatus } = await res.json();
-        setResearch((prev) => ({
-          ...(prev ?? {}),
-          ssdi,
-          sourceStatus: { ...(prev?.sourceStatus ?? {}), ...(sourceStatus ?? {}) },
-        }));
-        const existing = await getGrave(pending.id);
-        if (existing) await saveGrave({ ...existing, research: { ...existing.research, ssdi } });
-      }
-    } catch { /* non-fatal */ } finally { setSectionRefreshing(null); }
-  }, [pending, sectionRefreshing, extractedOverride, selectedPersonIdx]);
 
   // ────────────────────────────────────────────────────────────────────────────
 
@@ -1632,133 +1521,15 @@ export default function ResultPage({ id }: { id: string }) {
             <ConflictWarningCard extracted={activeExtracted} research={research} />
           )}
 
-          {/* Sources that couldn't be searched inline — offer direct deep links */}
-          {!researchLoading && (
-            <SourceStatusCard sourceStatus={research?.sourceStatus} />
-          )}
-
-          {/* WikiTree — real inline profile data, scored by confidence */}
-          {(research?.wikitree?.length || researchLoading) ? (
-            <WikiTreeCard records={research?.wikitree ?? []} loading={researchLoading} />
-          ) : null}
-
-          {/* SSDI — death confirmation */}
-          {(research?.ssdi?.length || researchLoading) ? (
-            <SSDICard
-              records={research?.ssdi ?? []}
-              loading={researchLoading}
-              onRefresh={handleRefreshSsdi}
-              refreshing={sectionRefreshing === "ssdi"}
-            />
-          ) : null}
-
-          {/* Historical Census — household, occupation, birthplace */}
-          {(research?.historicalCensus?.length || researchLoading) ? (
-            <HistoricalCensusCard records={research?.historicalCensus ?? []} loading={researchLoading} />
-          ) : null}
-
-          {/* Household members from census */}
-          {research?.historicalCensus?.some((r) => r.household?.length) ? (
-            <HouseholdCard records={research.historicalCensus} />
-          ) : null}
-
-          {/* Immigration records */}
-          {(research?.immigration?.length || researchLoading) ? (
-            <ImmigrationCard records={research?.immigration ?? []} loading={researchLoading} />
-          ) : null}
-
-          {/* Immigration journey visual */}
-          {research?.immigration?.length ? (
-            <ImmigrationJourneyCard records={research.immigration} />
-          ) : null}
-
-          {/* Item-level military/enlistment records */}
-          {(research?.naraItemRecords?.length || researchLoading) ? (
-            <NaraItemCard
-              records={research?.naraItemRecords ?? []}
-              loading={researchLoading}
-              onRefresh={handleRefreshNara}
-              refreshing={sectionRefreshing === "nara"}
-            />
-          ) : null}
-
-          {/* Newspaper records */}
-          {(research?.newspapers?.length || researchLoading) ? (
-            <RecordsCard
-              title="Newspaper Archives"
-              icon="📰"
-              loading={researchLoading}
-              onRefresh={handleRefreshNewspapers}
-              refreshing={sectionRefreshing === "newspapers"}
-              items={research?.newspapers?.map((n) => ({
-                title: n.newspaper,
-                subtitle: n.date,
-                detail: n.snippet,
-                url: n.url,
-              }))}
-            />
-          ) : null}
-
-          {/* NARA records — only show standalone when there's no military section */}
-          {!research?.militaryContext && (research?.naraRecords?.length || researchLoading) ? (
-            <RecordsCard
-              title="National Archives"
-              icon="🏛"
-              loading={researchLoading}
-              onRefresh={handleRefreshNara}
-              refreshing={sectionRefreshing === "nara"}
-              items={research?.naraRecords?.map((r) => ({
-                title: r.title,
-                subtitle: r.recordGroup ? `Record Group ${r.recordGroup}` : "",
-                detail: r.description,
-                url: r.url,
-              }))}
-            />
-          ) : null}
-
-          {/* Land patents */}
-          {(research?.landRecords?.length || researchLoading) ? (
-            <RecordsCard
-              title="Land Patents (BLM)"
-              icon="📜"
-              loading={researchLoading}
-              items={research?.landRecords?.map((l) => ({
-                title: `${l.acres} acres — ${l.county}, ${l.state}`,
-                subtitle: l.date,
-                detail: `Patent #${l.patentNumber}`,
-                url: l.documentUrl,
-              }))}
-            />
-          ) : null}
-
-          {/* FamilySearch record hints */}
-          {(research?.familySearchHints?.length || researchLoading) ? (
-            <FamilySearchCard
-              hints={research?.familySearchHints}
-              loading={researchLoading}
-              onRefresh={handleRefreshFamilySearch}
-              refreshing={sectionRefreshing === "familysearch"}
-            />
-          ) : null}
-
-          {/* ── ZONE 5: NEXT STEPS ── Where to go from here ───────────────── */}
-
-          {/* Research Checklist */}
-          {(research?.researchChecklist?.items?.length || researchLoading) ? (
-            <ResearchChecklistCard checklist={research?.researchChecklist} loading={researchLoading} />
-          ) : null}
+          {/* All person-record research collapsed into one entry point (plan Step 4) */}
+          <ResearchSummaryCard
+            research={research}
+            graveId={pending.id}
+            loading={researchLoading}
+          />
             </>
           )}
 
-          {/* External search links (Find A Grave, BillionGraves, FamilySearch) */}
-          {!researchLoading && activeExtracted.name && (
-            <ExternalLinksCard extracted={activeExtracted} location={location} research={research} />
-          )}
-
-          {/* Targeted research links (WWI draft, state vitals, modern obits, fraternal) */}
-          {!researchLoading && research?.researchLinks?.length && (
-            <ResearchLinksCard links={research.researchLinks} />
-          )}
 
           {/* ── ZONE 6: CONNECTIONS ── Relationships ──────────────────────── */}
 
