@@ -235,3 +235,17 @@ Two Postgres facts that matter for renames:
 - Client `.from()`/`.rpc()` call hubs: `Antisocial/api/_utils/*`, `Antisocial/api/*`,
   `GraveLens/src/lib/*`, `LowHigh Website/api/*` and `src/*`.
 - Only edit `LowHigh Website/` (root `api/`/`src/` are stale copies that Vercel does not serve).
+
+---
+
+## 10. Reference artifacts (in `references/`)
+
+These ship with the skill so any repo can continue the cross-app naming refactor:
+
+- `references/DB_RENAME_MAP.md` — the canonical old→new name map for the ecosystem-wide rename
+  (goals→rewards, graves→scans, factoids→facts, notes→journal_entries, pins→saved_items, etc.).
+- `references/db_naming_bigbang.sql` — the idempotent big-bang rename migration. Run against the
+  shared Supabase project **only after** a fresh live-schema introspection confirms current names
+  (the repo `migrations/` folders are known to drift from live — see the "introspect first" rule).
+- `references/db_security_advisor_fixes.sql` — Supabase security-advisor remediations (RLS/policy/
+  search_path hardening) intended for the same shared project.
