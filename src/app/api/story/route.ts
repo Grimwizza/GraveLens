@@ -5,6 +5,7 @@ import { admitAiCall } from "@/lib/tokenGate";
 import { requireRateLimit } from "@/lib/rateLimit";
 import { logUsage } from "@/lib/lowhigh";
 import { createClient } from "@/lib/supabase/server";
+import { getServiceClient } from "@/lib/supabase/service";
 import { getAiContentCache, saveAiContentCache, aiContentCacheKey } from "@/lib/researchCache";
 
 const MODEL = "claude-haiku-4-5-20251001";
@@ -297,7 +298,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Persist the generated content for reuse by any future identical request.
-    after(() => saveAiContentCache(supabase, "story", cacheKey, parsed).catch(() => {}));
+    after(() => saveAiContentCache(getServiceClient() ?? supabase, "story", cacheKey, parsed).catch(() => {}));
 
     after(() =>
       logUsage(auth.userId, {

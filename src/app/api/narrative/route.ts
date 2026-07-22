@@ -5,6 +5,7 @@ import { admitAiCall } from "@/lib/tokenGate";
 import { requireRateLimit } from "@/lib/rateLimit";
 import { logUsage } from "@/lib/lowhigh";
 import { createClient } from "@/lib/supabase/server";
+import { getServiceClient } from "@/lib/supabase/service";
 import { getAiContentCache, saveAiContentCache, aiContentCacheKey } from "@/lib/researchCache";
 
 // Uses Haiku — this is a creative writing task, not vision analysis.
@@ -191,7 +192,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Persist the generated content for reuse by any future identical request.
-    after(() => saveAiContentCache(supabase, "narrative", cacheKey, result).catch(() => {}));
+    after(() => saveAiContentCache(getServiceClient() ?? supabase, "narrative", cacheKey, result).catch(() => {}));
 
     after(() =>
       logUsage(auth.userId, {

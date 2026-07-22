@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/apiAuth";
 import { enrichCemetery, fetchOsmCemeteryDetails, cemeteryId } from "@/lib/apis/cemetery";
 import { createClient } from "@/lib/supabase/server";
+import { getServiceClient } from "@/lib/supabase/service";
 import { checkCemeteryCache, saveCemeteryCache } from "@/lib/community";
 import { requireRateLimit } from "@/lib/rateLimit";
 
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
 
     // 4. Save to cache
     if (result.osmId) {
-      await saveCemeteryCache(supabase, result.osmId, {
+      await saveCemeteryCache(getServiceClient() ?? supabase, result.osmId, {
         name: result.name,
         description: result.description,
         wikipediaUrl: result.wikipediaUrl,

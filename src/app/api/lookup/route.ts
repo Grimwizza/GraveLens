@@ -24,6 +24,7 @@ import { buildResearchChecklist } from "@/lib/researchChecklist";
 import { buildAllResearchLinks } from "@/lib/researchLinks";
 import type { ResearchData, GeoLocation, NaraItemRecord, LocalHistoryContext } from "@/types";
 import { createClient } from "@/lib/supabase/server";
+import { getServiceClient } from "@/lib/supabase/service";
 import {
   checkLocalHistoryCache,
   saveLocalHistoryCache,
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest) {
         };
 
         if (hasCoords) {
-          await saveLocalHistoryCache(supabase, lat, lng, {
+          await saveLocalHistoryCache(getServiceClient() ?? supabase, lat, lng, {
             localHistory,
             wikidataEvents: wikiEvents,
             nrhpSites: nrhp,
