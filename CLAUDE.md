@@ -12,6 +12,7 @@ Every response MUST end with this status block:
 🔵 **Next Steps:** [Strategic recommendations for what should happen next.]
 
 All four lines are mandatory. Never skip this block, even for short answers.
+When referencing any file or directory in this block, always use markdown link syntax: [filename](relative/path) — never plain text or backticks.
 
 ---
 
